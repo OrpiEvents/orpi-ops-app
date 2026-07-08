@@ -28,7 +28,12 @@ button { cursor: pointer; }
 a { color: inherit; }
 
 @media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+  @page { margin: 12mm; }
   aside, .no-print { display: none !important; }
   main { margin-left: 0 !important; padding: 0 !important; max-width: none !important; }
+  .print-grid-collapse { display: block !important; }
+  .print-avoid-break { break-inside: avoid; page-break-inside: avoid; }
+  .inv-preview-doc { border: none !important; box-shadow: none !important; max-width: none !important; }
   body { background: #fff; }
 }

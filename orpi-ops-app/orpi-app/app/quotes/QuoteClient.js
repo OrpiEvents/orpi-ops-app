@@ -17,7 +17,7 @@ const DEF_SPIRITS = [
 ];
 const DEF_SOFT = ['Coca-Cola', 'Coke Zero', 'Lemonade', 'Lemonade Zero', 'Tonic', 'Soda', 'Water', 'Cranberry Juice', 'Tropical Juice'];
 const DEF_ADDONS = [
-  { label: 'Custom glassware', desc: 'Personalised glassware printed with event name, logo or monogram', price: '', on: false },
+  { label: 'Personalised bar accessories', desc: 'Bar mats (keepsake), drinks coasters, cocktail napkins & cocktail toppers/stirrers printed with event name, logo or monogram', price: '', on: false },
   { label: 'Flair bartending show', desc: 'Theatrical bar performance (subject to venue)', price: '', on: false },
   { label: 'Bar hire', desc: '4m round LED bar, non-LED bar, or bespoke unit', price: '', on: false },
   { label: 'Bar van', desc: 'Fully equipped outdoor bar van', price: '', on: false },
@@ -134,7 +134,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="print-grid-collapse" style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20, alignItems: 'start' }}>
         <div className="no-print" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 20, position: 'sticky', top: 24, maxHeight: 'calc(100vh - 60px)', overflowY: 'auto' }}>
           <SectionHead>Document</SectionHead>
           <ThreeCol>
@@ -396,8 +396,8 @@ function QuotePreview({ s, addonTotal, total, dep }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontFamily: 'var(--sans)' }}>
-      <div style={{ background: 'var(--black)', padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
+    <div className="inv-preview-doc" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontFamily: 'var(--sans)' }}>
+      <div className="print-avoid-break" style={{ background: 'var(--black)', padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
         <div>
           <div style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 700, letterSpacing: '.18em', color: '#fff' }}>ORPI</div>
           <div style={{ fontSize: 10, letterSpacing: '.2em', color: '#555', marginTop: 2 }}>EVENTS</div>
@@ -510,7 +510,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
           <div style={{ background: 'var(--gold-bg)', borderLeft: '3px solid var(--gold)', padding: '10px 14px', fontSize: 12, borderRadius: '0 4px 4px 0', marginBottom: 10 }}>{s.notes}</div>
         )}
       </div>
-      <div style={{ background: 'var(--black)', padding: '16px 28px' }}>
+      <div className="print-avoid-break" style={{ background: 'var(--black)', padding: '16px 28px' }}>
         <PriceRow label="Base package" value={gbp(parseFloat(s.base) || 0)} />
         {addonTotal > 0 && <PriceRow label="Extras / add-ons" value={gbp(addonTotal)} />}
         {parseFloat(s.disc) > 0 && <PriceRow label="Discount" value={`−${gbp(parseFloat(s.disc))}`} />}
@@ -537,7 +537,7 @@ function DL({ label, value }) {
   return (<><div style={{ fontSize: 11, color: 'var(--muted)', padding: '3px 0' }}>{label}</div><div style={{ fontSize: 11, padding: '3px 0' }}>{value || '—'}</div></>);
 }
 function Section({ title, children }) {
-  return (<div style={{ marginBottom: 10 }}><div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', margin: '12px 0 6px' }}>{title}</div>{children}</div>);
+  return (<div className="print-avoid-break" style={{ marginBottom: 10 }}><div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', margin: '12px 0 6px' }}>{title}</div>{children}</div>);
 }
 function PriceRow({ label, value, muted }) {
   return (<div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: muted ? 11 : 12, color: muted ? '#555' : '#888', borderBottom: '1px solid #1a1a1a' }}><span>{label}</span><span>{value}</span></div>);

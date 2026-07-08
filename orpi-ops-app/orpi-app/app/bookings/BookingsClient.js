@@ -1,11 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '../AppShell';
+import BookingPanel from './BookingPanel';
 
 export default function BookingsClient({ userEmail }) {
   const [bookings, setBookings] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -22,6 +24,11 @@ export default function BookingsClient({ userEmail }) {
   }
 
   useEffect(() => { load(); }, []);
+
+  function handleSaved(updatedBooking) {
+    setBookings(prev => prev.map(b => b.id === updatedBooking.id ? { ...b, ...updatedBooking } : b));
+    setSelected(prev => prev ? { ...prev, ...updatedBooking } : prev);
+  }
 
   return (
     <AppShell active="/bookings" userEmail={userEmail}>
@@ -60,7 +67,7 @@ export default function BookingsClient({ userEmail }) {
               {bookings.length === 0 ? (
                 <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No confirmed bookings in Notion yet</td></tr>
               ) : bookings.map(b => (
-                <tr key={b.id}>
+                <tr key={b.id} onClick={() => setSelected(b)} style={{ cursor: 'pointer' }}>
                   <Td><strong>{b.name}</strong></Td>
                   <Td muted>{b.clientName}</Td>
                   <Td>{fmtDate(b.eventDate)}</Td>
@@ -77,6 +84,10 @@ export default function BookingsClient({ userEmail }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {selected && (
+        <BookingPanel booking={selected} onClose={() => setSelected(null)} onSaved={handleSaved} />
       )}
     </AppShell>
   );

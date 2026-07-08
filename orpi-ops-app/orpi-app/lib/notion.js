@@ -113,6 +113,253 @@ function enquiryToProperties(d) {
   return props;
 }
 
+// ---- Single booking lookup (for the checklist page) ------------------------
+export async function getBookingById(id) {
+  const page = await notionFetch(`/pages/${id}`);
+  return pageToBooking(page);
+}
+
+// ---- ORPI Drinks Library ----------------------------------------------------
+export async function listDrinks() {
+  const dbId = process.env.NOTION_DB_DRINKS;
+  const data = await notionFetch(`/databases/${dbId}/query`, { method: 'POST', body: JSON.stringify({}) });
+  return data.results.map(pageToDrink);
+}
+
+function pageToDrink(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    name: text(p['Drink Name']),
+    drinkType: sel(p['Drink Type']),
+    category: sel(p['Category']),
+    garnish: text(p['Garnish']),
+    glassware: sel(p['Glassware']),
+    ice: sel(p['Ice']),
+    method: sel(p['Method']),
+    rim: text(p['Rim']),
+    batchable: checkbox(p['Batchable?']),
+    prepRequired: checkbox(p['Prep Required?']),
+  };
+}
+
+// Ingredients and the written method live in the page body (not properties),
+// under "## Ingredients" and "## Method" headings, so we read the block
+// children and parse them out.
+export async function getDrinkRecipe(pageId) {
+  const data = await notionFetch(`/blocks/${pageId}/children?page_size=100`);
+  const blocks = data.results || [];
+  const ingredients = [];
+  let methodText = '';
+  let section = null;
+  for (const block of blocks) {
+    const t = block.type;
+    if (t === 'heading_1' || t === 'heading_2' || t === 'heading_3') {
+      const headingText = blockText(block, t).toLowerCase();
+      if (headingText.includes('ingredient')) section = 'ingredients';
+      else if (headingText.includes('method')) section = 'method';
+      else section = null;
+      continue;
+    }
+    if (section === 'ingredients' && t === 'bulleted_list_item') {
+      ingredients.push(blockText(block, t));
+    } else if (section === 'method' && t === 'paragraph') {
+      const t2 = blockText(block, t);
+      if (t2) methodText += (methodText ? ' ' : '') + t2;
+    }
+  }
+  return { ingredients, methodText };
+}
+
+function blockText(block, type) {
+  const rt = block[type]?.rich_text || [];
+  return rt.map(r => r.plain_text).join('');
+}
+
+// Matches a free-text drink name (as typed into a booking's Cocktail Menu /
+// Mocktail Menu field) against the Drinks Library by exact then partial
+// case-insensitive match. Returns null if nothing reasonable matches (the
+// checklist flags these as "not in library" rather than guessing).
+export function matchDrink(name, drinks) {
+  const clean = name.trim().toLowerCase();
+  if (!clean || clean === 'tbc') return null;
+  const exact = drinks.find(d => d.name.trim().toLowerCase() === clean);
+  if (exact) return exact;
+  const partial = drinks.find(d => d.name.toLowerCase().includes(clean) || clean.includes(d.name.toLowerCase()));
+  return partial || null;
+}
+
+// Resolves a comma-separated menu string (e.g. "Pornstar Martini, TBC") into
+// full drink details with recipes, for the checklist. Skips "TBC"/empty
+// entries and flags any name that has no match in the library.
+export async function resolveMenu(menuCsv, drinksLibrary) {
+  if (!menuCsv) return [];
+  const names = menuCsv.split(',').map(s => s.trim()).filter(Boolean);
+  const resolved = await Promise.all(names.map(async name => {
+    if (name.toLowerCase() === 'tbc') return { name, isTbc: true, found: false };
+    const match = matchDrink(name, drinksLibrary);
+    if (!match) return { name, found: false };
+    const recipe = await getDrinkRecipe(match.id);
+    return { name: match.name, found: true, drink: match, ...recipe };
+  }));
+  return resolved;
+}
+
+// ---- Event Costing (per-booking cost lines) --------------------------------
+export async function listBookingCosts(bookingId) {
+  const dbId = process.env.NOTION_DB_COSTING;
+  const data = await notionFetch(`/databases/${dbId}/query`, {
+    method: 'POST',
+    body: JSON.stringify({
+      filter: { property: '📕 Booking and Events Tracker', relation: { contains: bookingId } },
+    }),
+  });
+  return data.results.map(pageToCost);
+}
+
+function pageToCost(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    name: text(p['Name']),
+    costType: sel(p['Cost Type']),
+    cost: num(p['Cost']),
+    quantityUsed: num(p['Quantity Used']),
+    lockedUnitCost: num(p['Locked Unit Cost']),
+    finalCost: formulaNum(p['Final Cost']),
+    notes: text(p['Notes']),
+  };
+}
+
+export async function createBookingCost(bookingId, data) {
+  const dbId = process.env.NOTION_DB_COSTING;
+  const props = {
+    'Name': { title: [{ text: { content: data.name } }] },
+    '📕 Booking and Events Tracker': { relation: [{ id: bookingId }] },
+  };
+  if (data.costType) props['Cost Type'] = { select: { name: data.costType } };
+  if (data.cost !== undefined) props['Cost'] = { number: Number(data.cost) || 0 };
+  if (data.quantityUsed !== undefined) props['Quantity Used'] = { number: Number(data.quantityUsed) || 0 };
+  if (data.lockedUnitCost !== undefined) props['Locked Unit Cost'] = { number: Number(data.lockedUnitCost) || 0 };
+  if (data.notes) props['Notes'] = { rich_text: [{ text: { content: data.notes } }] };
+
+  const page = await notionFetch('/pages', {
+    method: 'POST',
+    body: JSON.stringify({ parent: { database_id: dbId }, properties: props }),
+  });
+  return pageToCost(page);
+}
+
+export async function deleteBookingCost(costId) {
+  await notionFetch(`/pages/${costId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ archived: true }),
+  });
+  return { id: costId };
+}
+
+// ---- Inventory Items (Stock tracker + Stock take) -------------------------
+export async function listInventoryItems() {
+  const dbId = process.env.NOTION_DB_INVENTORY;
+  const data = await notionFetch(`/databases/${dbId}/query`, {
+    method: 'POST',
+    body: JSON.stringify({ sorts: [{ property: 'Item Name', direction: 'ascending' }] }),
+  });
+  return data.results.map(pageToInventoryItem);
+}
+
+function pageToInventoryItem(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    name: text(p['Item Name']),
+    category: sel(p['Catagory']),
+    size: text(p['Size']),
+    unit: sel(p['Unit']),
+    currentStock: num(p['Current Stock']),
+    parLevel: num(p['Par Level']),
+    averageUnitCost: formulaNum(p['Average Unit Cost']),
+  };
+}
+
+export async function updateInventoryStock(id, currentStock) {
+  const page = await notionFetch(`/pages/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ properties: { 'Current Stock': { number: currentStock } } }),
+  });
+  return pageToInventoryItem(page);
+}
+
+export async function createInventoryItem(data) {
+  const dbId = process.env.NOTION_DB_INVENTORY;
+  const props = {
+    'Item Name': { title: [{ text: { content: data.name } }] },
+  };
+  if (data.category) props['Catagory'] = { select: { name: data.category } };
+  if (data.size) props['Size'] = { rich_text: [{ text: { content: data.size } }] };
+  if (data.unit) props['Unit'] = { select: { name: data.unit } };
+  if (data.currentStock !== undefined) props['Current Stock'] = { number: Number(data.currentStock) || 0 };
+  if (data.parLevel !== undefined) props['Par Level'] = { number: Number(data.parLevel) || 0 };
+  const page = await notionFetch('/pages', {
+    method: 'POST',
+    body: JSON.stringify({ parent: { database_id: dbId }, properties: props }),
+  });
+  return pageToInventoryItem(page);
+}
+
+// ---- Inventory Purchases ----------------------------------------------------
+export async function listPurchases() {
+  const dbId = process.env.NOTION_DB_PURCHASES;
+  const data = await notionFetch(`/databases/${dbId}/query`, {
+    method: 'POST',
+    body: JSON.stringify({ sorts: [{ property: 'Date Bought', direction: 'descending' }] }),
+  });
+  return data.results.map(pageToPurchase);
+}
+
+function pageToPurchase(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    line: text(p['Purchase Line']),
+    dateBought: dateStart(p['Date Bought']),
+    supplier: sel(p['Supplier']),
+    quantityBought: num(p['Quantity Bought']),
+    unitCost: num(p['Unit Cost']),
+    totalCost: formulaNum(p['Total Cost']),
+    ownedBy: sel(p['Owned By?']),
+  };
+}
+
+// Creates a purchase record linked to an inventory item, and bumps that
+// item's Current Stock by the purchased quantity in the same operation.
+export async function createPurchase({ inventoryItemId, itemName, quantity, unitCost, supplier, dateBought, ownedBy }) {
+  const dbId = process.env.NOTION_DB_PURCHASES;
+  const props = {
+    'Purchase Line': { title: [{ text: { content: `${itemName} — ${dateBought || 'undated'}` } }] },
+    'Quantity Bought': { number: Number(quantity) || 0 },
+    'Unit Cost': { number: Number(unitCost) || 0 },
+  };
+  if (supplier) props['Supplier'] = { select: { name: supplier } };
+  if (ownedBy) props['Owned By?'] = { select: { name: ownedBy } };
+  if (dateBought) props['Date Bought'] = { date: { start: dateBought } };
+  if (inventoryItemId) props['🍺 Inventory Items'] = { relation: [{ id: inventoryItemId }] };
+
+  const page = await notionFetch('/pages', {
+    method: 'POST',
+    body: JSON.stringify({ parent: { database_id: dbId }, properties: props }),
+  });
+
+  // Bump stock on the linked item
+  if (inventoryItemId) {
+    const itemPage = await notionFetch(`/pages/${inventoryItemId}`);
+    const currentStock = num(itemPage.properties['Current Stock']) || 0;
+    await updateInventoryStock(inventoryItemId, currentStock + (Number(quantity) || 0));
+  }
+
+  return pageToPurchase(page);
+}
+
 // ---- Quote saving (writes back to the matching Sales Pipeline enquiry) ----
 export async function saveQuoteResult({ enquiryId, name, amount }) {
   if (enquiryId) {

@@ -231,6 +231,11 @@ function pageToCost(page) {
   };
 }
 
+// Creates a cost line for a booking. When linked to an inventory item, we
+// snapshot that item's current average unit cost into "Locked Unit Cost" —
+// this is deliberate: the Inventory Items "Average Unit Cost" is a live
+// formula that drifts as new purchases come in at different prices, but a
+// past event's cost should stay frozen at what it actually cost at the time.
 export async function createBookingCost(bookingId, data) {
   const dbId = process.env.NOTION_DB_COSTING;
   const props = {
@@ -242,6 +247,7 @@ export async function createBookingCost(bookingId, data) {
   if (data.quantityUsed !== undefined) props['Quantity Used'] = { number: Number(data.quantityUsed) || 0 };
   if (data.lockedUnitCost !== undefined) props['Locked Unit Cost'] = { number: Number(data.lockedUnitCost) || 0 };
   if (data.notes) props['Notes'] = { rich_text: [{ text: { content: data.notes } }] };
+  if (data.inventoryItemId) props['🍺 Inventory Items'] = { relation: [{ id: data.inventoryItemId }] };
 
   const page = await notionFetch('/pages', {
     method: 'POST',

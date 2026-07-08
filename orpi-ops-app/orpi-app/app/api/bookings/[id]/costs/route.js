@@ -30,7 +30,9 @@ export async function POST(request, { params }) {
       userEmail: user.email,
       action: 'booking.cost_add',
       target: body.name,
-      detail: `${body.costType || 'Uncategorised'} — £${body.cost || 0}`,
+      detail: body.inventoryItemId
+        ? `${body.costType || 'Uncategorised'} — ${body.quantityUsed} × £${body.lockedUnitCost || 0} (from stock)`
+        : `${body.costType || 'Uncategorised'} — £${body.cost || 0}`,
     });
     return NextResponse.json({ cost });
   } catch (err) {

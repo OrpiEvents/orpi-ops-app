@@ -3,6 +3,13 @@ import { useEffect, useState } from 'react';
 
 const COST_TYPES = ['Alcohol', 'Staff', 'Mixers', 'Ice', 'Logistics/Travel', 'Equipment', 'Printing/Branding', 'Marketing', 'Glassware', 'Estimation', 'Other/Misc'];
 
+// Maps an Inventory Items category to the nearest Event Costing "Cost Type"
+// option, so picking a stock item auto-suggests a sensible cost type.
+const CATEGORY_TO_COST_TYPE = {
+  Spirit: 'Alcohol', Beer: 'Alcohol', Wine: 'Alcohol', Prosecco: 'Alcohol', Champagne: 'Alcohol', Liqueur: 'Alcohol',
+  Mixer: 'Mixers', 'Soft Drink': 'Mixers', Ice: 'Ice', Garnish: 'Other/Misc', Other: 'Other/Misc',
+};
+
 export default function BookingPanel({ booking, onClose, onSaved }) {
   const [tab, setTab] = useState('overview');
   const [form, setForm] = useState(() => ({
@@ -28,10 +35,18 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
   const [newCost, setNewCost] = useState({ name: '', costType: 'Staff', cost: '' });
   const [addingCost, setAddingCost] = useState(false);
 
+  const [costMode, setCostMode] = useState('stock'); // 'stock' | 'manual'
+  const [stockItems, setStockItems] = useState([]);
+  const [stockForm, setStockForm] = useState({ itemId: '', quantityUsed: '' });
+  const [addingStockCost, setAddingStockCost] = useState(false);
+
   useEffect(() => {
     fetch(`/api/bookings/${booking.id}/costs`).then(r => r.json()).then(res => {
       if (!res.error) setCosts(res.costs || []);
       setCostsLoading(false);
+    });
+    fetch('/api/stock').then(r => r.json()).then(res => {
+      if (!res.error) setStockItems(res.items || []);
     });
   }, [booking.id]);
 
@@ -52,6 +67,33 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
       alert('Save failed: ' + err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function addCostFromStock() {
+    const item = stockItems.find(i => i.id === stockForm.itemId);
+    const qty = parseFloat(stockForm.quantityUsed);
+    if (!item || !qty) { alert('Select an item and enter the quantity used.'); return; }
+    setAddingStockCost(true);
+    try {
+      const lockedUnitCost = item.averageUnitCost || 0;
+      const res = await fetch(`/api/bookings/${booking.id}/costs`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: item.name,
+          costType: CATEGORY_TO_COST_TYPE[item.category] || 'Other/Misc',
+          inventoryItemId: item.id,
+          quantityUsed: qty,
+          lockedUnitCost,
+        }),
+      }).then(r => r.json());
+      if (res.error) throw new Error(res.error);
+      setCosts([...costs, res.cost]);
+      setStockForm({ itemId: '', quantityUsed: '' });
+    } catch (err) {
+      alert('Failed to add cost: ' + err.message);
+    } finally {
+      setAddingStockCost(false);
     }
   }
 
@@ -178,7 +220,10 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                     <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--off)' }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{c.costType}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                          {c.costType}
+                          {c.quantityUsed ? ` · ${c.quantityUsed} × ${gbp(c.lockedUnitCost)} (locked)` : ''}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{gbp(c.finalCost ?? c.cost)}</span>
@@ -194,19 +239,61 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 </div>
               )}
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 8 }}>Add cost line</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 8 }}>
-                  <input style={inputStyle} placeholder="Description" value={newCost.name} onChange={e => setNewCost({ ...newCost, name: e.target.value })} />
-                  <select style={{ ...inputStyle, cursor: 'pointer' }} value={newCost.costType} onChange={e => setNewCost({ ...newCost, costType: e.target.value })}>
-                    {COST_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
+                <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid var(--border)' }}>
+                  <div onClick={() => setCostMode('stock')} style={{
+                    padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    color: costMode === 'stock' ? 'var(--text)' : 'var(--muted)',
+                    borderBottom: costMode === 'stock' ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
+                  }}>From stock</div>
+                  <div onClick={() => setCostMode('manual')} style={{
+                    padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    color: costMode === 'manual' ? 'var(--text)' : 'var(--muted)',
+                    borderBottom: costMode === 'manual' ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
+                  }}>Manual entry</div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input type="number" step="0.01" style={inputStyle} placeholder="Cost (£)" value={newCost.cost} onChange={e => setNewCost({ ...newCost, cost: e.target.value })} />
-                  <button onClick={addCost} disabled={addingCost} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, whiteSpace: 'nowrap' }}>
-                    {addingCost ? 'Adding…' : '+ Add'}
-                  </button>
-                </div>
+
+                {costMode === 'stock' ? (
+                  <div>
+                    <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                      Locks in today's average unit cost for this item — won't change later if you buy more stock at a different price.
+                    </p>
+                    <select style={{ ...inputStyle, marginBottom: 8, cursor: 'pointer' }} value={stockForm.itemId} onChange={e => setStockForm({ ...stockForm, itemId: e.target.value })}>
+                      <option value="">— select item —</option>
+                      {stockItems.map(i => <option key={i.id} value={i.id}>{i.name} ({i.category})</option>)}
+                    </select>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input type="number" step="0.01" style={{ ...inputStyle, flex: 1 }} placeholder="Quantity used" value={stockForm.quantityUsed} onChange={e => setStockForm({ ...stockForm, quantityUsed: e.target.value })} />
+                      <button onClick={addCostFromStock} disabled={addingStockCost} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, whiteSpace: 'nowrap' }}>
+                        {addingStockCost ? 'Adding…' : '+ Add'}
+                      </button>
+                    </div>
+                    {stockForm.itemId && stockForm.quantityUsed && (() => {
+                      const item = stockItems.find(i => i.id === stockForm.itemId);
+                      const unitCost = item?.averageUnitCost || 0;
+                      const qty = parseFloat(stockForm.quantityUsed) || 0;
+                      return (
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+                          {qty} × {gbp(unitCost)} = <strong style={{ color: 'var(--text)' }}>{gbp(qty * unitCost)}</strong>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <input style={inputStyle} placeholder="Description" value={newCost.name} onChange={e => setNewCost({ ...newCost, name: e.target.value })} />
+                      <select style={{ ...inputStyle, cursor: 'pointer' }} value={newCost.costType} onChange={e => setNewCost({ ...newCost, costType: e.target.value })}>
+                        {COST_TYPES.map(t => <option key={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input type="number" step="0.01" style={inputStyle} placeholder="Cost (£)" value={newCost.cost} onChange={e => setNewCost({ ...newCost, cost: e.target.value })} />
+                      <button onClick={addCost} disabled={addingCost} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, whiteSpace: 'nowrap' }}>
+                        {addingCost ? 'Adding…' : '+ Add'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

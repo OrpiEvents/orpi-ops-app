@@ -17,6 +17,7 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     venueAccessConfirmed: !!booking.venueAccessConfirmed,
     depositReceived: !!booking.depositReceived,
     balanceReceived: !!booking.balanceReceived,
+    marketingEvent: !!booking.marketingEvent,
     internalNotes: booking.internalNotes || '',
   }));
   const [saving, setSaving] = useState(false);
@@ -119,6 +120,7 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Row label="Event date" value={fmtDate(booking.eventDate)} />
                 <Row label="Venue" value={booking.venue} />
                 <Row label="Guests" value={booking.guestCount} />
+                <Row label="Event type" value={booking.eventType} />
                 <Row label="Service" value={booking.typeOfService} />
                 <Row label="Quote value" value={gbp(booking.finalQuoteAmount ?? booking.quoteAmount)} />
                 {booking.referredBy && <Row label="Referred by" value={booking.referredBy} />}
@@ -153,6 +155,10 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Check label="Venue access confirmed" checked={form.venueAccessConfirmed} onChange={v => set({ venueAccessConfirmed: v })} />
                 <Check label="Deposit received" checked={form.depositReceived} onChange={v => set({ depositReceived: v })} />
                 <Check label="Balance received" checked={form.balanceReceived} onChange={v => set({ balanceReceived: v })} />
+              </Section>
+              <Section title="KPI tagging">
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>Excludes this event from commercial cost-per-head averages (e.g. wedding shows, promo events)</p>
+                <Check label="This is a marketing / promo event" checked={form.marketingEvent} onChange={v => set({ marketingEvent: v })} />
               </Section>
             </>
           )}

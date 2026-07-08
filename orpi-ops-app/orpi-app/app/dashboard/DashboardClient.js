@@ -36,6 +36,15 @@ export default function DashboardClient({ userEmail }) {
   const next = sorted[0];
   const daysNext = next ? Math.ceil((new Date(next.eventDate) - new Date()) / 86400000) : null;
 
+  // Revenue by event type — excludes marketing/promo events so they don't
+  // distort the commercial picture.
+  const byType = {};
+  bookings.filter(b => !b.marketingEvent).forEach(b => {
+    const t = b.eventType || 'Unspecified';
+    byType[t] = (byType[t] || 0) + (b.quoteAmount || 0);
+  });
+  const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+
   return (
     <AppShell active="/dashboard" userEmail={userEmail}>
       <div style={{ marginBottom: 24 }}>
@@ -57,6 +66,20 @@ export default function DashboardClient({ userEmail }) {
           <Stat label="Next event" value={daysNext != null ? `${daysNext} days` : '—'} sub={next?.name} />
           <Stat label="Forward revenue" value={gbp(fwdRevenue)} />
           <Stat label="New enquiries" value={newCount} sub="need follow-up" />
+        </div>
+      )}
+
+      {!loading && typeEntries.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Revenue by event type</div>
+          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 20px', maxWidth: 480 }}>
+            {typeEntries.map(([type, rev]) => (
+              <div key={type} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--off)', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>{type}</span>
+                <span style={{ fontWeight: 500 }}>{gbp(rev)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </AppShell>

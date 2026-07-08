@@ -416,6 +416,8 @@ function pageToBooking(page) {
     internalNotes: text(p['Internal Notes']),
     referredBy: text(p['Referred By']),
     status: sel(p['Status']),
+    eventType: sel(p['Event Type']),
+    marketingEvent: checkbox(p['Marketing Event?']),
   };
 }
 
@@ -444,6 +446,7 @@ export async function createBookingFromEnquiry(enq) {
         typeOfService: enq.serviceType,
         status: 'Confirmed Booking',
         referredBy: enq.referredBy,
+        eventType: enq.eventType,
         internalNotes: `Created from enquiry. ${enq.internalNotes || ''}`.trim(),
       }),
     }),
@@ -461,6 +464,8 @@ function bookingToProperties(d) {
   if (d.guestCount !== undefined) props['Number of Guests'] = { number: Number(d.guestCount) || null };
   if (d.typeOfService !== undefined) props['Type of Service'] = { multi_select: [{ name: d.typeOfService }] };
   if (d.status !== undefined) props['Status'] = { select: { name: d.status } };
+  if (d.eventType !== undefined && d.eventType) props['Event Type'] = { select: { name: d.eventType } };
+  if (d.marketingEvent !== undefined) props['Marketing Event?'] = { checkbox: !!d.marketingEvent };
   if (d.referredBy !== undefined) props['Referred By'] = { rich_text: [{ text: { content: d.referredBy || '' } }] };
   if (d.internalNotes !== undefined) props['Internal Notes'] = { rich_text: [{ text: { content: d.internalNotes || '' } }] };
   if (d.tastingNotes !== undefined) props['Tasting Notes'] = { rich_text: [{ text: { content: d.tastingNotes || '' } }] };

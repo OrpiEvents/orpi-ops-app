@@ -113,6 +113,29 @@ function enquiryToProperties(d) {
   return props;
 }
 
+// Matches a recipe ingredient line (e.g. "50ml Absolut Vodka") against the
+// Inventory Items list, so the checklist can suggest which stock to pack.
+// Deliberately conservative — a miss just means it's not suggested, not
+// fabricated.
+export function matchIngredientToStock(ingredientLine, stockItems) {
+  const clean = ingredientLine.toLowerCase();
+  return stockItems.find(s => clean.includes(s.name.toLowerCase())) || null;
+}
+
+// Builds a de-duplicated "suggested stock to pack" list from a set of
+// resolved drinks (cocktails/mocktails with ingredient lines already
+// looked up from the Drinks Library).
+export function suggestStockForDrinks(drinks, stockItems) {
+  const matched = new Map();
+  drinks.forEach(d => {
+    (d.ingredients || []).forEach(line => {
+      const item = matchIngredientToStock(line, stockItems);
+      if (item && !matched.has(item.id)) matched.set(item.id, item);
+    });
+  });
+  return [...matched.values()];
+}
+
 // ---- Single booking lookup (for the checklist page) ------------------------
 export async function getBookingById(id) {
   const page = await notionFetch(`/pages/${id}`);

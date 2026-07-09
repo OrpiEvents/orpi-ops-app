@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import AppShell from '../../../AppShell';
 
 const STANDARD_CHECKLIST = {
@@ -12,7 +13,7 @@ const STANDARD_CHECKLIST = {
     'Staff travel / arrival time confirmed', 'Uniform / dress code confirmed', 'Transport to venue booked',
   ],
   'Bar Kit & Stock': [
-    'All spirits for menu ordered/packed', 'All soft drinks & mixers packed', 'Garnishes packed',
+    'Soft drinks & mixers packed', 'Garnishes packed',
     'Ice supply confirmed', 'Glassware confirmed (venue or ORPI backup)', 'Boston shakers, strainers, jiggers packed',
     'Bar mats, spill trays, waste bags packed', 'Dry ice / smoke gun / extras tested if included',
   ],
@@ -23,8 +24,20 @@ const STANDARD_CHECKLIST = {
     'Client / planner sign-off obtained', 'Post-event debrief notes filed',
   ],
 };
+// Only relevant when ORPI is supplying the alcohol — spliced into
+// "Bar Kit & Stock" ahead of the other items when applicable.
+const ALCOHOL_ONLY_ITEM = 'All spirits for menu ordered/packed';
 
-export default function ChecklistClient({ userEmail, booking, costs, cocktails, mocktails, error }) {
+export default function ChecklistClient({ userEmail, booking, costs, cocktails, mocktails, stockItems, suggestedStock, error }) {
+  const [reconcile, setReconcile] = useState(() => {
+    const initial = {};
+    (suggestedStock || []).forEach(s => { initial[s.id] = { takenOut: '', returned: '' }; });
+    return initial;
+  });
+  const [addItemId, setAddItemId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+
   if (error || !booking) {
     return (
       <AppShell active="/bookings" userEmail={userEmail}>
@@ -35,9 +48,57 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
     );
   }
 
+  const providesAlcohol = booking.alcoholProvidedBy === 'ORPI';
   const flags = buildFlags(booking, cocktails, mocktails);
   const totalCost = costs.reduce((s, c) => s + (c.finalCost ?? c.cost ?? 0), 0);
   const staffNeeded = (booking.guestCount || 0) > 150 ? '6+' : '4+';
+
+  // Reconciliation rows: suggested stock (from recipes) plus anything the
+  // team manually adds, each tracked as { itemId, takenOut, returned }
+  const reconcileList = Object.entries(reconcile).map(([itemId, v]) => ({
+    item: stockItems.find(s => s.id === itemId), ...v,
+  })).filter(r => r.item);
+
+  function initRow(itemId) {
+    if (reconcile[itemId]) return;
+    setReconcile(prev => ({ ...prev, [itemId]: { takenOut: '', returned: '' } }));
+  }
+  function updateRow(itemId, field, value) {
+    setReconcile(prev => ({ ...prev, [itemId]: { ...prev[itemId], [field]: value } }));
+  }
+  function removeRow(itemId) {
+    setReconcile(prev => { const next = { ...prev }; delete next[itemId]; return next; });
+  }
+  function addManualItem() {
+    if (!addItemId) return;
+    initRow(addItemId);
+    setAddItemId('');
+  }
+
+  async function saveReconciliation() {
+    const entries = reconcileList
+      .filter(r => r.takenOut !== '' || r.returned !== '')
+      .map(r => ({
+        inventoryItemId: r.item.id, itemName: r.item.name, category: r.item.category,
+        currentStock: r.item.currentStock, averageUnitCost: r.item.averageUnitCost,
+        takenOut: r.takenOut, returned: r.returned,
+      }));
+    if (!entries.length) { alert('Enter at least one taken-out quantity.'); return; }
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/stock-reconcile`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries }),
+      }).then(r => r.json());
+      if (res.error) throw new Error(res.error);
+      setSaveMsg(`✓ Stock updated and ${res.processed} cost line(s) added — refresh the booking to see them`);
+      setReconcile({});
+    } catch (err) {
+      alert('Failed to save: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <AppShell active="/bookings" userEmail={userEmail}>
@@ -142,17 +203,80 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
 
           {/* Standard checklist */}
           <SectionHead icon="✅">Pre-event &amp; day-of checklist</SectionHead>
-          {Object.entries(STANDARD_CHECKLIST).map(([section, checkItems]) => (
-            <div key={section} style={{ marginBottom: 14, breakInside: 'avoid' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{section}</div>
-              {checkItems.map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12.5, borderBottom: '1px solid var(--off)' }}>
-                  <span style={{ width: 14, height: 14, border: '1.5px solid var(--muted)', borderRadius: 3, flexShrink: 0, display: 'inline-block' }} />
-                  {item}
+          {Object.entries(STANDARD_CHECKLIST).map(([section, checkItems]) => {
+            const items = section === 'Bar Kit & Stock' && providesAlcohol
+              ? [ALCOHOL_ONLY_ITEM, ...checkItems]
+              : checkItems;
+            return (
+              <div key={section} style={{ marginBottom: 14, breakInside: 'avoid' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{section}</div>
+                {items.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12.5, borderBottom: '1px solid var(--off)' }}>
+                    <span style={{ width: 14, height: 14, border: '1.5px solid var(--muted)', borderRadius: 3, flexShrink: 0, display: 'inline-block' }} />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+
+          {/* Stock pack list — only relevant when ORPI supplies the alcohol */}
+          {providesAlcohol && suggestedStock.length > 0 && (
+            <>
+              <SectionHead icon="📦">Suggested stock to pack</SectionHead>
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                Matched from the cocktail/mocktail recipes above — check against par levels before loading the van.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 8, marginBottom: 12 }}>
+                {suggestedStock.map(s => (
+                  <div key={s.id} style={{ display: 'contents' }}>
+                    <div style={{ fontSize: 12.5, padding: '4px 0', borderBottom: '1px solid var(--off)' }}>{s.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 0', borderBottom: '1px solid var(--off)' }}>Stock: {s.currentStock ?? '—'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 0', borderBottom: '1px solid var(--off)' }}>Par: {s.parLevel ?? '—'}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Post-event stock reconciliation — interactive, no-print */}
+          {providesAlcohol && (
+            <div className="no-print">
+              <SectionHead icon="🔄">Confirm stock used (post-event)</SectionHead>
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                Enter what was taken out and what came back. This updates stock levels <strong>and</strong> adds the cost to this event automatically — no separate stock take needed for what was used here.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 90px 90px 60px', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Item</span>
+                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Taken out</span>
+                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Returned</span>
+                <span></span>
+              </div>
+              {reconcileList.map(r => (
+                <div key={r.item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 90px 90px 60px', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--off)' }}>
+                  <span style={{ fontSize: 13 }}>{r.item.name} <span style={{ color: 'var(--muted)', fontSize: 11 }}>(stock: {r.item.currentStock ?? '—'})</span></span>
+                  <input type="number" min="0" value={r.takenOut} onChange={e => updateRow(r.item.id, 'takenOut', e.target.value)}
+                    style={{ width: 70, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 5, fontSize: 12, textAlign: 'center' }} />
+                  <input type="number" min="0" value={r.returned} onChange={e => updateRow(r.item.id, 'returned', e.target.value)}
+                    style={{ width: 70, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 5, fontSize: 12, textAlign: 'center' }} />
+                  <button onClick={() => removeRow(r.item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>✕</button>
                 </div>
               ))}
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                <select value={addItemId} onChange={e => setAddItemId(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}>
+                  <option value="">— add another item —</option>
+                  {stockItems.filter(s => !reconcile[s.id]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <button onClick={addManualItem} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 12px', fontSize: 12 }}>+ Add</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+                <button onClick={saveReconciliation} disabled={saving} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13 }}>
+                  {saving ? 'Saving…' : 'Save & update stock + cost'}
+                </button>
+                {saveMsg && <span style={{ fontSize: 12, color: 'var(--success)' }}>{saveMsg}</span>}
+              </div>
             </div>
-          ))}
+          )}
 
           <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
             ORPI Events LTD &nbsp;|&nbsp; Unit 5 Clements Court, Clements Lane, Ilford, IG1 2QY &nbsp;|&nbsp; Hello@Orpi.Events

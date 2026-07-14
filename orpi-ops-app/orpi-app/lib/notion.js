@@ -212,18 +212,73 @@ export function matchDrink(name, drinks) {
   return partial || null;
 }
 
+// Parses the "Recipe Overrides" text field on a booking into a map of
+// { drinkName (lowercase) → { ingredients: string[], methodText?: string } }.
+//
+// Format is one drink per stanza, name on its own line ending with a colon,
+// followed by one bullet-per-line for ingredients. An optional "Method:"
+// section adds a written method. Blank line separates stanzas.
+//
+//   Espresso Martini:
+//   50ml Grey Goose
+//   35ml Baileys (not Kahlúa)
+//   25ml fresh espresso
+//   Method: Shake hard with ice, double strain.
+//
+//   Passionfruit Martini:
+//   40ml Absolut Vanilla
+//   ...
+//
+// Deliberately forgiving — anything we can't parse we just skip, so a
+// half-typed override never breaks the checklist.
+export function parseRecipeOverrides(overridesText) {
+  if (!overridesText) return {};
+  const stanzas = overridesText.split(/\n\s*\n/);
+  const map = {};
+  for (const stanza of stanzas) {
+    const lines = stanza.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) continue;
+    const headerMatch = lines[0].match(/^(.+?):\s*$/);
+    if (!headerMatch) continue;
+    const name = headerMatch[1].trim().toLowerCase();
+    const ingredients = [];
+    let methodText = '';
+    for (const line of lines.slice(1)) {
+      const mMatch = line.match(/^method:\s*(.*)$/i);
+      if (mMatch) methodText = mMatch[1].trim();
+      else if (methodText) methodText += ' ' + line;
+      else ingredients.push(line.replace(/^[•\-*]\s*/, ''));
+    }
+    if (ingredients.length || methodText) map[name] = { ingredients, methodText };
+  }
+  return map;
+}
+
 // Resolves a comma-separated menu string (e.g. "Pornstar Martini, TBC") into
-// full drink details with recipes, for the checklist. Skips "TBC"/empty
-// entries and flags any name that has no match in the library.
-export async function resolveMenu(menuCsv, drinksLibrary) {
+// full drink details with recipes, for the checklist. If a recipe override
+// exists for a drink name on this specific booking, it takes precedence over
+// the Drinks Library recipe.
+export async function resolveMenu(menuCsv, drinksLibrary, overridesText = '') {
   if (!menuCsv) return [];
+  const overrides = parseRecipeOverrides(overridesText);
   const names = menuCsv.split(',').map(s => s.trim()).filter(Boolean);
   const resolved = await Promise.all(names.map(async name => {
     if (name.toLowerCase() === 'tbc') return { name, isTbc: true, found: false };
     const match = matchDrink(name, drinksLibrary);
     if (!match) return { name, found: false };
-    const recipe = await getDrinkRecipe(match.id);
-    return { name: match.name, found: true, drink: match, ...recipe };
+    const libraryRecipe = await getDrinkRecipe(match.id);
+    const override = overrides[match.name.toLowerCase()] || overrides[name.toLowerCase()];
+    if (override) {
+      return {
+        name: match.name,
+        found: true,
+        drink: match,
+        ingredients: override.ingredients.length ? override.ingredients : libraryRecipe.ingredients,
+        methodText: override.methodText || libraryRecipe.methodText,
+        hasOverride: true,
+      };
+    }
+    return { name: match.name, found: true, drink: match, ...libraryRecipe, hasOverride: false };
   }));
   return resolved;
 }
@@ -242,6 +297,7 @@ export async function listBookingCosts(bookingId) {
 
 function pageToCost(page) {
   const p = page.properties;
+  const invRel = p['🍺 Inventory Items']?.relation || [];
   return {
     id: page.id,
     name: text(p['Name']),
@@ -251,6 +307,8 @@ function pageToCost(page) {
     lockedUnitCost: num(p['Locked Unit Cost']),
     finalCost: formulaNum(p['Final Cost']),
     notes: text(p['Notes']),
+    inventoryItemId: invRel[0]?.id || null,
+    isStockLinked: invRel.length > 0,
   };
 }
 
@@ -416,6 +474,52 @@ export async function listConfirmedBookings() {
   return data.results.map(pageToBooking);
 }
 
+// Paginated fetch of every booking regardless of status — used by the KPI
+// dashboard, which needs Completed events to compute historical CPH.
+export async function listAllBookings() {
+  const dbId = process.env.NOTION_DB_BOOKINGS;
+  const results = [];
+  let cursor = undefined;
+  while (true) {
+    const data = await notionFetch(`/databases/${dbId}/query`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sorts: [{ property: 'Event Date', direction: 'descending' }],
+        ...(cursor ? { start_cursor: cursor } : {}),
+      }),
+    });
+    results.push(...data.results.map(pageToBooking));
+    if (!data.has_more) break;
+    cursor = data.next_cursor;
+  }
+  return results;
+}
+
+// Sum of Cost linked to an event, split by whether the cost line is
+// stock-linked (reconciled alcohol/mixers) or manual (staff/logistics/etc).
+// Used by the KPI dashboard to compute alcohol CPH separately from ops CPH.
+export async function listAllCosts() {
+  const dbId = process.env.NOTION_DB_COSTING;
+  const results = [];
+  let cursor = undefined;
+  while (true) {
+    const data = await notionFetch(`/databases/${dbId}/query`, {
+      method: 'POST',
+      body: JSON.stringify({ ...(cursor ? { start_cursor: cursor } : {}) }),
+    });
+    for (const page of data.results) {
+      const cost = pageToCost(page);
+      // The booking relation isn't in pageToCost's return; grab it directly.
+      const bookingRel = page.properties['📕 Booking and Events Tracker']?.relation || [];
+      cost.bookingId = bookingRel[0]?.id || null;
+      results.push(cost);
+    }
+    if (!data.has_more) break;
+    cursor = data.next_cursor;
+  }
+  return results;
+}
+
 function pageToBooking(page) {
   const p = page.properties;
   return {
@@ -441,6 +545,11 @@ function pageToBooking(page) {
     drinksTastingDate: dateStart(p['Drinks Tasting Date']),
     cocktailMenu: text(p['Cocktail Menu']),
     mocktailMenu: text(p['Mocktail Menu']),
+    cocktailRecipeOverrides: text(p['Cocktail Recipe Overrides']),
+    mocktailRecipeOverrides: text(p['Mocktail Recipe Overrides']),
+    beerSelection: text(p['Beer Selection']),
+    spiritsSelection: text(p['Spirits Selection']),
+    softDrinksSelection: text(p['Soft Drinks Selection']),
     tastingNotes: text(p['Tasting Notes']),
     internalNotes: text(p['Internal Notes']),
     referredBy: text(p['Referred By']),
@@ -500,6 +609,11 @@ function bookingToProperties(d) {
   if (d.tastingNotes !== undefined) props['Tasting Notes'] = { rich_text: [{ text: { content: d.tastingNotes || '' } }] };
   if (d.cocktailMenu !== undefined) props['Cocktail Menu'] = { rich_text: [{ text: { content: d.cocktailMenu || '' } }] };
   if (d.mocktailMenu !== undefined) props['Mocktail Menu'] = { rich_text: [{ text: { content: d.mocktailMenu || '' } }] };
+  if (d.cocktailRecipeOverrides !== undefined) props['Cocktail Recipe Overrides'] = { rich_text: [{ text: { content: d.cocktailRecipeOverrides || '' } }] };
+  if (d.mocktailRecipeOverrides !== undefined) props['Mocktail Recipe Overrides'] = { rich_text: [{ text: { content: d.mocktailRecipeOverrides || '' } }] };
+  if (d.beerSelection !== undefined) props['Beer Selection'] = { rich_text: [{ text: { content: d.beerSelection || '' } }] };
+  if (d.spiritsSelection !== undefined) props['Spirits Selection'] = { rich_text: [{ text: { content: d.spiritsSelection || '' } }] };
+  if (d.softDrinksSelection !== undefined) props['Soft Drinks Selection'] = { rich_text: [{ text: { content: d.softDrinksSelection || '' } }] };
   if (d.eventDate) props['Event Date'] = { date: { start: d.eventDate } };
   if (d.drinksTastingDate) props['Drinks Tasting Date'] = { date: { start: d.drinksTastingDate } };
   const boolFields = {

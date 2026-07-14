@@ -151,6 +151,25 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
             {booking.drinksTastingDate && <GridRow label="Drinks tasting" value={fmtDateLong(booking.drinksTastingDate)} />}
           </Grid>
 
+          {/* Event drink selections — the specifics agreed for THIS event */}
+          {providesAlcohol && (booking.beerSelection || booking.spiritsSelection || booking.softDrinksSelection) && (
+            <>
+              <SectionHead icon="🥃">This event's selections</SectionHead>
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                What was confirmed with the client for this event — packs may differ from the standard quote.
+              </p>
+              {booking.spiritsSelection && (
+                <SelectionRow label="Spirits" value={booking.spiritsSelection} />
+              )}
+              {booking.beerSelection && (
+                <SelectionRow label="Beer" value={booking.beerSelection} />
+              )}
+              {booking.softDrinksSelection && (
+                <SelectionRow label="Soft drinks & mixers" value={booking.softDrinksSelection} />
+              )}
+            </>
+          )}
+
           {/* Drinks menu */}
           {(cocktails.length > 0 || mocktails.length > 0) && (
             <>
@@ -314,6 +333,15 @@ function GridRow({ label, value }) {
   return (<><div style={{ fontSize: 11, color: 'var(--muted)', padding: '3px 0' }}>{label}</div><div style={{ fontSize: 12, padding: '3px 0' }}>{value || '—'}</div></>);
 }
 
+function SelectionRow({ label, value }) {
+  return (
+    <div style={{ display: 'flex', gap: 14, padding: '6px 0', borderBottom: '1px solid var(--off)', fontSize: 12, breakInside: 'avoid' }}>
+      <span style={{ color: 'var(--muted)', width: 140, flexShrink: 0, textTransform: 'uppercase', fontSize: 10, fontWeight: 600, letterSpacing: '.06em', paddingTop: 2 }}>{label}</span>
+      <span style={{ flex: 1, whiteSpace: 'pre-wrap' }}>{value}</span>
+    </div>
+  );
+}
+
 function DrinkGroup({ title, drinks }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -334,9 +362,14 @@ function DrinkCard({ drink }) {
   }
   const d = drink.drink;
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '12px 16px', marginBottom: 8, breakInside: 'avoid' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>{drink.name}</div>
+    <div style={{ border: drink.hasOverride ? '1px solid var(--gold)' : '1px solid var(--border)', borderRadius: 6, padding: '12px 16px', marginBottom: 8, breakInside: 'avoid' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, gap: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>
+          {drink.name}
+          {drink.hasOverride && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#8a6a00', background: 'var(--gold-bg)', padding: '2px 6px', borderRadius: 3, marginLeft: 8, letterSpacing: '.04em', textTransform: 'uppercase' }}>Custom for this event</span>
+          )}
+        </div>
         <div style={{ fontSize: 11, color: 'var(--muted)' }}>
           {[d.method, d.glassware, d.ice ? `${d.ice} ice` : null].filter(Boolean).join(' · ')}
         </div>

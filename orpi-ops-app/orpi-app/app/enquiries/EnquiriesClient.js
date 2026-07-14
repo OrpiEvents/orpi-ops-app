@@ -65,7 +65,14 @@ export default function EnquiriesClient({ userEmail }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enquiry: e }),
       }).then(r => r.json());
-      if (bookingRes.error) throw new Error(bookingRes.error);
+      if (bookingRes.error) {
+        if (bookingRes.gates?.length) {
+          alert(`${bookingRes.error}\n\n${bookingRes.gates.map(g => `• ${g.label}\n   → ${g.fix}`).join('\n\n')}`);
+        } else {
+          alert(bookingRes.error);
+        }
+        return;
+      }
       alert(`✓ ${e.name} added to Confirmed Bookings.`);
       await load();
     } catch (err) {

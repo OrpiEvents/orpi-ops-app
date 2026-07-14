@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabaseServer';
 import { listConfirmedBookings, createBookingFromEnquiry, updateEnquiry } from '@/lib/notion';
+import { enquiryWonGates } from '@/lib/gates';
 import { logActivity } from '@/lib/activityLog';
 
 // GET /api/bookings — real, live Confirmed Bookings from Notion. No sample
@@ -21,6 +22,7 @@ export async function GET() {
 
 // POST /api/bookings — body: { enquiry: {...} } — creates the Confirmed
 // Booking record from a won enquiry, and marks the enquiry Won in the process.
+// Gated: enquiry must have an event date and a quote value before Won is allowed.
 export async function POST(request) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -28,6 +30,14 @@ export async function POST(request) {
 
   const { enquiry } = await request.json();
   if (!enquiry?.id) return NextResponse.json({ error: 'enquiry is required' }, { status: 400 });
+
+  const gates = enquiryWonGates(enquiry);
+  if (gates.length) {
+    return NextResponse.json({
+      error: 'Cannot mark won — some details are missing.',
+      gates,
+    }, { status: 400 });
+  }
 
   try {
     const booking = await createBookingFromEnquiry(enquiry);

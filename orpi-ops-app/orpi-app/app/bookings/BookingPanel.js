@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { drinksConfirmationGates, eventCompletionGates } from '@/lib/gates';
 
 const COST_TYPES = ['Alcohol', 'Staff', 'Mixers', 'Ice', 'Logistics/Travel', 'Equipment', 'Printing/Branding', 'Marketing', 'Glassware', 'Estimation', 'Other/Misc'];
 
@@ -17,6 +18,11 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     tastingNotes: booking.tastingNotes || '',
     cocktailMenu: booking.cocktailMenu || '',
     mocktailMenu: booking.mocktailMenu || '',
+    cocktailRecipeOverrides: booking.cocktailRecipeOverrides || '',
+    mocktailRecipeOverrides: booking.mocktailRecipeOverrides || '',
+    beerSelection: booking.beerSelection || '',
+    spiritsSelection: booking.spiritsSelection || '',
+    softDrinksSelection: booking.softDrinksSelection || '',
     cocktailsConfirmed: !!booking.cocktailsConfirmed,
     mocktailsConfirmed: !!booking.mocktailsConfirmed,
     staffConfirmed: !!booking.staffConfirmed,
@@ -39,6 +45,8 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
   const [stockItems, setStockItems] = useState([]);
   const [stockForm, setStockForm] = useState({ itemId: '', quantityUsed: '' });
   const [addingStockCost, setAddingStockCost] = useState(false);
+  const [drinksLibrary, setDrinksLibrary] = useState([]);
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     fetch(`/api/bookings/${booking.id}/costs`).then(r => r.json()).then(res => {
@@ -47,6 +55,9 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     });
     fetch('/api/stock').then(r => r.json()).then(res => {
       if (!res.error) setStockItems(res.items || []);
+    });
+    fetch('/api/drinks').then(r => r.json()).then(res => {
+      if (!res.error) setDrinksLibrary(res.drinks || []);
     });
   }, [booking.id]);
 
@@ -59,7 +70,14 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
       const res = await fetch(`/api/bookings/${booking.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
       }).then(r => r.json());
-      if (res.error) throw new Error(res.error);
+      if (res.error) {
+        if (res.gates?.length) {
+          alert(`${res.error}\n\n${res.gates.map(g => `• ${g.label}\n   → ${g.fix}`).join('\n\n')}`);
+        } else {
+          alert(res.error);
+        }
+        return;
+      }
       setSaveMsg('✓ Saved to Notion');
       onSaved?.(res.booking);
       setTimeout(() => setSaveMsg(''), 3000);
@@ -67,6 +85,29 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
       alert('Save failed: ' + err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function markCompleted() {
+    if (!confirm(`Mark "${booking.name}" as Completed? This closes out the event.`)) return;
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/complete`, { method: 'POST' }).then(r => r.json());
+      if (res.error) {
+        if (res.gates?.length) {
+          alert(`${res.error}\n\n${res.gates.map(g => `• ${g.label}\n   → ${g.fix}`).join('\n\n')}`);
+        } else {
+          alert(res.error);
+        }
+        return;
+      }
+      onSaved?.(res.booking);
+      alert('✓ Event marked Completed.');
+      onClose();
+    } catch (err) {
+      alert('Failed: ' + err.message);
+    } finally {
+      setCompleting(false);
     }
   }
 
@@ -128,6 +169,16 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
 
   const totalCost = costs.reduce((s, c) => s + (c.finalCost ?? c.cost ?? 0), 0);
 
+  // Live gate checks. We use the local form state where relevant so the
+  // gates update as the user edits (e.g. type a new cocktail name → the
+  // "Cocktails not in library" gate updates immediately).
+  const cocktailGates = drinksConfirmationGates(form.cocktailMenu, drinksLibrary, 'Cocktails');
+  const mocktailGates = drinksConfirmationGates(form.mocktailMenu, drinksLibrary, 'Mocktails');
+  // Merge live form state into a booking-shape for completion gate calc.
+  const bookingForGates = { ...booking, ...form };
+  const completionGates = eventCompletionGates(bookingForGates, costs, { drinksLibrary });
+  const canComplete = booking.status !== 'Completed' && completionGates.length === 0 && drinksLibrary.length > 0;
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 300, display: 'flex', justifyContent: 'flex-end' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 520, maxWidth: '95vw', height: '100vh', background: '#fff', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,.08)' }}>
@@ -176,6 +227,44 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Row label="Deposit" value={booking.depositReceived ? '✓ Received' : 'Pending'} />
                 <Row label="Balance" value={booking.balanceReceived ? '✓ Received' : 'Pending'} />
               </Section>
+
+              <Section title="Close event">
+                {booking.status === 'Completed' ? (
+                  <div style={{ background: 'var(--success-bg)', color: 'var(--success)', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
+                    ✓ This event is marked Completed.
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                      Once all pre- and post-event steps are done, close the event. The button unlocks automatically when every requirement below is met.
+                    </p>
+                    {completionGates.length > 0 && (
+                      <div style={{ background: '#fff8e0', color: '#9a7500', padding: '10px 14px', borderRadius: 6, fontSize: 12, marginBottom: 10 }}>
+                        <strong>{completionGates.length} outstanding item{completionGates.length !== 1 ? 's' : ''}:</strong>
+                        <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
+                          {completionGates.map((g, i) => (
+                            <li key={i} style={{ marginBottom: 4 }}>
+                              {g.label}
+                              <div style={{ fontStyle: 'italic', color: '#7a5a00', fontSize: 11 }}>→ {g.fix}</div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <button
+                      onClick={markCompleted}
+                      disabled={!canComplete || completing}
+                      style={{
+                        background: canComplete ? 'var(--gold)' : 'var(--mid)',
+                        color: canComplete ? '#fff' : 'var(--muted)',
+                        border: 'none', borderRadius: 8, padding: '10px 18px',
+                        fontSize: 13, cursor: canComplete ? 'pointer' : 'not-allowed', fontWeight: 500,
+                      }}>
+                      {completing ? 'Marking completed…' : 'Mark event as Completed'}
+                    </button>
+                  </>
+                )}
+              </Section>
             </>
           )}
 
@@ -189,9 +278,47 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Field label="Cocktails"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.cocktailMenu} onChange={e => set({ cocktailMenu: e.target.value })} placeholder="Pornstar Martini, Strawberry Mojito, TBC" /></Field>
                 <Field label="Mocktails"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.mocktailMenu} onChange={e => set({ mocktailMenu: e.target.value })} placeholder="TBC, TBC" /></Field>
               </Section>
+              <Section title="Event-specific selections">
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                  What we're actually bringing on the day. Overrides the standard package — the checklist and pack list will use these.
+                </p>
+                <Field label="Spirits"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.spiritsSelection} onChange={e => set({ spiritsSelection: e.target.value })} placeholder="Absolut, Bombay Sapphire, Jameson…" /></Field>
+                <Field label="Beer"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.beerSelection} onChange={e => set({ beerSelection: e.target.value })} placeholder="Budweiser only (dropped Peroni)" /></Field>
+                <Field label="Soft drinks & mixers"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.softDrinksSelection} onChange={e => set({ softDrinksSelection: e.target.value })} placeholder="Coca-Cola, Diet Coke, Lemonade, Tonic, Soda…" /></Field>
+              </Section>
+              <Section title="Recipe overrides">
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                  If a drink needs a custom recipe for THIS client only (different spirit, different measures), enter it here.
+                  Format: drink name on its own line ending with a colon, then one ingredient per line. Blank line between drinks.
+                </p>
+                <Field label="Cocktail overrides"><textarea style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} rows={6} value={form.cocktailRecipeOverrides} onChange={e => set({ cocktailRecipeOverrides: e.target.value })} placeholder={"Espresso Martini:\n50ml Grey Goose\n35ml Baileys (not Kahlúa)\n25ml fresh espresso\nMethod: Shake hard, double strain\n\nPornstar Martini:\n50ml Absolut Vanilla\n..."} /></Field>
+                <Field label="Mocktail overrides"><textarea style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} rows={4} value={form.mocktailRecipeOverrides} onChange={e => set({ mocktailRecipeOverrides: e.target.value })} placeholder="Same format as cocktails above" /></Field>
+              </Section>
               <Section title="Confirmations">
-                <Check label="Cocktails confirmed" checked={form.cocktailsConfirmed} onChange={v => set({ cocktailsConfirmed: v })} />
-                <Check label="Mocktails confirmed" checked={form.mocktailsConfirmed} onChange={v => set({ mocktailsConfirmed: v })} />
+                <Check
+                  label="Cocktails confirmed"
+                  checked={form.cocktailsConfirmed}
+                  onChange={v => set({ cocktailsConfirmed: v })}
+                  disabled={form.cocktailsConfirmed ? false : cocktailGates.length > 0}
+                />
+                {cocktailGates.length > 0 && !form.cocktailsConfirmed && (
+                  <div style={{ background: '#fff8e0', color: '#9a7500', padding: '6px 10px', borderRadius: 6, fontSize: 11, marginTop: 4, marginBottom: 6 }}>
+                    ⚠ {cocktailGates[0].label}<br />
+                    <em style={{ color: '#7a5a00' }}>{cocktailGates[0].fix}</em>
+                  </div>
+                )}
+                <Check
+                  label="Mocktails confirmed"
+                  checked={form.mocktailsConfirmed}
+                  onChange={v => set({ mocktailsConfirmed: v })}
+                  disabled={form.mocktailsConfirmed ? false : mocktailGates.length > 0}
+                />
+                {mocktailGates.length > 0 && !form.mocktailsConfirmed && (
+                  <div style={{ background: '#fff8e0', color: '#9a7500', padding: '6px 10px', borderRadius: 6, fontSize: 11, marginTop: 4, marginBottom: 6 }}>
+                    ⚠ {mocktailGates[0].label}<br />
+                    <em style={{ color: '#7a5a00' }}>{mocktailGates[0].fix}</em>
+                  </div>
+                )}
                 <Check label="Staff confirmed" checked={form.staffConfirmed} onChange={v => set({ staffConfirmed: v })} />
                 <Check label="Event brief sent" checked={form.eventBriefSent} onChange={v => set({ eventBriefSent: v })} />
                 <Check label="Venue access confirmed" checked={form.venueAccessConfirmed} onChange={v => set({ venueAccessConfirmed: v })} />
@@ -333,11 +460,11 @@ function Row({ label, value }) {
 function Field({ label, children }) {
   return (<div style={{ marginBottom: 12 }}><label style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 4 }}>{label}</label>{children}</div>);
 }
-function Check({ label, checked, onChange }) {
+function Check({ label, checked, onChange, disabled }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '5px 0', borderBottom: '1px solid var(--off)', opacity: disabled ? 0.5 : 1 }}>
       <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{label}</span>
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }} />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: disabled ? 'not-allowed' : 'pointer' }} />
     </div>
   );
 }

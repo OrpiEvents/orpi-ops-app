@@ -13,8 +13,8 @@ export default async function ChecklistPage({ params }) {
     stockItems = allStock;
     [costs, cocktails, mocktails] = await Promise.all([
       listBookingCosts(params.id),
-      resolveMenu(booking.cocktailMenu, drinksLibrary),
-      resolveMenu(booking.mocktailMenu, drinksLibrary),
+      resolveMenu(booking.cocktailMenu, drinksLibrary, booking.cocktailRecipeOverrides),
+      resolveMenu(booking.mocktailMenu, drinksLibrary, booking.mocktailRecipeOverrides),
     ]);
     const providesAlcohol = booking.alcoholProvidedBy === 'ORPI';
     if (providesAlcohol) suggestedStock = suggestStockForDrinks([...cocktails, ...mocktails], stockItems);

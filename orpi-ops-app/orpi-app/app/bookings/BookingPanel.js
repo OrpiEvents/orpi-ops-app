@@ -289,9 +289,9 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
               <Section title="Recipe overrides">
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
                   If a drink needs a custom recipe for THIS client only (different spirit, different measures), enter it here.
-                  Format: drink name on its own line ending with a colon, then one ingredient per line. Blank line between drinks.
+                  Format: drink name on its own line ending with a colon, then one ingredient per line. A new colon-ending line starts the next drink.
                 </p>
-                <Field label="Cocktail overrides"><textarea style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} rows={6} value={form.cocktailRecipeOverrides} onChange={e => set({ cocktailRecipeOverrides: e.target.value })} placeholder={"Espresso Martini:\n50ml Grey Goose\n35ml Baileys (not Kahlúa)\n25ml fresh espresso\nMethod: Shake hard, double strain\n\nPornstar Martini:\n50ml Absolut Vanilla\n..."} /></Field>
+                <Field label="Cocktail overrides"><textarea style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} rows={6} value={form.cocktailRecipeOverrides} onChange={e => set({ cocktailRecipeOverrides: e.target.value })} placeholder={"Espresso Martini:\n50ml Grey Goose\n35ml Baileys (not Kahlúa)\n25ml fresh espresso\nMethod: Shake hard, double strain\nPornstar Martini:\n50ml Absolut Vanilla\n..."} /></Field>
                 <Field label="Mocktail overrides"><textarea style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} rows={4} value={form.mocktailRecipeOverrides} onChange={e => set({ mocktailRecipeOverrides: e.target.value })} placeholder="Same format as cocktails above" /></Field>
               </Section>
               <Section title="Confirmations">

@@ -215,42 +215,58 @@ export function matchDrink(name, drinks) {
 // Parses the "Recipe Overrides" text field on a booking into a map of
 // { drinkName (lowercase) → { ingredients: string[], methodText?: string } }.
 //
-// Format is one drink per stanza, name on its own line ending with a colon,
-// followed by one bullet-per-line for ingredients. An optional "Method:"
-// section adds a written method. Blank line separates stanzas.
+// Format is one drink per stanza. A stanza starts with the drink name on its
+// own line ending with a colon, followed by ingredients (one per line) and
+// an optional "Method: …" section.
 //
 //   Espresso Martini:
 //   50ml Grey Goose
 //   35ml Baileys (not Kahlúa)
-//   25ml fresh espresso
-//   Method: Shake hard with ice, double strain.
-//
+//   Method: Shake hard with ice.
 //   Passionfruit Martini:
 //   40ml Absolut Vanilla
 //   ...
+//
+// Stanzas are separated by any header line ending with a colon — blank
+// lines between stanzas are optional and ignored. This is deliberate:
+// Notion's rich_text storage sometimes collapses blank lines, so relying
+// on them for separation was fragile. A ":" at the end of a line is the
+// real separator.
 //
 // Deliberately forgiving — anything we can't parse we just skip, so a
 // half-typed override never breaks the checklist.
 export function parseRecipeOverrides(overridesText) {
   if (!overridesText) return {};
-  const stanzas = overridesText.split(/\n\s*\n/);
+  const allLines = overridesText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const map = {};
-  for (const stanza of stanzas) {
-    const lines = stanza.split('\n').map(l => l.trim()).filter(Boolean);
-    if (!lines.length) continue;
-    const headerMatch = lines[0].match(/^(.+?):\s*$/);
-    if (!headerMatch) continue;
-    const name = headerMatch[1].trim().toLowerCase();
-    const ingredients = [];
-    let methodText = '';
-    for (const line of lines.slice(1)) {
-      const mMatch = line.match(/^method:\s*(.*)$/i);
-      if (mMatch) methodText = mMatch[1].trim();
-      else if (methodText) methodText += ' ' + line;
-      else ingredients.push(line.replace(/^[•\-*]\s*/, ''));
+  let currentName = null;
+  let ingredients = [];
+  let methodText = '';
+
+  function commit() {
+    if (currentName && (ingredients.length || methodText)) {
+      map[currentName] = { ingredients, methodText };
     }
-    if (ingredients.length || methodText) map[name] = { ingredients, methodText };
+    currentName = null;
+    ingredients = [];
+    methodText = '';
   }
+
+  for (const line of allLines) {
+    const headerMatch = line.match(/^(.+?):\s*$/);
+    if (headerMatch) {
+      // Start of a new stanza — commit the previous one first.
+      commit();
+      currentName = headerMatch[1].trim().toLowerCase();
+      continue;
+    }
+    if (!currentName) continue; // stray line before first header — skip
+    const mMatch = line.match(/^method:\s*(.*)$/i);
+    if (mMatch) methodText = mMatch[1].trim();
+    else if (methodText) methodText += ' ' + line;
+    else ingredients.push(line.replace(/^[•\-*]\s*/, ''));
+  }
+  commit();
   return map;
 }
 

@@ -25,9 +25,11 @@ export async function PATCH(request, { params }) {
       ]);
       const cocktailMenu = body.cocktailMenu !== undefined ? body.cocktailMenu : current.cocktailMenu;
       const mocktailMenu = body.mocktailMenu !== undefined ? body.mocktailMenu : current.mocktailMenu;
+      const cocktailOverrides = body.cocktailRecipeOverrides !== undefined ? body.cocktailRecipeOverrides : current.cocktailRecipeOverrides;
+      const mocktailOverrides = body.mocktailRecipeOverrides !== undefined ? body.mocktailRecipeOverrides : current.mocktailRecipeOverrides;
       const gates = [];
-      if (flippingCt) gates.push(...drinksConfirmationGates(cocktailMenu, drinksLibrary, 'Cocktails'));
-      if (flippingMt) gates.push(...drinksConfirmationGates(mocktailMenu, drinksLibrary, 'Mocktails'));
+      if (flippingCt) gates.push(...drinksConfirmationGates(cocktailMenu, drinksLibrary, 'Cocktails', cocktailOverrides));
+      if (flippingMt) gates.push(...drinksConfirmationGates(mocktailMenu, drinksLibrary, 'Mocktails', mocktailOverrides));
       if (gates.length) {
         return NextResponse.json({
           error: 'Cannot confirm — some drinks are missing from the ORPI Drinks Library.',

@@ -30,6 +30,18 @@ export function resolveMenuNames(menuCsv, drinksLibrary) {
   return { resolved, unresolved };
 }
 
+// Same parser used by lib/notion.js — kept in sync but duplicated here so
+// gates can be checked without an async recipe fetch.
+function parseOverrideNames(overridesText) {
+  if (!overridesText) return new Set();
+  const names = new Set();
+  overridesText.split(/\r?\n/).forEach(line => {
+    const m = line.trim().match(/^(.+?):\s*$/);
+    if (m) names.add(m[1].trim().toLowerCase());
+  });
+  return names;
+}
+
 /**
  * Gates for marking an enquiry as Won.
  * @param {object} enquiry
@@ -50,15 +62,19 @@ export function enquiryWonGates(enquiry) {
 
 /**
  * Gates for setting the cocktail-confirmed or mocktail-confirmed checkbox on a booking.
- * All drinks in the menu must exist in the ORPI Drinks Library (or be TBC).
+ * Every drink in the menu must be resolvable — either in the ORPI Drinks Library,
+ * covered by a recipe override on this booking, or explicitly marked TBC.
  */
-export function drinksConfirmationGates(menuCsv, drinksLibrary, menuLabel) {
+export function drinksConfirmationGates(menuCsv, drinksLibrary, menuLabel, overridesText = '') {
   const gates = [];
   const { unresolved } = resolveMenuNames(menuCsv, drinksLibrary);
-  if (unresolved.length) {
+  const overrideNames = parseOverrideNames(overridesText);
+  // Anything unresolved by the library but covered by an override is fine.
+  const stillUnresolved = unresolved.filter(name => !overrideNames.has(name.toLowerCase()));
+  if (stillUnresolved.length) {
     gates.push({
-      label: `${menuLabel} not in Drinks Library: ${unresolved.join(', ')}`,
-      fix: 'Add these to the ORPI Drinks Library in Notion (with ingredients and method), or fix the spelling on this booking',
+      label: `${menuLabel} not in Drinks Library: ${stillUnresolved.join(', ')}`,
+      fix: 'Add these to the ORPI Drinks Library in Notion, add a recipe override on this booking, or fix the spelling',
     });
   }
   return gates;
@@ -86,8 +102,8 @@ export function eventCompletionGates(booking, costs, { drinksLibrary = [] } = {}
   });
 
   // Menu confirmations must be honest — cannot tick "confirmed" with unresolved drinks.
-  const ctGates = drinksConfirmationGates(booking.cocktailMenu, drinksLibrary, 'Cocktails');
-  const mtGates = drinksConfirmationGates(booking.mocktailMenu, drinksLibrary, 'Mocktails');
+  const ctGates = drinksConfirmationGates(booking.cocktailMenu, drinksLibrary, 'Cocktails', booking.cocktailRecipeOverrides);
+  const mtGates = drinksConfirmationGates(booking.mocktailMenu, drinksLibrary, 'Mocktails', booking.mocktailRecipeOverrides);
   if (booking.cocktailMenu && !booking.cocktailsConfirmed) gates.push({
     label: 'Cocktails not yet confirmed with client',
     fix: 'Booking → Planning tab → tick "Cocktails confirmed"',

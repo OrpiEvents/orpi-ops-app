@@ -29,7 +29,14 @@ a { color: inherit; }
 
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-  @page { margin: 12mm; }
+  /* size: A4 and generous margin — Safari/Chrome respect this and shrink
+     their auto header/footer accordingly. If the user unchecks "Headers
+     and footers" in the print dialog, those disappear entirely. */
+  @page {
+    size: A4;
+    margin: 15mm 12mm 15mm 12mm;
+  }
+  @page :first { margin-top: 12mm; }
   aside, .no-print { display: none !important; }
   main { margin-left: 0 !important; padding: 0 !important; max-width: none !important; }
   .print-grid-collapse { display: block !important; }

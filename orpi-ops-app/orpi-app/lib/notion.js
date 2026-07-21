@@ -274,27 +274,58 @@ export function parseRecipeOverrides(overridesText) {
 // full drink details with recipes, for the checklist. If a recipe override
 // exists for a drink name on this specific booking, it takes precedence over
 // the Drinks Library recipe.
+//
+// Additionally, any drink that appears ONLY in the overrides (but not in the
+// menu string) is treated as an implicit menu addition — the assumption being
+// that if you took the time to write a recipe for it in overrides, you meant
+// to serve it. This means the Cocktail Menu field is the ordering hint, but
+// overrides can add drinks that weren't listed there.
 export async function resolveMenu(menuCsv, drinksLibrary, overridesText = '') {
-  if (!menuCsv) return [];
   const overrides = parseRecipeOverrides(overridesText);
-  const names = menuCsv.split(',').map(s => s.trim()).filter(Boolean);
-  const resolved = await Promise.all(names.map(async name => {
-    if (name.toLowerCase() === 'tbc') return { name, isTbc: true, found: false };
-    const match = matchDrink(name, drinksLibrary);
-    if (!match) return { name, found: false };
-    const libraryRecipe = await getDrinkRecipe(match.id);
-    const override = overrides[match.name.toLowerCase()] || overrides[name.toLowerCase()];
+  const menuNames = (menuCsv || '').split(',').map(s => s.trim()).filter(Boolean);
+  const menuNamesLower = new Set(menuNames.map(n => n.toLowerCase()));
+
+  // Add any override-only names to the end of the effective menu.
+  const orderedNames = [...menuNames];
+  for (const overrideName of Object.keys(overrides)) {
+    if (!menuNamesLower.has(overrideName)) orderedNames.push(overrideName);
+  }
+  if (!orderedNames.length) return [];
+
+  const resolved = await Promise.all(orderedNames.map(async rawName => {
+    if (rawName.toLowerCase() === 'tbc') return { name: rawName, isTbc: true, found: false };
+    const match = matchDrink(rawName, drinksLibrary);
+    const override = overrides[match?.name.toLowerCase()] || overrides[rawName.toLowerCase()];
+
+    // Case 1: matched in the Drinks Library.
+    if (match) {
+      const libraryRecipe = await getDrinkRecipe(match.id);
+      if (override) {
+        return {
+          name: match.name, found: true, drink: match,
+          ingredients: override.ingredients.length ? override.ingredients : libraryRecipe.ingredients,
+          methodText: override.methodText || libraryRecipe.methodText,
+          hasOverride: true,
+        };
+      }
+      return { name: match.name, found: true, drink: match, ...libraryRecipe, hasOverride: false };
+    }
+
+    // Case 2: not in Drinks Library, but there IS an override — treat the
+    // override as the full recipe (we still flag "not in library" separately
+    // via the gate system so it doesn't sneak through un-audited).
     if (override) {
+      // Prettify the name — title-case the lookup key we found.
+      const prettyName = rawName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       return {
-        name: match.name,
-        found: true,
-        drink: match,
-        ingredients: override.ingredients.length ? override.ingredients : libraryRecipe.ingredients,
-        methodText: override.methodText || libraryRecipe.methodText,
-        hasOverride: true,
+        name: prettyName, found: true, drink: { name: prettyName },
+        ingredients: override.ingredients, methodText: override.methodText,
+        hasOverride: true, isOverrideOnly: true,
       };
     }
-    return { name: match.name, found: true, drink: match, ...libraryRecipe, hasOverride: false };
+
+    // Case 3: neither in library nor overrides — flag as missing.
+    return { name: rawName, found: false };
   }));
   return resolved;
 }

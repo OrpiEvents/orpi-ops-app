@@ -172,8 +172,8 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
   // Live gate checks. We use the local form state where relevant so the
   // gates update as the user edits (e.g. type a new cocktail name → the
   // "Cocktails not in library" gate updates immediately).
-  const cocktailGates = drinksConfirmationGates(form.cocktailMenu, drinksLibrary, 'Cocktails');
-  const mocktailGates = drinksConfirmationGates(form.mocktailMenu, drinksLibrary, 'Mocktails');
+  const cocktailGates = drinksConfirmationGates(form.cocktailMenu, drinksLibrary, 'Cocktails', form.cocktailRecipeOverrides);
+  const mocktailGates = drinksConfirmationGates(form.mocktailMenu, drinksLibrary, 'Mocktails', form.mocktailRecipeOverrides);
   // Merge live form state into a booking-shape for completion gate calc.
   const bookingForGates = { ...booking, ...form };
   const completionGates = eventCompletionGates(bookingForGates, costs, { drinksLibrary });

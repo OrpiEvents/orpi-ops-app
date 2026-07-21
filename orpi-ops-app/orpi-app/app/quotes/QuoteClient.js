@@ -56,12 +56,55 @@ export default function QuoteClient({ userEmail }) {
   const [enquiries, setEnquiries] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [templateMsg, setTemplateMsg] = useState('');
+
+  // Fields that survive being "reset" back to default — client-specific
+  // things (name, date, guests, base price, invoice number) are always
+  // wiped when loading the template; brand structure carries over.
+  const TEMPLATE_FIELDS = [
+    'salesPerson', 'pkg', 'duration', 'setup',
+    'wdOn', 'wdDur', 'wdItems',
+    'inclItems', 'spiritRows', 'softItems',
+    'nct', 'nmt', 'addons', 'compItems',
+  ];
+  const templateKey = `orpi-quote-template::${userEmail || 'default'}`;
 
   useEffect(() => {
     fetch('/api/enquiries').then(r => r.json()).then(res => {
       if (!res.error) setEnquiries(res.enquiries || []);
     });
+    // Auto-load the saved template on first render (if one exists) so a
+    // fresh quote starts from your saved structure, not the built-in default.
+    try {
+      const raw = localStorage.getItem(templateKey);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        setS(prev => ({ ...prev, ...saved }));
+      }
+    } catch { /* ignore corrupt or missing */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function saveAsTemplate() {
+    try {
+      const toSave = {};
+      TEMPLATE_FIELDS.forEach(k => { toSave[k] = s[k]; });
+      localStorage.setItem(templateKey, JSON.stringify(toSave));
+      setTemplateMsg('✓ Saved as your default quote template');
+      setTimeout(() => setTemplateMsg(''), 3500);
+    } catch (err) {
+      alert('Could not save template: ' + err.message);
+    }
+  }
+
+  function clearTemplate() {
+    if (!confirm('Reset your default quote template? Future quotes will start from the built-in default.')) return;
+    try {
+      localStorage.removeItem(templateKey);
+      setTemplateMsg('Default template cleared');
+      setTimeout(() => setTemplateMsg(''), 3500);
+    } catch {}
+  }
 
   function set(patch) { setS(prev => ({ ...prev, ...patch })); }
 
@@ -102,8 +145,17 @@ export default function QuoteClient({ userEmail }) {
   }
 
   function resetAll() {
-    if (!confirm('Reset the quote builder?')) return;
-    setS(freshState());
+    if (!confirm('Reset the quote builder? Client-specific fields will be cleared; your saved template (if any) will be restored.')) return;
+    const fresh = freshState();
+    try {
+      const raw = localStorage.getItem(templateKey);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        setS({ ...fresh, ...saved });
+        return;
+      }
+    } catch { /* fall through to blank */ }
+    setS(fresh);
   }
 
   return (
@@ -112,12 +164,13 @@ export default function QuoteClient({ userEmail }) {
         s={s} set={set} enquiries={enquiries} loadFromEnquiry={loadFromEnquiry}
         addonTotal={addonTotal} total={total} dep={dep}
         saving={saving} saveMsg={saveMsg} saveToNotion={saveToNotion} resetAll={resetAll}
+        saveAsTemplate={saveAsTemplate} clearTemplate={clearTemplate} templateMsg={templateMsg}
       />
     </AppShell>
   );
 }
 
-function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll }) {
+function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, saveAsTemplate, clearTemplate, templateMsg }) {
   return (
     <div>
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -130,8 +183,12 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <option value="">Load from enquiry…</option>
             {enquiries.map(e => <option key={e.id} value={e.id}>{e.name} — {fmtDate(e.eventDate)}</option>)}
           </select>
-          <button onClick={() => window.print()} style={btnBlack}>🖨 Download PDF</button>
+          <button onClick={() => window.print()} style={btnBlack} title="For a clean PDF, untick 'Headers and footers' in the print dialog under 'More settings'">🖨 Download PDF</button>
         </div>
+      </div>
+
+      <div className="no-print" style={{ background: '#fdf8ec', border: '1px solid var(--gold)', color: '#7a6300', padding: '8px 14px', borderRadius: 6, fontSize: 12, marginBottom: 14 }}>
+        💡 In the print dialog, expand <strong>More settings</strong> → untick <strong>Headers and footers</strong> for a clean PDF (removes the URL &amp; timestamp).
       </div>
 
       <div className="print-grid-collapse" style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20, alignItems: 'start' }}>
@@ -249,6 +306,18 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <button onClick={resetAll} style={btnOutline}>Reset</button>
           </div>
           {saveMsg && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--success)' }}>{saveMsg}</div>}
+
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 6 }}>Your default template</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+              Save the current quote structure (welcome drinks, spirits, inclusions, add-ons) as your default. Every new quote will start from these settings — client details always start blank.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={saveAsTemplate} style={btnOutline}>Save as default</button>
+              <button onClick={clearTemplate} style={btnOutline}>Clear default</button>
+            </div>
+            {templateMsg && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--success)' }}>{templateMsg}</div>}
+          </div>
         </div>
 
         <QuotePreview s={s} addonTotal={addonTotal} total={total} dep={dep} />
@@ -395,139 +464,217 @@ function QuotePreview({ s, addonTotal, total, dep }) {
     return <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center', padding: '60px 40px', color: 'var(--muted)', fontSize: 13 }}>Fill in the builder to preview the quote</div>;
   }
 
+  const rowMuted = { color: '#8a8880', fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', padding: '4px 0' };
+  const rowValue = { color: '#1c1b18', fontSize: 12, padding: '4px 0' };
+  const sectionHead = { fontSize: 10, letterSpacing: '.28em', textTransform: 'uppercase', color: '#0a0a0a', margin: '22px 0 12px', fontWeight: 500, borderBottom: '1px solid #e8e6e0', paddingBottom: 8 };
+  const goldLabelSmall = { fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#b8953a', marginBottom: 5, fontWeight: 500 };
+
   return (
     <div className="inv-preview-doc" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontFamily: 'var(--sans)' }}>
-      <div className="print-avoid-break" style={{ background: 'var(--black)', padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
+      {/* ── Black header with brand + corner ref ── */}
+      <div className="print-avoid-break" style={{ background: 'var(--black)', color: '#fff', padding: '32px 44px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 30 }}>
         <div>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 700, letterSpacing: '.18em', color: '#fff' }}>ORPI</div>
-          <div style={{ fontSize: 10, letterSpacing: '.2em', color: '#555', marginTop: 2 }}>EVENTS</div>
-          <div style={{ marginTop: 10, fontSize: 11, color: '#888', lineHeight: 1.8 }}>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 26, letterSpacing: '.3em', fontWeight: 500, lineHeight: 1 }}>ORPI</div>
+          <div style={{ fontSize: 9.5, letterSpacing: '.38em', color: 'var(--gold)', marginTop: 6 }}>MOBILE BAR &amp; EVENTS</div>
+          <div style={{ marginTop: 20, fontSize: 10.5, color: '#999', lineHeight: 1.8, letterSpacing: '.02em' }}>
             Unit 5 Clements Court, Clements Lane, Ilford, IG1 2QY<br />
             Rudhra: +44 7424 505763 &nbsp;|&nbsp; Rahul: +44 7405 812971
           </div>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 11, color: '#888', lineHeight: 1.8 }}>
-          <p>Hello@Orpi.Events</p><p>@Orpi.Events</p>
-          <div style={{ marginTop: 12, border: '1px solid #2a2a2a', padding: '10px 14px', borderRadius: 4, textAlign: 'left' }}>
-            <div style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: '.08em' }}>Sort code</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>04-06-05</div>
-            <div style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: '.08em', marginTop: 6 }}>Account no</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>27534338</div>
+        <div style={{ textAlign: 'right', fontSize: 9.5, letterSpacing: '.12em', color: '#999', lineHeight: 2, textTransform: 'uppercase' }}>
+          {s.invNum && <>Ref &nbsp; <strong style={{ color: '#fff', fontWeight: 500, letterSpacing: '.18em' }}>{s.invNum}</strong><br /></>}
+          Sort &nbsp; <strong style={{ color: '#fff', fontWeight: 500, letterSpacing: '.18em' }}>04-06-05</strong><br />
+          Acc &nbsp; <strong style={{ color: '#fff', fontWeight: 500, letterSpacing: '.18em' }}>27534338</strong>
+        </div>
+      </div>
+      {/* Gold band */}
+      <div style={{ height: 2, background: 'var(--gold)' }} />
+
+      {/* ── Doctype bar ── */}
+      <div style={{ padding: '18px 44px', background: '#faf9f6', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid #e8e6e0' }}>
+        <div style={{ fontFamily: 'var(--serif)', fontSize: 22, letterSpacing: '.04em', fontStyle: 'italic' }}>{docLabels[s.doctype]}</div>
+        <div style={{ fontSize: 9.5, letterSpacing: '.16em', textTransform: 'uppercase', color: '#666' }}>
+          {s.date && <>Issued <strong style={{ color: '#0a0a0a', fontWeight: 500 }}>{fmtDatePretty(s.date)}</strong></>}
+          {s.due && <> &nbsp;·&nbsp; {s.doctype === 'quote' ? 'Valid' : 'Due'} <strong style={{ color: '#0a0a0a', fontWeight: 500 }}>{fmtDatePretty(s.due)}</strong></>}
+        </div>
+      </div>
+
+      {/* ── Body ── */}
+      <div style={{ padding: '28px 44px' }}>
+        {/* Client + preparer row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 30, padding: '4px 0 22px', borderBottom: '1px solid #f0eee8' }}>
+          <div>
+            <div style={goldLabelSmall}>Prepared for</div>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: '#0a0a0a' }}>{s.client || '—'}</div>
+          </div>
+          <div>
+            <div style={goldLabelSmall}>Prepared by</div>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: '#0a0a0a' }}>{s.salesPerson}</div>
           </div>
         </div>
-      </div>
-      <div style={{ height: 3, background: 'var(--gold)' }} />
-      <div style={{ background: 'var(--off)', borderBottom: '1px solid var(--border)', padding: '12px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 600 }}>{docLabels[s.doctype]}</div>
-        <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)', lineHeight: 1.9 }}>
-          {s.date && <div><strong>{fmtDatePretty(s.date)}</strong> Date</div>}
-          {s.invNum && <div><strong>{s.invNum}</strong> Invoice no.</div>}
-          {s.due && <div><strong>{fmtDatePretty(s.due)}</strong> {s.doctype === 'quote' ? 'Valid until' : 'Due'}</div>}
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ padding: '14px 28px', borderRight: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--muted)', marginBottom: 8 }}>Client details</div>
-          <p style={{ fontSize: 13, fontWeight: 600 }}>{s.client || '—'}</p>
-        </div>
-        <div style={{ padding: '14px 28px' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--muted)', marginBottom: 8 }}>Payment details</div>
-          <p style={{ fontSize: 12, lineHeight: 2 }}>ORPI Events LTD<br />Sort Code: 04-06-05 | Account: 27534338<br /><em style={{ color: 'var(--muted)' }}>Ref: [Surname + Event Date]</em><br />50% deposit on confirmation. Balance 14 days before.</p>
-        </div>
-      </div>
-      <div style={{ padding: '16px 28px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 2, marginBottom: 14 }}>
-          <DL label="Event type" value={s.etype} />
-          <DL label="Venue" value={s.venue} />
-          <DL label="Event date" value={s.edate ? fmtDateLong(s.edate) : '—'} />
-          <DL label="Service time" value={s.etime} />
-          <DL label="Guests" value={s.guests} />
-          <DL label="Package" value={s.pkg} />
-          <DL label="Duration" value={s.duration} />
-          {s.setup && <DL label="Setup access" value={s.setup} />}
+
+        {/* Event details */}
+        <div style={sectionHead}>Event details</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '2px 20px' }}>
+          <div style={rowMuted}>Event type</div><div style={rowValue}>{s.etype || '—'}</div>
+          <div style={rowMuted}>Venue</div><div style={rowValue}>{s.venue || '—'}</div>
+          <div style={rowMuted}>Date</div><div style={rowValue}>{s.edate ? fmtDateLong(s.edate) : '—'}</div>
+          <div style={rowMuted}>Service time</div><div style={rowValue}>{s.etime || '—'}</div>
+          <div style={rowMuted}>Guests</div><div style={rowValue}>{s.guests || '—'}</div>
+          <div style={rowMuted}>Package</div><div style={rowValue}>{s.pkg}</div>
+          <div style={rowMuted}>Duration</div><div style={rowValue}>{s.duration || '—'}</div>
+          {s.setup && <><div style={rowMuted}>Setup access</div><div style={rowValue}>{s.setup}</div></>}
         </div>
 
+        {/* What's included */}
         {inclActive.length > 0 && (
-          <Section title="What's included">
-            <ul style={{ listStyle: 'none', padding: 0, fontSize: 12, lineHeight: 1.9 }}>
-              {inclActive.map(i => <li key={i.id}>✓ {i.text}</li>)}
-            </ul>
-          </Section>
+          <>
+            <div style={sectionHead}>What's included</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '5px 24px', fontSize: 12, color: '#333' }}>
+              {inclActive.map(i => (
+                <span key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                  <span style={{ display: 'inline-block', width: 3, height: 3, background: 'var(--gold)', borderRadius: '50%', flexShrink: 0 }}></span>
+                  {i.text}
+                </span>
+              ))}
+            </div>
+          </>
         )}
+
+        {/* Welcome drinks */}
         {s.wdOn && wdActive.length > 0 && (
-          <Section title={`${s.wdDur} welcome drinks`}>
-            <div style={{ fontSize: 12 }}>{wdActive.map(i => i.text).join(', ')}</div>
-          </Section>
+          <>
+            <div style={sectionHead}>{s.wdDur} welcome drinks</div>
+            <div style={{ fontSize: 12, color: '#333' }}>{wdActive.map(i => i.text).join(' · ')}</div>
+          </>
         )}
+
+        {/* Spirits & alcohol */}
         {activeSpirits.length > 0 && (
-          <Section title="Spirits & alcohol">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <>
+            <div style={sectionHead}>Spirits &amp; alcohol</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               {activeSpirits.map(row => (
                 <div key={row.cat}>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 3 }}>{row.cat}</div>
-                  <div style={{ fontSize: 11, lineHeight: 1.9 }}>{row.items.map(i => <div key={i.id}>{i.text}</div>)}</div>
+                  <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--gold)', marginBottom: 5 }}>{row.cat}</div>
+                  <div style={{ fontSize: 11.5, lineHeight: 1.85, color: '#333' }}>{row.items.map(i => <div key={i.id}>{i.text}</div>)}</div>
                 </div>
               ))}
             </div>
-          </Section>
+          </>
         )}
+
+        {/* Soft drinks */}
         {softActive.length > 0 && (
-          <Section title="Soft drinks & mixers">
-            <div style={{ fontSize: 12 }}>{softActive.map(i => i.text).join(', ')}</div>
-          </Section>
+          <>
+            <div style={sectionHead}>Soft drinks &amp; mixers</div>
+            <div style={{ fontSize: 12, color: '#333' }}>{softActive.map(i => i.text).join(' · ')}</div>
+          </>
         )}
+
+        {/* Cocktails & mocktails */}
         {(s.nct > 0 || s.nmt > 0) && (
-          <Section title="Cocktails & mocktails">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <>
+            <div style={sectionHead}>Cocktails &amp; mocktails</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               {s.nct > 0 && (
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 4 }}>Cocktails ×{s.nct}</div>
-                  {s.cocktailNames.slice(0, s.nct).map((n, i) => <div key={i} style={{ fontSize: 12, padding: '2px 0' }}>{i + 1}. {n || 'TBC'}</div>)}
+                  <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--gold)', marginBottom: 6 }}>Cocktails ×{s.nct}</div>
+                  {s.cocktailNames.slice(0, s.nct).map((n, i) => <div key={i} style={{ fontSize: 12, padding: '2px 0', color: '#333' }}>{i + 1}. {n || 'TBC'}</div>)}
                 </div>
               )}
               {s.nmt > 0 && (
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 4 }}>Mocktails ×{s.nmt}</div>
-                  {s.mocktailNames.slice(0, s.nmt).map((n, i) => <div key={i} style={{ fontSize: 12, padding: '2px 0' }}>{i + 1}. {n || 'TBC'}</div>)}
+                  <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--gold)', marginBottom: 6 }}>Mocktails ×{s.nmt}</div>
+                  {s.mocktailNames.slice(0, s.nmt).map((n, i) => <div key={i} style={{ fontSize: 12, padding: '2px 0', color: '#333' }}>{i + 1}. {n || 'TBC'}</div>)}
                 </div>
               )}
             </div>
-          </Section>
+          </>
         )}
+
+        {/* Add-ons */}
         {activeAddons.length > 0 && (
-          <Section title="Extras & add-ons">
+          <>
+            <div style={sectionHead}>Extras &amp; add-ons</div>
             {activeAddons.map(a => (
-              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', borderBottom: '1px solid var(--off)' }}>
+              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', borderBottom: '1px solid #f0eee8', color: '#333' }}>
                 <span>{a.label}</span><span style={{ fontWeight: 500 }}>{gbp(parseFloat(a.price))}</span>
               </div>
             ))}
-          </Section>
+          </>
         )}
+
+        {/* Complimentary */}
         {compActive.length > 0 && (
-          <Section title="Complimentary"><div style={{ fontSize: 12 }}>{compActive.map(i => i.text).join(', ')}</div></Section>
+          <>
+            <div style={sectionHead}>Complimentary</div>
+            <div style={{ fontSize: 12, color: '#333' }}>{compActive.map(i => i.text).join(' · ')}</div>
+          </>
         )}
+
+        {/* Notes */}
         {s.notes && (
-          <div style={{ background: 'var(--gold-bg)', borderLeft: '3px solid var(--gold)', padding: '10px 14px', fontSize: 12, borderRadius: '0 4px 4px 0', marginBottom: 10 }}>{s.notes}</div>
+          <div style={{ background: 'var(--gold-bg)', borderLeft: '3px solid var(--gold)', padding: '10px 14px', fontSize: 12, borderRadius: '0 4px 4px 0', marginTop: 18, color: '#555' }}>{s.notes}</div>
         )}
       </div>
-      <div className="print-avoid-break" style={{ background: 'var(--black)', padding: '16px 28px' }}>
-        <PriceRow label="Base package" value={gbp(parseFloat(s.base) || 0)} />
-        {addonTotal > 0 && <PriceRow label="Extras / add-ons" value={gbp(addonTotal)} />}
-        {parseFloat(s.disc) > 0 && <PriceRow label="Discount" value={`−${gbp(parseFloat(s.disc))}`} />}
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 700, color: '#fff', paddingTop: 12, display: 'flex', justifyContent: 'space-between' }}>
-          <span>{s.doctype === 'quote' ? 'Total' : s.doctype === 'deposit' ? 'Deposit due (50%)' : 'Balance due'}</span>
-          <span>{gbp(s.doctype === 'quote' ? total : dep)}</span>
+
+      {/* ── Black pricing box ── */}
+      <div className="print-avoid-break" style={{ background: 'var(--black)', color: '#fff', padding: '24px 44px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#999' }}>
+          <span>Base package</span><span>{gbp(parseFloat(s.base) || 0)}</span>
+        </div>
+        {addonTotal > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#999' }}>
+            <span>Extras / add-ons</span><span>{gbp(addonTotal)}</span>
+          </div>
+        )}
+        {parseFloat(s.disc) > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#999' }}>
+            <span>Discount</span><span>−{gbp(parseFloat(s.disc))}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 14, marginTop: 10, borderTop: '1px solid #333', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--gold)' }}>
+            {s.doctype === 'quote' ? 'Total' : s.doctype === 'deposit' ? 'Deposit due (50%)' : 'Balance due'}
+          </span>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 26, color: '#fff' }}>
+            {gbp(s.doctype === 'quote' ? total : dep)}
+          </span>
         </div>
         {s.doctype === 'quote' && (
           <>
-            <PriceRow label="50% deposit on booking confirmation" value={gbp(dep)} muted />
-            <PriceRow label="Balance due 14 days before event" value={gbp(dep)} muted />
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#777', marginTop: 10 }}>
+              <span>50% deposit on confirmation</span><span>{gbp(dep)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#777' }}>
+              <span>Balance due 14 days before</span><span>{gbp(dep)}</span>
+            </div>
           </>
         )}
       </div>
-      <div style={{ padding: '14px 28px', background: 'var(--off)', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.8 }}>
-        Thank you for booking with ORPI Events. We look forward to making your day special.<br />
-        <strong>Hello@Orpi.Events &nbsp;|&nbsp; @Orpi.Events &nbsp;|&nbsp; orpi.events</strong>
+
+      {/* ── Key terms ── */}
+      <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff' }}>
+        <div style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 500, marginBottom: 10, letterSpacing: '.02em', fontStyle: 'italic' }}>Key terms &amp; conditions</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px', fontSize: 10.5, color: '#333', lineHeight: 1.55 }}>
+          <div><strong>Booking confirmation</strong> — 50% deposit secures your date; until received, the date remains open.</div>
+          <div><strong>Balance</strong> — remaining 50% due no later than 14 days before the event.</div>
+          <div><strong>Quote validity</strong> — this quote is valid for 14 days; pricing may change after.</div>
+          <div><strong>Guest numbers</strong> — final count required 7 days before; increases charged at agreed rate.</div>
+          <div><strong>Cancellation</strong> — {'>'}60 days: deposit retained · within 60: 50% · within 14: 100%.</div>
+          <div><strong>Substitutions</strong> — if a spirit brand is unavailable, we substitute for equal/higher quality.</div>
+          <div><strong>Access &amp; power</strong> — client provides venue access, parking &amp; power supply.</div>
+          <div><strong>Responsible service</strong> — our team serves in line with UK licensing law; we may refuse service.</div>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 10, color: 'var(--muted)', fontStyle: 'italic' }}>
+          Full terms &amp; conditions will be provided on booking confirmation. Paying the deposit confirms your acceptance.
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <div style={{ padding: '16px 44px', background: '#faf9f6', borderTop: '1px solid #e8e6e0', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: '#8a8880', textAlign: 'center' }}>
+        Hello@Orpi.Events &nbsp;·&nbsp; @Orpi.Events &nbsp;·&nbsp; Orpi.Events
       </div>
     </div>
   );

@@ -360,19 +360,22 @@ function DrinkCard({ drink }) {
       </div>
     );
   }
-  const d = drink.drink;
+  const d = drink.drink || {};
+  const metaBits = [d.method, d.glassware, d.ice ? `${d.ice} ice` : null].filter(Boolean);
   return (
     <div style={{ border: drink.hasOverride ? '1px solid var(--gold)' : '1px solid var(--border)', borderRadius: 6, padding: '12px 16px', marginBottom: 8, breakInside: 'avoid' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, gap: 8 }}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>
           {drink.name}
           {drink.hasOverride && (
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#8a6a00', background: 'var(--gold-bg)', padding: '2px 6px', borderRadius: 3, marginLeft: 8, letterSpacing: '.04em', textTransform: 'uppercase' }}>Custom for this event</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#8a6a00', background: 'var(--gold-bg)', padding: '2px 6px', borderRadius: 3, marginLeft: 8, letterSpacing: '.04em', textTransform: 'uppercase' }}>
+              {drink.isOverrideOnly ? 'Custom recipe (not in library)' : 'Custom for this event'}
+            </span>
           )}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-          {[d.method, d.glassware, d.ice ? `${d.ice} ice` : null].filter(Boolean).join(' · ')}
-        </div>
+        {metaBits.length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{metaBits.join(' · ')}</div>
+        )}
       </div>
       {drink.ingredients?.length > 0 && (
         <div style={{ fontSize: 12, marginBottom: 6 }}>
@@ -380,12 +383,14 @@ function DrinkCard({ drink }) {
         </div>
       )}
       {drink.methodText && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{drink.methodText}</div>}
-      <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-        {d.garnish && <>Garnish: {d.garnish}{d.rim ? ' · ' : ''}</>}
-        {d.rim && <>Rim: {d.rim}</>}
-        {d.batchable && <span style={{ marginLeft: 8 }}>· Batchable</span>}
-        {d.prepRequired && <span style={{ marginLeft: 8 }}>· Prep required</span>}
-      </div>
+      {(d.garnish || d.rim || d.batchable || d.prepRequired) && (
+        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+          {d.garnish && <>Garnish: {d.garnish}{d.rim ? ' · ' : ''}</>}
+          {d.rim && <>Rim: {d.rim}</>}
+          {d.batchable && <span style={{ marginLeft: 8 }}>· Batchable</span>}
+          {d.prepRequired && <span style={{ marginLeft: 8 }}>· Prep required</span>}
+        </div>
+      )}
     </div>
   );
 }

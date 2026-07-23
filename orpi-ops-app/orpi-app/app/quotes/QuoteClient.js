@@ -471,21 +471,22 @@ function QuotePreview({ s, addonTotal, total, dep }) {
 
   return (
     <div className="inv-preview-doc" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontFamily: 'var(--sans)' }}>
-      {/* ── Black header with brand + corner ref ── */}
-      <div className="print-avoid-break" style={{ background: 'var(--black)', color: '#fff', padding: '32px 44px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 30 }}>
+      {/* ── White header with brand + Ref number ── */}
+      <div className="print-avoid-break" style={{ background: '#fff', color: '#0a0a0a', padding: '36px 44px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 30, borderBottom: '1px solid #e8e6e0' }}>
         <div>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 26, letterSpacing: '.3em', fontWeight: 500, lineHeight: 1 }}>ORPI</div>
-          <div style={{ fontSize: 9.5, letterSpacing: '.38em', color: 'var(--gold)', marginTop: 6 }}>MOBILE BAR &amp; EVENTS</div>
-          <div style={{ marginTop: 20, fontSize: 10.5, color: '#999', lineHeight: 1.8, letterSpacing: '.02em' }}>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 30, letterSpacing: '.3em', fontWeight: 500, lineHeight: 1, color: '#0a0a0a' }}>ORPI</div>
+          <div style={{ fontSize: 9.5, letterSpacing: '.38em', color: 'var(--gold)', marginTop: 6, fontWeight: 500 }}>MOBILE BAR &amp; EVENTS</div>
+          <div style={{ marginTop: 22, fontSize: 10.5, color: '#555', lineHeight: 1.8, letterSpacing: '.02em' }}>
             Unit 5 Clements Court, Clements Lane, Ilford, IG1 2QY<br />
             Rudhra: +44 7424 505763 &nbsp;|&nbsp; Rahul: +44 7405 812971
           </div>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 9.5, letterSpacing: '.12em', color: '#999', lineHeight: 2, textTransform: 'uppercase' }}>
-          {s.invNum && <>Ref &nbsp; <strong style={{ color: '#fff', fontWeight: 500, letterSpacing: '.18em' }}>{s.invNum}</strong><br /></>}
-          Sort &nbsp; <strong style={{ color: '#fff', fontWeight: 500, letterSpacing: '.18em' }}>04-06-05</strong><br />
-          Acc &nbsp; <strong style={{ color: '#fff', fontWeight: 500, letterSpacing: '.18em' }}>27534338</strong>
-        </div>
+        {s.invNum && (
+          <div style={{ textAlign: 'right', fontSize: 9.5, letterSpacing: '.16em', color: '#8a8880', lineHeight: 1.8, textTransform: 'uppercase' }}>
+            Reference<br />
+            <strong style={{ color: '#0a0a0a', fontWeight: 500, letterSpacing: '.2em', fontSize: 12 }}>{s.invNum}</strong>
+          </div>
+        )}
       </div>
       {/* Gold band */}
       <div style={{ height: 2, background: 'var(--gold)' }} />
@@ -619,40 +620,87 @@ function QuotePreview({ s, addonTotal, total, dep }) {
         )}
       </div>
 
-      {/* ── Black pricing box ── */}
-      <div className="print-avoid-break" style={{ background: 'var(--black)', color: '#fff', padding: '24px 44px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#999' }}>
+      {/* ── Pricing block (light, legible, with bank details) ── */}
+      <div className="print-avoid-break" style={{ background: '#faf9f6', color: '#1c1b18', padding: '26px 44px', borderTop: '1px solid #e8e6e0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
           <span>Base package</span><span>{gbp(parseFloat(s.base) || 0)}</span>
         </div>
         {addonTotal > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#999' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
             <span>Extras / add-ons</span><span>{gbp(addonTotal)}</span>
           </div>
         )}
         {parseFloat(s.disc) > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#999' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
             <span>Discount</span><span>−{gbp(parseFloat(s.disc))}</span>
           </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 14, marginTop: 10, borderTop: '1px solid #333', alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--sans)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--gold)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 14, marginTop: 10, borderTop: '1px solid #d9d5c8', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 11, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 500 }}>
             {s.doctype === 'quote' ? 'Total' : s.doctype === 'deposit' ? 'Deposit due (50%)' : 'Balance due'}
           </span>
-          <span style={{ fontFamily: 'var(--serif)', fontSize: 26, color: '#fff' }}>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 32, color: '#0a0a0a', fontWeight: 500 }}>
             {gbp(s.doctype === 'quote' ? total : dep)}
           </span>
         </div>
         {s.doctype === 'quote' && (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#777', marginTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#555', marginTop: 10 }}>
               <span>50% deposit on confirmation</span><span>{gbp(dep)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#777' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#555' }}>
               <span>Balance due 14 days before</span><span>{gbp(dep)}</span>
             </div>
           </>
         )}
+
+        {/* ── Bank details, right beside the amount that needs paying ── */}
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #d9d5c8', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Payee</div>
+            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500 }}>ORPI Events LTD</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Sort code</div>
+            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500, letterSpacing: '.06em' }}>04-06-05</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Account no.</div>
+            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500, letterSpacing: '.06em' }}>27534338</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 10.5, color: '#8a8880', fontStyle: 'italic' }}>
+          Reference &nbsp;·&nbsp; {s.client || 'Your surname'} &nbsp;+&nbsp; {s.edate ? fmtDatePretty(s.edate) : 'event date'}
+        </div>
       </div>
+
+      {/* ── Enhancements you might like (unselected add-ons) ──
+          Shown greyed-out below pricing so clients can see what else we
+          offer without feeling pitched to. Only appears when there are
+          any unselected add-ons — a clean, all-selected quote won't show
+          this section at all. */}
+      {(() => {
+        const unselectedAddons = s.addons.filter(a => !a.on || !parseFloat(a.price));
+        if (unselectedAddons.length === 0) return null;
+        return (
+          <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff', borderTop: '1px solid #e8e6e0' }}>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 500, marginBottom: 4, letterSpacing: '.02em', fontStyle: 'italic', color: '#0a0a0a' }}>
+              Enhancements you might like
+            </div>
+            <div style={{ fontSize: 10.5, color: '#8a8880', marginBottom: 14, fontStyle: 'italic' }}>
+              Not included in this quote — let us know if you'd like to add any.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
+              {unselectedAddons.map(a => (
+                <div key={a.id} style={{ opacity: 0.72, borderLeft: '1px solid #e8e6e0', paddingLeft: 12, minHeight: 34 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 500, color: '#333' }}>{a.label}</div>
+                  {a.desc && <div style={{ fontSize: 10, color: '#8a8880', marginTop: 2, lineHeight: 1.45 }}>{a.desc}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Key terms ── */}
       <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff' }}>
@@ -674,7 +722,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
 
       {/* ── Footer ── */}
       <div style={{ padding: '16px 44px', background: '#faf9f6', borderTop: '1px solid #e8e6e0', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: '#8a8880', textAlign: 'center' }}>
-        Hello@Orpi.Events &nbsp;·&nbsp; @Orpi.Events &nbsp;·&nbsp; Orpi.Events
+        hello@orpi.events &nbsp;·&nbsp; @orpi.events &nbsp;·&nbsp; orpi.events
       </div>
     </div>
   );

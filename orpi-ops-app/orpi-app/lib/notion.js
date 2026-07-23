@@ -136,6 +136,26 @@ export function suggestStockForDrinks(drinks, stockItems) {
   return [...matched.values()];
 }
 
+// Builds a "standard service" stock list from the free-text Spirits/Beer/
+// Soft Drinks Selection fields on a booking. Each entry is comma-separated
+// (typical usage: "Absolut, Bombay Sapphire, Jameson"). We match each
+// substring against the inventory list, skipping any that don't resolve —
+// team members can still see the raw text on the checklist for anything
+// that couldn't be matched to real stock.
+export function suggestStandardServiceStock(booking, stockItems) {
+  const selectionFields = [booking.spiritsSelection, booking.beerSelection, booking.softDrinksSelection]
+    .filter(Boolean).join(', ');
+  if (!selectionFields) return [];
+  const matched = new Map();
+  selectionFields.split(',').forEach(chunk => {
+    const cleaned = chunk.trim();
+    if (!cleaned) return;
+    const item = matchIngredientToStock(cleaned, stockItems);
+    if (item && !matched.has(item.id)) matched.set(item.id, item);
+  });
+  return [...matched.values()];
+}
+
 // ---- Single booking lookup (for the checklist page) ------------------------
 export async function getBookingById(id) {
   const page = await notionFetch(`/pages/${id}`);

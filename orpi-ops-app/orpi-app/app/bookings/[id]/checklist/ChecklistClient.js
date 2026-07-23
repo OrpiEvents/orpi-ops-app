@@ -28,10 +28,15 @@ const STANDARD_CHECKLIST = {
 // "Bar Kit & Stock" ahead of the other items when applicable.
 const ALCOHOL_ONLY_ITEM = 'All spirits for menu ordered/packed';
 
-export default function ChecklistClient({ userEmail, booking, costs, cocktails, mocktails, stockItems, suggestedStock, error }) {
+export default function ChecklistClient({ userEmail, booking, costs, cocktails, mocktails, stockItems, cocktailStock = [], serviceStock = [], error }) {
+  // Reconciliation state is pre-populated from BOTH stock groups. The rows
+  // themselves are grouped visually in the UI but share the same input state,
+  // because for stock accounting they're all the same thing — items leaving
+  // the warehouse and coming back.
+  const combinedSuggested = [...cocktailStock, ...serviceStock];
   const [reconcile, setReconcile] = useState(() => {
     const initial = {};
-    (suggestedStock || []).forEach(s => { initial[s.id] = { takenOut: '', returned: '' }; });
+    combinedSuggested.forEach(s => { initial[s.id] = { takenOut: '', returned: '' }; });
     return initial;
   });
   const [addItemId, setAddItemId] = useState('');
@@ -239,66 +244,133 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
             );
           })}
 
-          {/* Stock pack list — only relevant when ORPI supplies the alcohol */}
-          {providesAlcohol && suggestedStock.length > 0 && (
+          {/* Stock pack list — split by purpose so the warehouse knows
+              WHY each item is being packed and can spot missing categories */}
+          {providesAlcohol && (cocktailStock.length > 0 || serviceStock.length > 0) && (
             <>
-              <SectionHead icon="📦">Suggested stock to pack</SectionHead>
-              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
-                Matched from the cocktail/mocktail recipes above — check against par levels before loading the van.
+              <SectionHead icon="📦">Stock to pack</SectionHead>
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
+                Two separate lists — cocktail/mocktail ingredients (from recipes above) and standard service items (from the client's package). Check against par before loading.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 8, marginBottom: 12 }}>
-                {suggestedStock.map(s => (
-                  <div key={s.id} style={{ display: 'contents' }}>
-                    <div style={{ fontSize: 12.5, padding: '4px 0', borderBottom: '1px solid var(--off)' }}>{s.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 0', borderBottom: '1px solid var(--off)' }}>Stock: {s.currentStock ?? '—'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 0', borderBottom: '1px solid var(--off)' }}>Par: {s.parLevel ?? '—'}</div>
+
+              {cocktailStock.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--gold)', marginBottom: 6 }}>For cocktails &amp; mocktails</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 6 }}>
+                    {cocktailStock.map(s => (
+                      <div key={s.id} style={{ display: 'contents' }}>
+                        <div style={{ fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>{s.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Stock: {s.currentStock ?? '—'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Par: {s.parLevel ?? '—'}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {serviceStock.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--gold)', marginBottom: 6 }}>For standard service (spirits, beer, mixers)</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 6 }}>
+                    {serviceStock.map(s => (
+                      <div key={s.id} style={{ display: 'contents' }}>
+                        <div style={{ fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>{s.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Stock: {s.currentStock ?? '—'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Par: {s.parLevel ?? '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
-          {/* Post-event stock reconciliation — interactive, no-print */}
+          {/* ── Van loadout & return (mobile-friendly, no-print) ──
+              Two-step flow: log what's going on the van before the event,
+              log what comes back after. Both feed the same cost line — the
+              "taken minus returned" delta becomes locked-cost consumption. */}
           {providesAlcohol && (
-            <div className="no-print">
-              <SectionHead icon="🔄">Confirm stock used (post-event)</SectionHead>
-              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
-                Enter what was taken out and what came back. This updates stock levels <strong>and</strong> adds the cost to this event automatically — no separate stock take needed for what was used here.
+            <div className="no-print" style={{ marginTop: 20 }}>
+              <SectionHead icon="🚐">Van loadout &amp; return</SectionHead>
+              <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.55 }}>
+                <strong>Before the event:</strong> enter what's being loaded onto the van.<br />
+                <strong>After the event:</strong> come back and enter what came back.<br />
+                Save once at the end — this updates stock levels <strong>and</strong> adds the used amount as a cost line automatically.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 90px 90px 60px', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Item</span>
-                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Taken out</span>
-                <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Returned</span>
-                <span></span>
-              </div>
+
               {reconcileList.map(r => (
-                <div key={r.item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 90px 90px 60px', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--off)' }}>
-                  <span style={{ fontSize: 13 }}>{r.item.name} <span style={{ color: 'var(--muted)', fontSize: 11 }}>(stock: {r.item.currentStock ?? '—'})</span></span>
-                  <input type="number" min="0" value={r.takenOut} onChange={e => updateRow(r.item.id, 'takenOut', e.target.value)}
-                    style={{ width: 70, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 5, fontSize: 12, textAlign: 'center' }} />
-                  <input type="number" min="0" value={r.returned} onChange={e => updateRow(r.item.id, 'returned', e.target.value)}
-                    style={{ width: 70, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 5, fontSize: 12, textAlign: 'center' }} />
-                  <button onClick={() => removeRow(r.item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>✕</button>
+                <div key={r.item.id} style={{
+                  background: '#fff', border: '1px solid var(--border)', borderRadius: 10,
+                  padding: '12px 14px', marginBottom: 10, position: 'relative',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{r.item.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                        {r.item.category} · Stock now: <strong>{r.item.currentStock ?? '—'}</strong>
+                      </div>
+                    </div>
+                    <button onClick={() => removeRow(r.item.id)}
+                      style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 4 }}
+                      aria-label="Remove row">✕</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Taken out</label>
+                      <input type="number" inputMode="numeric" min="0" placeholder="0"
+                        value={r.takenOut}
+                        onChange={e => updateRow(r.item.id, 'takenOut', e.target.value)}
+                        style={{
+                          width: '100%', padding: '10px 12px', border: '1px solid var(--border)',
+                          borderRadius: 8, fontSize: 16, textAlign: 'center', background: '#faf9f6',
+                        }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Returned</label>
+                      <input type="number" inputMode="numeric" min="0" placeholder="0"
+                        value={r.returned}
+                        onChange={e => updateRow(r.item.id, 'returned', e.target.value)}
+                        style={{
+                          width: '100%', padding: '10px 12px', border: '1px solid var(--border)',
+                          borderRadius: 8, fontSize: 16, textAlign: 'center', background: '#faf9f6',
+                        }} />
+                    </div>
+                  </div>
+                  {r.takenOut !== '' && r.returned !== '' && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)', textAlign: 'right' }}>
+                      Used: <strong style={{ color: 'var(--text)' }}>{Math.max(0, (parseInt(r.takenOut, 10) || 0) - (parseInt(r.returned, 10) || 0))}</strong>
+                    </div>
+                  )}
                 </div>
               ))}
-              <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-                <select value={addItemId} onChange={e => setAddItemId(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}>
+
+              {/* Add-another selector */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
+                <select value={addItemId} onChange={e => setAddItemId(e.target.value)}
+                  style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14, background: '#fff' }}>
                   <option value="">— add another item —</option>
                   {stockItems.filter(s => !reconcile[s.id]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
-                <button onClick={addManualItem} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 12px', fontSize: 12 }}>+ Add</button>
+                <button onClick={addManualItem}
+                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', fontSize: 14 }}>+ Add</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-                <button onClick={saveReconciliation} disabled={saving} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13 }}>
+
+              {/* Save row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
+                <button onClick={saveReconciliation} disabled={saving}
+                  style={{
+                    background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 10,
+                    padding: '12px 22px', fontSize: 15, fontWeight: 500, cursor: 'pointer',
+                  }}>
                   {saving ? 'Saving…' : 'Save & update stock + cost'}
                 </button>
-                {saveMsg && <span style={{ fontSize: 12, color: 'var(--success)' }}>{saveMsg}</span>}
+                {saveMsg && <span style={{ fontSize: 13, color: 'var(--success)' }}>{saveMsg}</span>}
               </div>
             </div>
           )}
 
           <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
-            ORPI Events LTD &nbsp;|&nbsp; Unit 5 Clements Court, Clements Lane, Ilford, IG1 2QY &nbsp;|&nbsp; Hello@Orpi.Events
+            ORPI Events LTD &nbsp;|&nbsp; Unit 5 Clements Court, Clements Lane, Ilford, IG1 2QY &nbsp;|&nbsp; hello@orpi.events
           </div>
         </div>
       </div>

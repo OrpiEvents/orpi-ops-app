@@ -17,6 +17,8 @@ const DEF_SPIRITS = [
 ];
 const DEF_SOFT = ['Coca-Cola', 'Coke Zero', 'Lemonade', 'Lemonade Zero', 'Tonic', 'Soda', 'Water', 'Cranberry Juice', 'Tropical Juice'];
 const DEF_ADDONS = [
+  { label: 'Upgrade to Ultimate (unlimited cocktails & mocktails)', desc: 'All-event unlimited cocktail & mocktail service — no time limit', price: '', on: false },
+  { label: 'Toast package', desc: 'Chilled Prosecco poured for every guest during speeches for the toast', price: '', on: false },
   { label: 'Personalised bar accessories', desc: 'Bar mats (keepsake), drinks coasters, cocktail napkins & cocktail toppers/stirrers printed with event name, logo or monogram', price: '', on: false },
   { label: 'Flair bartending show', desc: 'Theatrical bar performance (subject to venue)', price: '', on: false },
   { label: 'Bar hire', desc: '4m round LED bar, non-LED bar, or bespoke unit', price: '', on: false },
@@ -39,7 +41,7 @@ function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
     enquiryId: null, client: '', etype: 'Wedding Reception', venue: '', edate: '', etime: '', guests: '',
-    pkg: 'Unlimited Service', duration: '', setup: '',
+    pkg: 'Premium', duration: '', setup: '',
     wdOn: true, wdDur: '2 hours', wdItems: withIds(DEF_WD),
     inclItems: withIds(DEF_INCL),
     spiritRows: spiritsWithIds(DEF_SPIRITS),
@@ -232,7 +234,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <Field label="Guests"><input type="number" style={inputStyle} value={s.guests} onChange={e => set({ guests: e.target.value })} /></Field>
             <Field label="Package">
               <select style={selStyle} value={s.pkg} onChange={e => set({ pkg: e.target.value })}>
-                {['Unlimited Service', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Cocktail Experience', 'Custom'].map(o => <option key={o}>{o}</option>)}
+                {['Premium', 'Ultimate', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Cocktail Experience', 'Custom'].map(o => <option key={o}>{o}</option>)}
               </select>
             </Field>
           </ThreeCol>
@@ -526,6 +528,31 @@ function QuotePreview({ s, addonTotal, total, dep }) {
           <div style={rowMuted}>Duration</div><div style={rowValue}>{s.duration || '—'}</div>
           {s.setup && <><div style={rowMuted}>Setup access</div><div style={rowValue}>{s.setup}</div></>}
         </div>
+
+        {/* Package summary — what this specific package includes.
+            Makes it crystal clear to the client what they're getting,
+            especially the Premium/Ultimate distinction. */}
+        {(s.pkg === 'Premium' || s.pkg === 'Ultimate') && (
+          <div style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderLeft: '3px solid var(--gold)', padding: '14px 18px', borderRadius: '0 6px 6px 0', marginTop: 22 }}>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 500, marginBottom: 8, letterSpacing: '.02em' }}>
+              The <em style={{ color: 'var(--gold)' }}>{s.pkg}</em> Package
+            </div>
+            {s.pkg === 'Premium' ? (
+              <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
+                <div><strong>1 hour welcome drinks</strong> — served on arrival to greet your guests</div>
+                <div><strong>2 hours cocktail &amp; mocktail service</strong> — bespoke cocktails and mocktails from your bar menu</div>
+                <div><strong>Full open bar for the remainder of your event</strong> — beers, wines, spirits and soft drinks throughout the evening</div>
+                <div style={{ marginTop: 6, color: '#666', fontStyle: 'italic' }}>Want unlimited cocktails throughout the whole event? Upgrade to Ultimate — see enhancements below.</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
+                <div><strong>1 hour welcome drinks</strong> — served on arrival to greet your guests</div>
+                <div><strong>Unlimited cocktails &amp; mocktails throughout your event</strong> — no time limit on cocktail service</div>
+                <div><strong>Full open bar throughout</strong> — beers, wines, spirits and soft drinks alongside cocktails</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* What's included */}
         {inclActive.length > 0 && (

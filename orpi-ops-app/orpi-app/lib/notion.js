@@ -623,6 +623,7 @@ function pageToBooking(page) {
     status: sel(p['Status']),
     eventType: sel(p['Event Type']),
     marketingEvent: checkbox(p['Marketing Event?']),
+    targetMargin: num(p['Target Margin %']),
   };
 }
 
@@ -681,6 +682,7 @@ function bookingToProperties(d) {
   if (d.beerSelection !== undefined) props['Beer Selection'] = { rich_text: [{ text: { content: d.beerSelection || '' } }] };
   if (d.spiritsSelection !== undefined) props['Spirits Selection'] = { rich_text: [{ text: { content: d.spiritsSelection || '' } }] };
   if (d.softDrinksSelection !== undefined) props['Soft Drinks Selection'] = { rich_text: [{ text: { content: d.softDrinksSelection || '' } }] };
+  if (d.targetMargin !== undefined) props['Target Margin %'] = { number: d.targetMargin === '' || d.targetMargin === null ? null : Number(d.targetMargin) };
   if (d.eventDate) props['Event Date'] = { date: { start: d.eventDate } };
   if (d.drinksTastingDate) props['Drinks Tasting Date'] = { date: { start: d.drinksTastingDate } };
   const boolFields = {

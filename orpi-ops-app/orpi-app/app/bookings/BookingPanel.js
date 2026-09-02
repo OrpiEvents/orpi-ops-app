@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { drinksConfirmationGates, eventCompletionGates } from '@/lib/gates';
 
-const COST_TYPES = ['Alcohol', 'Staff', 'Mixers', 'Ice', 'Logistics/Travel', 'Equipment', 'Printing/Branding', 'Marketing', 'Glassware', 'Estimation', 'Other/Misc'];
+const COST_TYPES = ['Alcohol', 'Mixers', 'Ice', 'Staff', 'Glassware', 'Logistics/Travel', 'Equipment', 'Bar Hire/Decor', 'Marketing', 'Printing/Branding', 'Contingency', 'Estimation', 'Other/Misc'];
 
 // Maps an Inventory Items category to the nearest Event Costing "Cost Type"
 // option, so picking a stock item auto-suggests a sensible cost type.
@@ -31,6 +31,7 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     depositReceived: !!booking.depositReceived,
     balanceReceived: !!booking.balanceReceived,
     marketingEvent: !!booking.marketingEvent,
+    targetMargin: booking.targetMargin ?? '',
     internalNotes: booking.internalNotes || '',
   }));
   const [saving, setSaving] = useState(false);
@@ -334,55 +335,147 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
 
           {tab === 'costs' && (
             <>
+              {/* ── Internal costing summary — margin & price ────────
+                  Sits at the top so at a glance you see: what this event
+                  actually costs us, what margin you're aiming for, and
+                  what price should be quoted to hit it. */}
+              {(() => {
+                const quoteValue = parseFloat(booking.finalQuoteAmount ?? booking.quoteAmount) || 0;
+                const marginPct = parseFloat(form.targetMargin);
+                const validMargin = !isNaN(marginPct) && marginPct >= 0;
+                // Suggested price = cost / (1 - margin) so the MARGIN is a
+                // percentage of the FINAL PRICE (industry convention),
+                // not a markup on cost. Falls back to cost + 55% if no
+                // margin has been set.
+                const suggested = validMargin && marginPct < 100
+                  ? totalCost / (1 - marginPct / 100)
+                  : totalCost * 1.55;
+                const actualMargin = quoteValue > 0 ? ((quoteValue - totalCost) / quoteValue) * 100 : null;
+                const actualBelowTarget = validMargin && actualMargin !== null && actualMargin < marginPct;
+
+                return (
+                  <div style={{ background: '#faf9f6', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 18 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--muted)', marginBottom: 12 }}>Internal costing → quote price</div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Internal cost (total)</div>
+                        <div style={{ fontSize: 22, fontFamily: 'var(--serif)', fontWeight: 500, color: '#0a0a0a', marginTop: 2 }}>{gbp(totalCost)}</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{costs.length} cost line{costs.length === 1 ? '' : 's'} across {new Set(costs.map(c => c.costType)).size} categor{new Set(costs.map(c => c.costType)).size === 1 ? 'y' : 'ies'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Target margin</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+                          <input
+                            type="number" min="0" max="99" step="1" placeholder="—"
+                            value={form.targetMargin}
+                            onChange={e => set({ targetMargin: e.target.value })}
+                            style={{ width: 72, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 20, fontFamily: 'var(--serif)', fontWeight: 500, textAlign: 'right', background: '#fff' }} />
+                          <span style={{ fontSize: 18, color: 'var(--muted)' }}>%</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Type your target for this event</div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#fff', borderRadius: 8, padding: '12px 14px', marginBottom: quoteValue > 0 ? 10 : 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: 'var(--gold)', letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 600 }}>Suggested quote price</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{validMargin ? `To hit ${marginPct}% margin` : 'Set a margin above to calibrate'}</div>
+                        </div>
+                        <div style={{ fontSize: 26, fontFamily: 'var(--serif)', fontWeight: 500, color: '#0a0a0a' }}>{gbp(suggested)}</div>
+                      </div>
+                    </div>
+
+                    {quoteValue > 0 && (
+                      <div style={{ background: actualBelowTarget ? '#fef6e4' : '#fff', border: actualBelowTarget ? '1px solid #f0c674' : 'none', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Actual quote & margin</div>
+                          <div style={{ fontSize: 13, color: '#0a0a0a', marginTop: 3 }}>
+                            {gbp(quoteValue)} quoted · <strong style={{ color: actualBelowTarget ? '#b8720a' : '#0a0a0a' }}>
+                              {actualMargin === null ? '—' : `${actualMargin.toFixed(1)}% margin`}
+                            </strong>
+                          </div>
+                        </div>
+                        {actualBelowTarget && (
+                          <div style={{ fontSize: 11, color: '#b8720a', fontStyle: 'italic', textAlign: 'right' }}>
+                            Below target by<br /><strong>{(marginPct - actualMargin).toFixed(1)}pp</strong>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
+                      Remember to save changes (bottom of panel) to persist the target margin to Notion.
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── Cost lines grouped by category ── */}
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 10 }}>
-                Event costs — saved to Notion Event Costing
+                Cost lines by category
               </div>
               {costsLoading ? (
                 <div style={{ color: 'var(--muted)', fontSize: 13, padding: '12px 0' }}>Loading…</div>
+              ) : costs.length === 0 ? (
+                <div style={{ background: 'var(--off)', borderRadius: 8, padding: '16px 18px', color: 'var(--muted)', fontSize: 13, marginBottom: 14 }}>
+                  No cost lines yet — add your first below to start building the internal cost picture for this event.
+                </div>
               ) : (
                 <div style={{ marginBottom: 14 }}>
-                  {costs.length === 0 ? (
-                    <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>No costs logged yet</div>
-                  ) : costs.map(c => (
-                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--off)' }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                          {c.costType}
-                          {c.quantityUsed ? ` · ${c.quantityUsed} × ${gbp(c.lockedUnitCost)} (locked)` : ''}
+                  {COST_TYPES.filter(t => costs.some(c => c.costType === t)).map(cat => {
+                    const linesInCat = costs.filter(c => c.costType === cat);
+                    const catTotal = linesInCat.reduce((s, c) => s + (c.finalCost ?? c.cost ?? 0), 0);
+                    return (
+                      <div key={cat} style={{ marginBottom: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '2px solid var(--border)' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--gold)' }}>{cat}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{gbp(catTotal)}</span>
                         </div>
+                        {linesInCat.map(c => (
+                          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--off)' }}>
+                            <div>
+                              <div style={{ fontSize: 13 }}>{c.name}</div>
+                              {c.quantityUsed ? (
+                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{c.quantityUsed} × {gbp(c.lockedUnitCost)} (locked at time of use)</div>
+                              ) : null}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 13 }}>{gbp(c.finalCost ?? c.cost)}</span>
+                              <button onClick={() => removeCost(c.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>✕</button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{gbp(c.finalCost ?? c.cost)}</span>
-                        <button onClick={() => removeCost(c.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>✕</button>
-                      </div>
-                    </div>
-                  ))}
-                  {costs.length > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 0', fontWeight: 600, fontSize: 13 }}>
-                      <span>Total</span><span>{gbp(totalCost)}</span>
-                    </div>
-                  )}
+                    );
+                  })}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 0', fontWeight: 700, fontSize: 14, borderTop: '2px solid var(--text)' }}>
+                    <span>Total internal cost</span><span>{gbp(totalCost)}</span>
+                  </div>
                 </div>
               )}
+
+              {/* ── Add-line form (existing UI kept, minor labelling refresh) ── */}
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 10 }}>Add a cost line</div>
                 <div style={{ display: 'flex', gap: 0, marginBottom: 12, borderBottom: '1px solid var(--border)' }}>
                   <div onClick={() => setCostMode('stock')} style={{
                     padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
                     color: costMode === 'stock' ? 'var(--text)' : 'var(--muted)',
                     borderBottom: costMode === 'stock' ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
-                  }}>From stock</div>
+                  }}>Alcohol (from stock)</div>
                   <div onClick={() => setCostMode('manual')} style={{
                     padding: '6px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
                     color: costMode === 'manual' ? 'var(--text)' : 'var(--muted)',
                     borderBottom: costMode === 'manual' ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
-                  }}>Manual entry</div>
+                  }}>Anything else (manual)</div>
                 </div>
 
                 {costMode === 'stock' ? (
                   <div>
                     <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
-                      Locks in today's average unit cost for this item — won't change later if you buy more stock at a different price.
+                      Pick from Inventory. Today's average unit cost locks in — future purchases at different prices won't change this event's cost.
                     </p>
                     <select style={{ ...inputStyle, marginBottom: 8, cursor: 'pointer' }} value={stockForm.itemId} onChange={e => setStockForm({ ...stockForm, itemId: e.target.value })}>
                       <option value="">— select item —</option>
@@ -407,14 +500,17 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                   </div>
                 ) : (
                   <div>
+                    <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                      For mixers, ice, staff, glassware, logistics, decor, print, contingency, misc. Pick a category, describe it, and enter the total cost.
+                    </p>
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 8 }}>
-                      <input style={inputStyle} placeholder="Description" value={newCost.name} onChange={e => setNewCost({ ...newCost, name: e.target.value })} />
+                      <input style={inputStyle} placeholder="Description (e.g. Lead Bartender × 8hrs)" value={newCost.name} onChange={e => setNewCost({ ...newCost, name: e.target.value })} />
                       <select style={{ ...inputStyle, cursor: 'pointer' }} value={newCost.costType} onChange={e => setNewCost({ ...newCost, costType: e.target.value })}>
-                        {COST_TYPES.map(t => <option key={t}>{t}</option>)}
+                        {COST_TYPES.filter(t => t !== 'Alcohol').map(t => <option key={t}>{t}</option>)}
                       </select>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input type="number" step="0.01" style={inputStyle} placeholder="Cost (£)" value={newCost.cost} onChange={e => setNewCost({ ...newCost, cost: e.target.value })} />
+                      <input type="number" step="0.01" style={inputStyle} placeholder="Total cost (£)" value={newCost.cost} onChange={e => setNewCost({ ...newCost, cost: e.target.value })} />
                       <button onClick={addCost} disabled={addingCost} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, whiteSpace: 'nowrap' }}>
                         {addingCost ? 'Adding…' : '+ Add'}
                       </button>

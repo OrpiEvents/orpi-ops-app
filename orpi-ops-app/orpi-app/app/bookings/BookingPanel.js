@@ -49,6 +49,13 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
   const [drinksLibrary, setDrinksLibrary] = useState([]);
   const [completing, setCompleting] = useState(false);
 
+  // Quoted selections (from the originating enquiry, if we can find it)
+  // — shown as a "Populate from quote" review banner on the Planning tab
+  // so the user can pull them into the booking's Spirits/Beer/Soft Drinks
+  // Selection fields with one tap after reviewing.
+  const [quotedSelections, setQuotedSelections] = useState(null);
+  const [reviewBannerDismissed, setReviewBannerDismissed] = useState(false);
+
   useEffect(() => {
     fetch(`/api/bookings/${booking.id}/costs`).then(r => r.json()).then(res => {
       if (!res.error) setCosts(res.costs || []);
@@ -60,6 +67,9 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     fetch('/api/drinks').then(r => r.json()).then(res => {
       if (!res.error) setDrinksLibrary(res.drinks || []);
     });
+    fetch(`/api/bookings/${booking.id}/quoted-selections`).then(r => r.json()).then(res => {
+      if (res.found) setQuotedSelections(res);
+    }).catch(() => {});
   }, [booking.id]);
 
   function set(patch) { setForm(prev => ({ ...prev, ...patch })); }
@@ -110,6 +120,20 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     } finally {
       setCompleting(false);
     }
+  }
+
+  // Populate booking selection fields from the quoted brands. This only
+  // fills empty fields — anything the user has already typed is preserved,
+  // so a partial re-populate never wipes their work.
+  function populateFromQuote() {
+    if (!quotedSelections) return;
+    setForm(prev => ({
+      ...prev,
+      spiritsSelection: prev.spiritsSelection || quotedSelections.quotedSpirits || '',
+      beerSelection: prev.beerSelection || quotedSelections.quotedBeer || '',
+      softDrinksSelection: prev.softDrinksSelection || quotedSelections.quotedSoftDrinks || '',
+    }));
+    setReviewBannerDismissed(true);
   }
 
   async function addCostFromStock() {
@@ -180,6 +204,51 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
   const completionGates = eventCompletionGates(bookingForGates, costs, { drinksLibrary });
   const canComplete = booking.status !== 'Completed' && completionGates.length === 0 && drinksLibrary.length > 0;
 
+  // Tab status indicators. Green tick = nothing outstanding on that tab.
+  // Amber dot = something needs attention. This is intentionally coarse —
+  // we tell them WHICH tab has stuff to do, not what it is; the tab itself
+  // shows the detail once opened.
+  const providesAlcohol = booking.alcoholProvidedBy === 'ORPI';
+  const planningAttention =
+    (form.cocktailMenu && !form.cocktailsConfirmed) ||
+    (form.mocktailMenu && !form.mocktailsConfirmed) ||
+    !form.staffConfirmed ||
+    !form.venueAccessConfirmed ||
+    !form.depositReceived ||
+    !form.balanceReceived ||
+    cocktailGates.length > 0 ||
+    mocktailGates.length > 0 ||
+    (providesAlcohol && quotedSelections && !form.spiritsSelection && !reviewBannerDismissed);
+  const costsAttention = !form.targetMargin || costs.length === 0;
+  const overviewAttention = completionGates.length > 0 && booking.status !== 'Completed';
+  const notesAttention = false; // notes are always optional, never blocks
+
+  const tabStatus = {
+    overview: overviewAttention ? 'amber' : 'green',
+    planning: planningAttention ? 'amber' : 'green',
+    costs: costsAttention ? 'amber' : 'green',
+    notes: 'none',
+  };
+
+  // The single "what's next" hint at the bottom. Pick the most obviously
+  // next thing, roughly ordered by lifecycle stage.
+  let nextHint = null;
+  if (booking.status === 'Completed') {
+    nextHint = null;
+  } else if (providesAlcohol && quotedSelections && !form.spiritsSelection && !reviewBannerDismissed && tab !== 'planning') {
+    nextHint = { label: 'Review quoted brands from the enquiry', tab: 'planning' };
+  } else if (!form.targetMargin && tab !== 'costs') {
+    nextHint = { label: 'Set a target margin for this event', tab: 'costs' };
+  } else if (planningAttention && tab !== 'planning') {
+    nextHint = { label: 'A few planning items still need attention', tab: 'planning' };
+  } else if (providesAlcohol && !booking.outboundLoggedAt) {
+    nextHint = { label: 'Before the event, log outbound stock on the Checklist', tab: null, href: `/bookings/${booking.id}/checklist` };
+  } else if (providesAlcohol && booking.outboundLoggedAt && !booking.returnLoggedAt) {
+    nextHint = { label: 'After the event, log returned stock on the Checklist', tab: null, href: `/bookings/${booking.id}/checklist` };
+  } else if (completionGates.length > 0 && tab !== 'overview') {
+    nextHint = { label: 'Ready to close? See outstanding items on Overview', tab: 'overview' };
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 300, display: 'flex', justifyContent: 'flex-end' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 520, maxWidth: '95vw', height: '100vh', background: '#fff', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,.08)' }}>
@@ -203,7 +272,16 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
               padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
               color: tab === k ? 'var(--text)' : 'var(--muted)',
               borderBottom: tab === k ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
-            }}>{label}</div>
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              {label}
+              {tabStatus[k] === 'amber' && (
+                <span title="Needs attention" style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#e0a13a' }} />
+              )}
+              {tabStatus[k] === 'green' && (
+                <span title="All done" style={{ fontSize: 10, color: '#4a9d5f' }}>✓</span>
+              )}
+            </div>
           ))}
         </div>
 
@@ -280,6 +358,41 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Field label="Mocktails"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.mocktailMenu} onChange={e => set({ mocktailMenu: e.target.value })} placeholder="TBC, TBC" /></Field>
               </Section>
               <Section title="Event-specific selections">
+                {quotedSelections && !reviewBannerDismissed && (!form.spiritsSelection || !form.beerSelection || !form.softDrinksSelection) && (
+                  <div style={{ background: '#fff8e1', border: '1px solid #f0c674', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#7a5c00', marginBottom: 6 }}>
+                      Populate from quote?
+                    </div>
+                    <div style={{ fontSize: 11, color: '#7a5c00', marginBottom: 10, lineHeight: 1.5 }}>
+                      These brands were quoted to the client. Review, then tap Confirm to fill the empty fields below. Nothing you've already typed will be overwritten.
+                    </div>
+                    {quotedSelections.quotedSpirits && (
+                      <div style={{ fontSize: 11, marginBottom: 4 }}>
+                        <strong style={{ color: '#7a5c00' }}>Spirits:</strong> <span style={{ color: '#333', whiteSpace: 'pre-wrap' }}>{quotedSelections.quotedSpirits}</span>
+                      </div>
+                    )}
+                    {quotedSelections.quotedBeer && (
+                      <div style={{ fontSize: 11, marginBottom: 4 }}>
+                        <strong style={{ color: '#7a5c00' }}>Beer:</strong> <span style={{ color: '#333' }}>{quotedSelections.quotedBeer}</span>
+                      </div>
+                    )}
+                    {quotedSelections.quotedSoftDrinks && (
+                      <div style={{ fontSize: 11, marginBottom: 8 }}>
+                        <strong style={{ color: '#7a5c00' }}>Soft drinks:</strong> <span style={{ color: '#333' }}>{quotedSelections.quotedSoftDrinks}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button onClick={populateFromQuote}
+                        style={{ background: '#7a5c00', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+                        Confirm & fill fields
+                      </button>
+                      <button onClick={() => setReviewBannerDismissed(true)}
+                        style={{ background: 'transparent', color: '#7a5c00', border: '1px solid #f0c674', borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+                        Not now
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
                   What we're actually bringing on the day. Overrides the standard package — the checklist and pack list will use these.
                 </p>
@@ -529,14 +642,32 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
           )}
         </div>
 
-        {tab !== 'costs' && (
-          <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={savePlanningAndNotes} disabled={saving} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13 }}>
-              {saving ? 'Saving…' : 'Save to Notion'}
+              {saving ? 'Saving…' : 'Save changes'}
             </button>
             {saveMsg && <span style={{ fontSize: 12, color: 'var(--success)' }}>{saveMsg}</span>}
           </div>
-        )}
+          {nextHint && (
+            <div style={{ marginTop: 10, background: 'var(--off)', borderRadius: 6, padding: '8px 12px', fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase' }}>Next</span>
+              <span style={{ flex: 1 }}>{nextHint.label}</span>
+              {nextHint.tab && (
+                <button onClick={() => setTab(nextHint.tab)}
+                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>
+                  Go
+                </button>
+              )}
+              {nextHint.href && (
+                <a href={nextHint.href} target="_blank" rel="noopener noreferrer"
+                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px', fontSize: 11, textDecoration: 'none', color: 'var(--text)' }}>
+                  Open
+                </a>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

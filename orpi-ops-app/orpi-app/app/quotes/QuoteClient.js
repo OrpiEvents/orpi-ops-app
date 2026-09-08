@@ -50,12 +50,19 @@ function freshState() {
     addons: addonsWithIds(DEF_ADDONS),
     compItems: withIds(DEF_COMP),
     notes: '', base: '', disc: '',
+    // ── Internal costing (never printed on client quote) ──
+    // Each line has: { id, category, name, qty, unitCost, inventoryId? }
+    // inventoryId links to a live Inventory Item so unit cost stays current
+    // if we edit before saving. Free-text lines don't need it.
+    costLines: [],
+    marginPct: '',
   };
 }
 
 export default function QuoteClient({ userEmail }) {
   const [s, setS] = useState(freshState);
   const [enquiries, setEnquiries] = useState([]);
+  const [stockItems, setStockItems] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [templateMsg, setTemplateMsg] = useState('');
@@ -74,6 +81,9 @@ export default function QuoteClient({ userEmail }) {
   useEffect(() => {
     fetch('/api/enquiries').then(r => r.json()).then(res => {
       if (!res.error) setEnquiries(res.enquiries || []);
+    });
+    fetch('/api/stock').then(r => r.json()).then(res => {
+      if (!res.error) setStockItems(res.items || []);
     });
     // Auto-load the saved template on first render (if one exists) so a
     // fresh quote starts from your saved structure, not the built-in default.
@@ -132,9 +142,34 @@ export default function QuoteClient({ userEmail }) {
     setSaving(true);
     setSaveMsg('');
     try {
+      // Compose brand strings from the quote's structured entry
+      // — these become the "review & confirm" seed on the booking's
+      // Event-specific selections when the enquiry is marked Won.
+      const quotedSpirits = s.spiritRows
+        .filter(r => r.on)
+        .map(r => {
+          const items = r.items.filter(i => i.on && i.text.trim()).map(i => i.text.trim());
+          return items.length ? `${r.cat}: ${items.join(', ')}` : null;
+        })
+        .filter(Boolean)
+        .join('\n');
+      const quotedSoftDrinks = s.softItems
+        .filter(i => i.on && i.text.trim())
+        .map(i => i.text.trim())
+        .join(', ');
+      // Beer is a sub-row of spirits with cat 'Beer / Lager' — extracted
+      // separately so it can be edited independently on the booking.
+      const beerRow = s.spiritRows.find(r => /beer|lager/i.test(r.cat));
+      const quotedBeer = beerRow?.on
+        ? beerRow.items.filter(i => i.on && i.text.trim()).map(i => i.text.trim()).join(', ')
+        : '';
+
       const res = await fetch('/api/quotes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enquiryId: s.enquiryId, name: s.client, amount: base, doctype: s.doctype }),
+        body: JSON.stringify({
+          enquiryId: s.enquiryId, name: s.client, amount: base, doctype: s.doctype,
+          quotedSpirits, quotedBeer, quotedSoftDrinks,
+        }),
       }).then(r => r.json());
       if (res.error) throw new Error(res.error);
       setSaveMsg('✓ Saved to Notion');
@@ -160,6 +195,123 @@ export default function QuoteClient({ userEmail }) {
     setS(fresh);
   }
 
+  // ── Cost line handlers ──────────────────────────────────────────────
+  function addCostLine(partial = {}) {
+    const line = {
+      id: uid(),
+      category: 'Alcohol',
+      name: '',
+      qty: '',
+      unitCost: '',
+      inventoryId: null,
+      ...partial,
+    };
+    setS(prev => ({ ...prev, costLines: [...prev.costLines, line] }));
+  }
+
+  function updateCostLine(id, patch) {
+    setS(prev => ({
+      ...prev,
+      costLines: prev.costLines.map(l => l.id === id ? { ...l, ...patch } : l),
+    }));
+  }
+
+  function removeCostLine(id) {
+    setS(prev => ({ ...prev, costLines: prev.costLines.filter(l => l.id !== id) }));
+  }
+
+  // Suggests default consumption for a given package + guest count. Starting
+  // values are industry-typical; refine over the season as real data lands.
+  //   Premium (3hr cocktail window + open bar remainder):
+  //     - Cocktails: 2.5 per guest across the window
+  //     - Beer: 1.5 bottles per guest for the full event
+  //     - Wine: 0.4 bottles per guest
+  //     - Spirit measures (for open bar): 3 per guest × 25ml = ~75ml
+  //   Ultimate (unlimited cocktails throughout):
+  //     - Cocktails: 4 per guest across the event
+  //     - Beer: 1 bottle per guest (people drink more cocktails)
+  //     - Wine: 0.3 bottles per guest
+  //     - Spirit measures: 3.5 per guest
+  //
+  // These are per-guest numbers we multiply by guest count. Spirit mix
+  // (which spirit gets what share of measures) is a separate ratio the
+  // user picks by selecting brands.
+  function suggestConsumption(pkg, guests) {
+    const g = Number(guests) || 0;
+    if (!g) return null;
+    const isUltimate = pkg === 'Ultimate';
+    return {
+      cocktailsTotal: Math.ceil(g * (isUltimate ? 4 : 2.5)),
+      beerBottles: Math.ceil(g * (isUltimate ? 1.0 : 1.5)),
+      wineBottles: Math.ceil(g * (isUltimate ? 0.3 : 0.4)),
+      spiritMeasures: Math.ceil(g * (isUltimate ? 3.5 : 3.0)),
+      // Cocktail production uses ~60ml spirit per cocktail on average
+      cocktailSpiritMl: Math.ceil(g * (isUltimate ? 4 : 2.5) * 60),
+      // 1 bottle spirit = 700ml → measures per bottle for open bar (25ml) = 28
+      // For cocktails at 60ml → 11 cocktails per bottle
+      staffCount: g > 150 ? Math.ceil(g / 40) + 1 : Math.ceil(g / 40),
+      glassMainCount: Math.ceil(g * 1.5),
+      glassWelcomeCount: g,
+    };
+  }
+
+  // Populates cost lines with suggested defaults based on current package + guests.
+  // Non-destructive: adds new lines rather than replacing existing ones so a
+  // second click doesn't wipe manual edits.
+  function seedFromDefaults() {
+    const c = suggestConsumption(s.pkg, s.guests);
+    if (!c) { alert('Enter guest count first.'); return; }
+    const seed = [
+      { category: 'Alcohol', name: 'Spirits (mixed — see brand selection)', qty: Math.ceil((c.cocktailSpiritMl + c.spiritMeasures * 25) / 700), unitCost: '' },
+      { category: 'Alcohol', name: 'Beer (bottles)', qty: c.beerBottles, unitCost: '' },
+      { category: 'Alcohol', name: 'Wine (bottles)', qty: c.wineBottles, unitCost: '' },
+      { category: 'Staff', name: 'Bartenders', qty: c.staffCount, unitCost: '' },
+      { category: 'Staff', name: 'Lead bartender', qty: 1, unitCost: '' },
+      { category: 'Glassware', name: 'Main event glassware', qty: c.glassMainCount, unitCost: '' },
+      { category: 'Glassware', name: 'Welcome drinks glassware', qty: c.glassWelcomeCount, unitCost: '' },
+      { category: 'Mixers', name: 'Soft drinks & mixers (bulk)', qty: 1, unitCost: '' },
+      { category: 'Ice', name: 'Ice (kg)', qty: Math.ceil((Number(s.guests) || 0) * 0.75), unitCost: '' },
+      { category: 'Logistics', name: 'Van, fuel, parking', qty: 1, unitCost: '' },
+    ];
+    setS(prev => ({
+      ...prev,
+      costLines: [
+        ...prev.costLines,
+        ...seed.map(l => ({ id: uid(), inventoryId: null, ...l })),
+      ],
+    }));
+  }
+
+  // Pulls the currently-selected alcohol brands from the client-facing
+  // quote's spirit rows into stock-linked cost lines, so unit cost comes
+  // from live Inventory Items. This is the "one entry, both sides" move —
+  // brands the client sees are the brands you're costed against.
+  function syncFromBrands() {
+    const added = [];
+    for (const row of s.spiritRows) {
+      if (!row.on) continue;
+      for (const item of row.items) {
+        if (!item.on || !item.text.trim()) continue;
+        // Try to match against inventory (loose match: brand name contained in item)
+        const match = stockItems.find(inv =>
+          inv.name.toLowerCase() === item.text.trim().toLowerCase() ||
+          inv.name.toLowerCase().includes(item.text.trim().toLowerCase()) ||
+          item.text.trim().toLowerCase().includes(inv.name.toLowerCase())
+        );
+        added.push({
+          id: uid(),
+          category: 'Alcohol',
+          name: match ? match.name : `${row.cat}: ${item.text.trim()}`,
+          qty: '',
+          unitCost: match?.averageUnitCost || '',
+          inventoryId: match?.id || null,
+        });
+      }
+    }
+    if (!added.length) { alert('No brands selected on the client quote to sync.'); return; }
+    setS(prev => ({ ...prev, costLines: [...prev.costLines, ...added] }));
+  }
+
   return (
     <AppShell active="/quotes" userEmail={userEmail}>
       <QuoteBuilderUI
@@ -167,12 +319,15 @@ export default function QuoteClient({ userEmail }) {
         addonTotal={addonTotal} total={total} dep={dep}
         saving={saving} saveMsg={saveMsg} saveToNotion={saveToNotion} resetAll={resetAll}
         saveAsTemplate={saveAsTemplate} clearTemplate={clearTemplate} templateMsg={templateMsg}
+        stockItems={stockItems}
+        addCostLine={addCostLine} updateCostLine={updateCostLine} removeCostLine={removeCostLine}
+        seedFromDefaults={seedFromDefaults} syncFromBrands={syncFromBrands}
       />
     </AppShell>
   );
 }
 
-function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, saveAsTemplate, clearTemplate, templateMsg }) {
+function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, saveAsTemplate, clearTemplate, templateMsg, stockItems, addCostLine, updateCostLine, removeCostLine, seedFromDefaults, syncFromBrands }) {
   return (
     <div>
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -193,7 +348,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
         💡 In the print dialog, expand <strong>More settings</strong> → untick <strong>Headers and footers</strong> for a clean PDF (removes the URL &amp; timestamp).
       </div>
 
-      <div className="print-grid-collapse" style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="print-grid-collapse" style={{ display: 'grid', gridTemplateColumns: '340px 340px 1fr', gap: 20, alignItems: 'start' }}>
         <div className="no-print" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 20, position: 'sticky', top: 24, maxHeight: 'calc(100vh - 60px)', overflowY: 'auto' }}>
           <SectionHead>Document</SectionHead>
           <ThreeCol>
@@ -322,7 +477,192 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           </div>
         </div>
 
+        <InternalCostingPanel
+          s={s} set={set} stockItems={stockItems}
+          total={total}
+          addCostLine={addCostLine} updateCostLine={updateCostLine} removeCostLine={removeCostLine}
+          seedFromDefaults={seedFromDefaults} syncFromBrands={syncFromBrands}
+        />
+
         <QuotePreview s={s} addonTotal={addonTotal} total={total} dep={dep} />
+      </div>
+    </div>
+  );
+}
+
+// ---- Internal Costing Panel (team-only, never printed) ---------------------
+//
+// Sits alongside the client-facing quote builder. Every line has a category,
+// name, quantity and unit cost; total = sum(qty * unitCost) per line.
+// Alcohol lines can optionally link to a live Inventory Item — when linked,
+// the unit cost auto-populates from Notion Average Unit Cost.
+//
+// The bottom summary computes suggested client price = cost / (1 - margin/100).
+function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostLine, updateCostLine, removeCostLine, seedFromDefaults, syncFromBrands }) {
+  const CATEGORIES = ['Alcohol', 'Mixers', 'Ice', 'Staff', 'Glassware', 'Logistics', 'Bar Hire/Decor', 'Marketing/Print', 'Contingency', 'Other'];
+  const internalCost = s.costLines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
+  const marginPct = parseFloat(s.marginPct);
+  const validMargin = !isNaN(marginPct) && marginPct >= 0 && marginPct < 100;
+  const suggested = validMargin ? internalCost / (1 - marginPct / 100) : null;
+  const actualQuote = Number(clientTotal) || 0;
+  const actualMargin = actualQuote > 0 && internalCost > 0
+    ? ((actualQuote - internalCost) / actualQuote) * 100
+    : null;
+  const belowTarget = validMargin && actualMargin != null && actualMargin < marginPct;
+
+  // Group lines by category for display so alcohol / staff / glassware
+  // stay visually distinct, matching how you'd actually think about the cost.
+  const grouped = {};
+  s.costLines.forEach(l => {
+    if (!grouped[l.category]) grouped[l.category] = [];
+    grouped[l.category].push(l);
+  });
+
+  return (
+    <div className="no-print" style={{ background: '#faf9f6', border: '1px solid var(--border)', borderRadius: 8, padding: 16, alignSelf: 'start', position: 'sticky', top: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>Internal costing</div>
+        <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Team only</div>
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.45 }}>
+        Cost every part of the event before quoting. Nothing here appears on the client PDF.
+      </p>
+
+      {/* Seed + sync buttons */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <button onClick={seedFromDefaults} style={{ flex: 1, background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px', fontSize: 11, cursor: 'pointer' }} title="Add default lines based on package and guest count">
+          + Suggest lines
+        </button>
+        <button onClick={syncFromBrands} style={{ flex: 1, background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px', fontSize: 11, cursor: 'pointer' }} title="Pull selected brands from the client quote into cost lines">
+          ↔ Sync brands
+        </button>
+      </div>
+
+      {/* Cost lines grouped by category */}
+      {Object.keys(grouped).length === 0 ? (
+        <div style={{ background: '#fff', border: '1px dashed var(--border)', borderRadius: 6, padding: 14, textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+          No cost lines yet.<br />Tap "+ Suggest lines" to start.
+        </div>
+      ) : (
+        CATEGORIES.filter(cat => grouped[cat]).map(cat => {
+          const lines = grouped[cat];
+          const catSubtotal = lines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
+          return (
+            <div key={cat} style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4, paddingBottom: 2, borderBottom: '1px solid var(--border)' }}>
+                <span>{cat}</span><span>{gbp(catSubtotal)}</span>
+              </div>
+              {lines.map(l => (
+                <CostLineRow key={l.id} l={l} stockItems={stockItems} update={p => updateCostLine(l.id, p)} remove={() => removeCostLine(l.id)} />
+              ))}
+            </div>
+          );
+        })
+      )}
+
+      {/* Add-line row */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
+        <select onChange={e => { if (e.target.value) { addCostLine({ category: e.target.value }); e.target.value = ''; } }} defaultValue="" style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 5, fontSize: 11, background: '#fff' }}>
+          <option value="">+ Add line…</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* Summary */}
+      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
+          <span style={{ color: 'var(--muted)' }}>Total internal cost</span>
+          <span style={{ fontWeight: 600 }}>{gbp(internalCost)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 8 }}>
+          <span style={{ color: 'var(--muted)' }}>Target margin</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input type="number" min="0" max="99" step="1" placeholder="—"
+              value={s.marginPct}
+              onChange={e => set({ marginPct: e.target.value })}
+              style={{ width: 50, padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 12, textAlign: 'right' }} />
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>%</span>
+          </div>
+        </div>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
+          <span style={{ color: 'var(--gold)', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', fontSize: 10 }}>Suggested price</span>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500 }}>{suggested != null ? gbp(suggested) : '—'}</span>
+        </div>
+        {actualQuote > 0 && (
+          <div style={{ background: belowTarget ? '#fef6e4' : 'var(--off)', borderRadius: 5, padding: '6px 8px', fontSize: 11 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--muted)' }}>
+              <span>Actual quote</span><span>{gbp(actualQuote)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, color: belowTarget ? '#b8720a' : 'var(--text)', fontWeight: 500 }}>
+              <span>Actual margin</span>
+              <span>{actualMargin == null ? '—' : `${actualMargin.toFixed(1)}%`}</span>
+            </div>
+            {belowTarget && (
+              <div style={{ fontSize: 10, color: '#b8720a', marginTop: 3, fontStyle: 'italic' }}>
+                {(marginPct - actualMargin).toFixed(1)}pp below target
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CostLineRow({ l, stockItems, update, remove }) {
+  const isAlcohol = l.category === 'Alcohol';
+  const linkedItem = l.inventoryId ? stockItems.find(i => i.id === l.inventoryId) : null;
+  const lineTotal = (Number(l.qty) || 0) * (Number(l.unitCost) || 0);
+  return (
+    <div style={{ padding: '5px 0', borderBottom: '1px solid var(--off)' }}>
+      {/* Name row: dropdown for alcohol (from Inventory), free text for everything else */}
+      {isAlcohol ? (
+        <select
+          value={l.inventoryId || ''}
+          onChange={e => {
+            const id = e.target.value;
+            const item = stockItems.find(i => i.id === id);
+            if (item) update({ inventoryId: id, name: item.name, unitCost: item.averageUnitCost || l.unitCost });
+            else update({ inventoryId: null });
+          }}
+          style={{ width: '100%', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, background: '#fff', marginBottom: 4 }}
+        >
+          <option value="">{l.name || '— pick spirit —'}</option>
+          {stockItems.map(item => (
+            <option key={item.id} value={item.id}>{item.name} ({item.category}) — {gbp(item.averageUnitCost || 0)}</option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type="text"
+          placeholder="Description"
+          value={l.name}
+          onChange={e => update({ name: e.target.value })}
+          style={{ width: '100%', padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, marginBottom: 4 }}
+        />
+      )}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <input
+          type="number"
+          step="0.01"
+          placeholder="Qty"
+          value={l.qty}
+          onChange={e => update({ qty: e.target.value })}
+          style={{ width: 46, padding: '3px 5px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, textAlign: 'right' }}
+        />
+        <span style={{ fontSize: 10, color: 'var(--muted)' }}>×</span>
+        <input
+          type="number"
+          step="0.01"
+          placeholder="£"
+          value={l.unitCost}
+          onChange={e => update({ unitCost: e.target.value })}
+          disabled={!!linkedItem}
+          title={linkedItem ? 'Locked to Inventory Average Unit Cost' : ''}
+          style={{ width: 56, padding: '3px 5px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, textAlign: 'right', background: linkedItem ? 'var(--off)' : '#fff' }}
+        />
+        <div style={{ flex: 1, textAlign: 'right', fontSize: 11, fontWeight: 500 }}>{gbp(lineTotal)}</div>
+        <button onClick={remove} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '0 4px' }} title="Remove line">✕</button>
       </div>
     </div>
   );

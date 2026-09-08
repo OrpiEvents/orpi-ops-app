@@ -8,11 +8,14 @@ export async function POST(request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
 
-  const { enquiryId, name, amount, doctype } = await request.json();
+  const { enquiryId, name, amount, doctype, quotedSpirits, quotedBeer, quotedSoftDrinks } = await request.json();
   if (!name?.trim()) return NextResponse.json({ error: 'Client name is required' }, { status: 400 });
 
   try {
-    const enquiry = await saveQuoteResult({ enquiryId, name, amount: amount || 0 });
+    const enquiry = await saveQuoteResult({
+      enquiryId, name, amount: amount || 0,
+      quotedSpirits, quotedBeer, quotedSoftDrinks,
+    });
     await logActivity({
       userEmail: user.email,
       action: 'quote.save',

@@ -71,6 +71,9 @@ function pageToEnquiry(page) {
     followUpDate: dateStart(p['Follow Up Date']),
     internalNotes: text(p['Internal Notes']),
     quoteSent: num(p['Quote Sent']),
+    quotedSpirits: text(p['Quoted Spirits']),
+    quotedBeer: text(p['Quoted Beer']),
+    quotedSoftDrinks: text(p['Quoted Soft Drinks']),
   };
 }
 
@@ -110,6 +113,9 @@ function enquiryToProperties(d) {
   if (d.eventDate) props['Event Date'] = { date: { start: d.eventDate } };
   if (d.followUpDate) props['Follow Up Date'] = { date: { start: d.followUpDate } };
   if (d.quoteSent !== undefined) props['Quote Sent'] = { number: Number(d.quoteSent) || 0 };
+  if (d.quotedSpirits !== undefined) props['Quoted Spirits'] = { rich_text: [{ text: { content: d.quotedSpirits || '' } }] };
+  if (d.quotedBeer !== undefined) props['Quoted Beer'] = { rich_text: [{ text: { content: d.quotedBeer || '' } }] };
+  if (d.quotedSoftDrinks !== undefined) props['Quoted Soft Drinks'] = { rich_text: [{ text: { content: d.quotedSoftDrinks || '' } }] };
   return props;
 }
 
@@ -515,17 +521,22 @@ export async function createPurchase({ inventoryItemId, itemName, quantity, unit
 }
 
 // ---- Quote saving (writes back to the matching Sales Pipeline enquiry) ----
-export async function saveQuoteResult({ enquiryId, name, amount }) {
+export async function saveQuoteResult({ enquiryId, name, amount, quotedSpirits, quotedBeer, quotedSoftDrinks }) {
+  const brandFields = {};
+  if (quotedSpirits !== undefined) brandFields.quotedSpirits = quotedSpirits;
+  if (quotedBeer !== undefined) brandFields.quotedBeer = quotedBeer;
+  if (quotedSoftDrinks !== undefined) brandFields.quotedSoftDrinks = quotedSoftDrinks;
+
   if (enquiryId) {
-    return updateEnquiry(enquiryId, { status: 'Quote Sent', quoteSent: amount });
+    return updateEnquiry(enquiryId, { status: 'Quote Sent', quoteSent: amount, ...brandFields });
   }
   // No linked enquiry — try to find one by exact name match (case-insensitive)
   // before creating a new one, so re-saving a quote for the same client
   // doesn't create duplicate Sales Pipeline rows.
   const all = await listEnquiries();
   const match = all.find(e => e.name.trim().toLowerCase() === name.trim().toLowerCase());
-  if (match) return updateEnquiry(match.id, { status: 'Quote Sent', quoteSent: amount });
-  return createEnquiry({ name, status: 'Quote Sent', quoteSent: amount });
+  if (match) return updateEnquiry(match.id, { status: 'Quote Sent', quoteSent: amount, ...brandFields });
+  return createEnquiry({ name, status: 'Quote Sent', quoteSent: amount, ...brandFields });
 }
 
 // ---- Booking & Quotes Tracker (Confirmed Bookings) ------------------------
@@ -624,6 +635,9 @@ function pageToBooking(page) {
     eventType: sel(p['Event Type']),
     marketingEvent: checkbox(p['Marketing Event?']),
     targetMargin: num(p['Target Margin %']),
+    outboundLoggedAt: p['Outbound Logged At']?.date?.start || null,
+    returnLoggedAt: p['Return Logged At']?.date?.start || null,
+    outboundLog: text(p['Outbound Log']),
   };
 }
 
@@ -637,6 +651,10 @@ export async function updateBooking(id, data) {
 
 export async function createBookingFromEnquiry(enq) {
   const dbId = process.env.NOTION_DB_BOOKINGS;
+  // NB: we deliberately do NOT copy quotedSpirits/quotedBeer/quotedSoftDrinks
+  // into the booking's Spirits Selection / Beer Selection / Soft Drinks
+  // Selection fields yet. The Planning tab shows a "Populate from quote"
+  // review banner instead, so the user can confirm before it commits.
   const page = await notionFetch('/pages', {
     method: 'POST',
     body: JSON.stringify({
@@ -683,6 +701,8 @@ function bookingToProperties(d) {
   if (d.spiritsSelection !== undefined) props['Spirits Selection'] = { rich_text: [{ text: { content: d.spiritsSelection || '' } }] };
   if (d.softDrinksSelection !== undefined) props['Soft Drinks Selection'] = { rich_text: [{ text: { content: d.softDrinksSelection || '' } }] };
   if (d.targetMargin !== undefined) props['Target Margin %'] = { number: d.targetMargin === '' || d.targetMargin === null ? null : Number(d.targetMargin) };
+  if (d.outboundLoggedAt !== undefined) props['Outbound Logged At'] = { date: d.outboundLoggedAt ? { start: d.outboundLoggedAt } : null };
+  if (d.returnLoggedAt !== undefined) props['Return Logged At'] = { date: d.returnLoggedAt ? { start: d.returnLoggedAt } : null };
   if (d.eventDate) props['Event Date'] = { date: { start: d.eventDate } };
   if (d.drinksTastingDate) props['Drinks Tasting Date'] = { date: { start: d.drinksTastingDate } };
   const boolFields = {

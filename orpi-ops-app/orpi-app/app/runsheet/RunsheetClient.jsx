@@ -58,6 +58,18 @@ const TYPES=["Welcome Cocktail","Welcome Mocktail","Cocktail","Mocktail","Shoote
 const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"5pm to 12am",arrival:"12pm",guests:"",uniform:"Black trousers, black shirts and aprons (provided)"},
  staff:[{id:1,name:"",role:"",transport:"Car"}],sel:{},ovr:{},prod:{},rm:{},add:{},extra:[],out:{},back:{},gCost:{}});
 
+
+// Collapsible section. Must live OUTSIDE Runsheet: defined inside, it becomes a
+// new component type on every render, so React unmounts and remounts everything
+// in it each keystroke — which on a phone closes the keyboard mid-word.
+function Sec({k,title,sub,open,setOpen,children}){
+ return (<div className="border-b" style={{borderColor:LINE}}>
+  <button onClick={()=>setOpen(o=>({...o,[k]:!o[k]}))} className="w-full px-5 py-4 flex items-center justify-between text-left">
+   <span><span className="text-base">{title}</span>{sub&&<span className="block text-xs text-neutral-500 mt-0.5">{sub}</span>}</span>
+   <span className="text-neutral-300 text-lg">{open[k]?"−":"+"}</span></button>
+  {open[k]&&<div className="px-5 pb-5">{children}</div>}</div>);
+}
+
 export default function Runsheet(){
  const [events,setEvents]=useState(null),[cur,setCur]=useState(null),[ready,setReady]=useState(false);
  const [tab,setTab]=useState("setup"),[saved,setSaved]=useState("");
@@ -132,11 +144,6 @@ export default function Runsheet(){
 
  const F="h-12 px-3 rounded-xl border bg-white outline-none text-base w-full";
  const B={borderColor:"#DDD8CE"};
- const Sec=({k,title,sub,children})=>(<div className="border-b" style={{borderColor:LINE}}>
-  <button onClick={()=>setOpen(o=>({...o,[k]:!o[k]}))} className="w-full px-5 py-4 flex items-center justify-between text-left">
-   <span><span className="text-base">{title}</span>{sub&&<span className="block text-xs text-neutral-500 mt-0.5">{sub}</span>}</span>
-   <span className="text-neutral-300 text-lg">{open[k]?"−":"+"}</span></button>
-  {open[k]&&<div className="px-5 pb-5">{children}</div>}</div>);
 
  const pickList=LIB.filter(d=>(ft==="All"||d.type===ft)&&d.name.toLowerCase().includes(q.toLowerCase()));
 
@@ -179,13 +186,13 @@ export default function Runsheet(){
 
   <main className="pb-28">
    {tab==="setup"&&<div>
-    <Sec k="det" title="Event details" sub={[ev.date,ev.venue].filter(Boolean).join(" · ")||"Not set"}>
+    <Sec open={open} setOpen={setOpen} k="det" title="Event details" sub={[ev.date,ev.venue].filter(Boolean).join(" · ")||"Not set"}>
      <div className="space-y-3">
       {[["client","Client"],["date","Date"],["venue","Venue & address"],["service","Service hours"],["arrival","Staff arrival"],["guests","Guests"],["uniform","Uniform"]].map(([k,l])=>(
        <div key={k}><label className="block text-xs text-neutral-500 mb-1">{l}</label>
         <input className={F} style={B} value={ev[k]} onChange={e=>{const v=e.target.value;up("ev",p=>({...p,[k]:v}));}}/></div>))}</div></Sec>
 
-    <Sec k="staff" title="Staff" sub={staff.filter(s=>s.name.trim()).map(s=>s.name).join(", ")||"None added"}>
+    <Sec open={open} setOpen={setOpen} k="staff" title="Staff" sub={staff.filter(s=>s.name.trim()).map(s=>s.name).join(", ")||"None added"}>
      {staff.map((s,i)=>(<div key={s.id} className="mb-3 p-3 rounded-xl space-y-2" style={{background:"#FAF8F4",border:"1px solid "+LINE}}>
       <input className={F} style={B} placeholder="Name" value={s.name} onChange={e=>{const v=e.target.value;up("staff",p=>p.map((x,j)=>j===i?{...x,name:v}:x));}}/>
       <div className="grid grid-cols-2 gap-2">
@@ -195,7 +202,7 @@ export default function Runsheet(){
       <button onClick={()=>up("staff",p=>p.filter((_,j)=>j!==i))} className="text-xs underline underline-offset-4 text-neutral-400">Remove</button></div>))}
      <button onClick={()=>up("staff",s=>[...s,{id:Date.now(),name:"",role:"",transport:"Car"}])} className="w-full py-3 rounded-xl border text-sm" style={{borderColor:"#DDD8CE",color:GOLD}}>+ Add person</button></Sec>
 
-    <Sec k="drinks" title="Drinks" sub={picked.length?`${picked.length} selected`:"None selected"}>
+    <Sec open={open} setOpen={setOpen} k="drinks" title="Drinks" sub={picked.length?`${picked.length} selected`:"None selected"}>
      <button onClick={()=>setPicker(true)} className="w-full py-3 rounded-xl text-white text-sm font-medium mb-4" style={{background:INK}}>Choose drinks</button>
      {!picked.length&&<p className="text-sm text-neutral-400 text-center py-4">Nothing selected yet.</p>}
      {picked.map(d=>{const x=!!expand[d.name];return(<div key={d.name} className="mb-2 rounded-xl" style={{border:"1px solid "+(dirty(d)?GOLD:LINE)}}>
@@ -239,7 +246,7 @@ export default function Runsheet(){
          className="text-sm underline underline-offset-4 text-neutral-400">Reset</button>}</div></div>}
      </div>);})}</Sec>
 
-    <Sec k="bar" title="Back bar & standard service" sub={extra.filter(e=>e.n).length?`${extra.filter(e=>e.n).length} lines`:"From the quote"}>
+    <Sec open={open} setOpen={setOpen} k="bar" title="Back bar & standard service" sub={extra.filter(e=>e.n).length?`${extra.filter(e=>e.n).length} lines`:"From the quote"}>
      {extra.map((e,i)=>(<div key={e.id} className="flex gap-2 mb-2">
        <select className={F} style={B} value={e.n} onChange={x=>{const v=x.target.value;up("extra",p=>p.map((y,j)=>j===i?{...y,n:v}:y));}}>
         <option value="">Choose an item…</option>

@@ -319,6 +319,142 @@ function buildInclusions(s) {
   return out;
 }
 
+// ── Client message ───────────────────────────────────────────
+// The WhatsApp/email message that goes out with the quote, built from the
+// quote itself so it can never say something the PDF doesn't.
+
+// "Mendhi/Sangeet" reads badly in "Kaveena's ..." — these are the versions a
+// client sees.
+const ETYPE_SAID = {
+  'Wedding Reception': 'Wedding Reception',
+  'Mendhi/Sangeet': 'Mendhi',
+  'Jago': 'Jago',
+  'Engagement': 'Engagement',
+  'Birthday Party': 'Birthday',
+  'Corporate': 'Event',
+  'House Party': 'Party',
+  'Other': 'Event',
+};
+
+const PKG_SAID = {
+  'Premium': 'Premium Bar Service',
+  'Ultimate': 'Unlimited Bar Service',
+  'Full Bar': 'Full Open Bar Service',
+  'Cocktail Experience': 'Cocktail Experience',
+  'Welcome Drinks Only': 'Welcome Drinks Service',
+  'Bar Only (client supplies alcohol)': 'Bar Service',
+  'Custom': 'Bar Service',
+};
+
+function fmtOrdinal(d) {
+  if (!d) return null;
+  try {
+    const dt = new Date(d + 'T12:00:00');
+    const day = dt.getDate();
+    const suf = (day % 10 === 1 && day !== 11) ? 'st'
+      : (day % 10 === 2 && day !== 12) ? 'nd'
+      : (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+    return `${day}${suf} ${dt.toLocaleDateString('en-GB', { month: 'long' })} ${dt.getFullYear()}`;
+  } catch { return d; }
+}
+
+function joinList(arr) {
+  const a = arr.filter(Boolean);
+  if (!a.length) return null;
+  if (a.length === 1) return a[0];
+  return a.slice(0, -1).join(', ') + ' & ' + a[a.length - 1];
+}
+
+// Builds the message and reports anything it had to leave a gap for, so a
+// half-finished quote can't be sent looking complete.
+function buildClientMessage(s, total) {
+  const gaps = [];
+  const need = (v, label) => { if (v == null || v === '' ) { gaps.push(label); return `[${label}]`; } return v; };
+
+  const c = computeCosts(s);
+  const L = [];
+
+  const etype = ETYPE_SAID[s.etype] || s.etype || 'event';
+  L.push('Hiii! Hope you\'re keeping well!');
+  L.push('');
+  L.push(`Here's the quote for ${need(s.client && s.client.trim(), 'client name')}'s ${etype} \u{1F389}`);
+  L.push('');
+  L.push(`\u{1F4CD} ${need(s.venue && s.venue.trim(), 'venue')}`);
+  L.push(`\u{1F4C5} ${need(fmtOrdinal(s.edate), 'event date')}`);
+  L.push(`\u{23F1}\u{FE0F} ${need(s.duration && s.duration.trim(), 'duration')}${s.etime && s.etime.trim() ? `, ${s.etime.trim()}` : ' (timings TBC)'}`);
+  L.push(`\u{1F465} ${need(s.guests, 'guest count')} guests`);
+  L.push('');
+
+  L.push(`\u{1F379} ${PKG_SAID[s.pkg] || 'Bar Service'} including:`);
+
+  // Spirits: grade word plus the brands actually ticked on the quote.
+  const parts = alcoholParts(s);
+  if (parts.spirits) {
+    const tier = SPIRIT_TIERS[s.spiritTier] || SPIRIT_TIERS.standard;
+    const grade = (tier.label === 'Standard' || tier.label === 'House') ? 'House' : tier.label;
+    const brands = s.spiritRows
+      .filter(r => r.on && !/beer|lager|cider|\bwine\b|prosecco|champagne|sparkl/i.test(r.cat))
+      .flatMap(r => r.items.filter(i => i.on && i.text.trim()).map(i => i.text.trim()));
+    const shown = brands.slice(0, 5).join(', ');
+    const suffix = brands.length > 5 ? ' + more' : '';
+    L.push(`\u{1F943} ${grade} spirits${shown ? ` (${shown}${suffix})` : ''}`);
+  }
+
+  const bw = joinList([parts.beer && 'beer', parts.wine && 'wine', parts.prosecco && 'prosecco']);
+  if (bw) L.push(`\u{1F37A} Full ${bw} selection`);
+
+  if (s.nct > 0 || s.nmt > 0) {
+    const named = [...s.cocktailNames.slice(0, s.nct), ...s.mocktailNames.slice(0, s.nmt)].filter(n => n && n.trim());
+    const count = [
+      s.nct > 0 && `${s.nct} cocktail${s.nct !== 1 ? 's' : ''}`,
+      s.nmt > 0 && `${s.nmt} mocktail${s.nmt !== 1 ? 's' : ''}`,
+    ].filter(Boolean).join(' & ');
+    const total2 = s.nct + s.nmt;
+    L.push(`\u{1F378} ${count}${named.length === total2 ? ` (${named.join(', ')})` : ' (TBC)'}`);
+  }
+
+  const softs = s.softItems.filter(i => i.on && i.text.trim());
+  if (softs.length) L.push('\u{1F964} Full soft drinks selection');
+
+  if (s.wdOn) {
+    const wd = s.wdItems.filter(i => i.on && i.text.trim()).map(i => i.text.trim());
+    L.push(`\u{1F942} ${s.wdDur} of welcome drinks${wd.length ? ` (${wd.join(', ')})` : ''}`);
+  }
+
+  // Bar, glassware and décor on one line — the bar itself only if it's hired.
+  // Any ticked add-on that is actually a bar unit leads this line. Prints,
+  // accessories and masterclasses mention "bar" too, so they're excluded.
+  const barAddon = s.addons.find(a => a.on && /\bbar\b/i.test(a.label) && !/print|accessor|menu|masterclass|staff|hour/i.test(a.label));
+  const drink = c.glassPerHead > 0 ? 'full glassware' : 'premium disposable barware';
+  L.push(`\u{2728} ${joinList([barAddon && barAddon.label, drink, 'garnishes', 'bar d\u00e9cor'])}`);
+
+  if (c.headcount) L.push(`\u{1F454} Minimum ${c.headcount} ORPI staff`);
+
+  // These land mid-sentence, so drop the leading capital unless it's an
+  // acronym or brand that's capitalised throughout.
+  const deCap = t => (t === t.toUpperCase() ? t : t.charAt(0).toLowerCase() + t.slice(1));
+  const comp = s.compItems.filter(i => i.on && i.text.trim()).map(i => deCap(i.text.trim()));
+  if (comp.length) L.push(`\u{1F381} Complimentary ${comp.join(' + ')}`);
+
+  // Priced extras are named but never itemised — same rule as the PDF.
+  const extras = s.addons
+    .filter(a => a.on && parseFloat(a.price) > 0 && !(barAddon && a.id === barAddon.id))
+    .map(a => a.label);
+  if (extras.length) L.push(`\u{1F38A} Plus ${joinList(extras)}`);
+
+  if (c.tasting === 'included') L.push('\u{1F37E} Pre-event drinks tasting included');
+
+  L.push('');
+  L.push(`\u{1F4B7} Total: ${total > 0 ? '\u00a3' + Math.round(total).toLocaleString('en-GB') : need(null, 'total')}`);
+  L.push('');
+  L.push('Let us know if anything needs tweaking - happy to help! \u{1F64C}');
+  L.push('');
+  L.push(s.salesPerson === 'Ruds' ? 'Rudhra' : s.salesPerson);
+  L.push('ORPI Events');
+
+  return { text: L.join('\n'), gaps: [...new Set(gaps)] };
+}
+
 function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
@@ -591,7 +727,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <Field label="Client name"><input style={inputStyle} value={s.client} onChange={e => set({ client: e.target.value })} /></Field>
             <Field label="Event type">
               <select style={selStyle} value={s.etype} onChange={e => set({ etype: e.target.value })}>
-                {['Wedding Reception', 'Mendhi/Sangeet', 'Engagement', 'Birthday Party', 'Corporate', 'House Party', 'Other'].map(o => <option key={o}>{o}</option>)}
+                {['Wedding Reception', 'Mendhi/Sangeet', 'Jago', 'Engagement', 'Birthday Party', 'Corporate', 'House Party', 'Other'].map(o => <option key={o}>{o}</option>)}
               </select>
             </Field>
           </TwoCol>
@@ -726,6 +862,76 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
 
         <QuotePreview s={s} addonTotal={addonTotal} total={total} dep={dep} />
       </div>
+
+      <ClientMessage s={s} total={total} />
+    </div>
+  );
+}
+
+// ---- Client message ---------------------------------------------------------
+// Sits under the builder. Built from the quote above it, so the message and the
+// PDF can't drift apart.
+function ClientMessage({ s, total }) {
+  const [copied, setCopied] = useState(false);
+  const [asEmail, setAsEmail] = useState(false);
+  const { text, gaps } = buildClientMessage(s, total);
+  const subject = `Your quote \u2014 ${ETYPE_SAID[s.etype] || 'event'}${s.edate ? `, ${fmtOrdinal(s.edate)}` : ''}`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(asEmail ? `Subject: ${subject}\n\n${text}` : text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch {
+      alert('Copy failed \u2014 select the text and copy it manually.');
+    }
+  }
+
+  return (
+    <div className="no-print" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 20, marginTop: 20, maxWidth: 720 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 4 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Message to client</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+            Built from the quote above. Copy straight into WhatsApp or email.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+          {[[false, 'WhatsApp'], [true, 'Email']].map(([v, label]) => (
+            <button key={label} onClick={() => setAsEmail(v)}
+              style={{
+                padding: '5px 12px', fontSize: 11.5, borderRadius: 5, cursor: 'pointer',
+                border: asEmail === v ? '1px solid var(--gold)' : '1px solid var(--border)',
+                background: asEmail === v ? 'var(--gold-bg)' : '#fff',
+                color: asEmail === v ? '#7a6300' : 'var(--muted)', fontWeight: asEmail === v ? 600 : 400,
+              }}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      {gaps.length > 0 && (
+        <div style={{ background: '#fef6e4', border: '1px solid var(--gold)', borderRadius: 6, padding: '8px 12px', fontSize: 11.5, color: '#7a6300', margin: '12px 0', lineHeight: 1.5 }}>
+          Still blank: <strong>{gaps.join(', ')}</strong>. Fill {gaps.length === 1 ? 'it' : 'them'} in above and this updates.
+        </div>
+      )}
+
+      {asEmail && (
+        <div style={{ margin: '12px 0 0' }}>
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Subject</div>
+          <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 11px', fontSize: 12.5 }}>{subject}</div>
+        </div>
+      )}
+
+      <textarea readOnly value={text}
+        style={{
+          width: '100%', minHeight: 420, resize: 'vertical', marginTop: 12, padding: '14px 16px',
+          border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, lineHeight: 1.6,
+          fontFamily: 'var(--sans)', background: 'var(--off)', color: '#1c1b18',
+        }} />
+
+      <button onClick={copy} style={{ ...btnBlack, marginTop: 10 }}>
+        {copied ? '\u2713 Copied' : 'Copy message'}
+      </button>
     </div>
   );
 }

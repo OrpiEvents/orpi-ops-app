@@ -17,7 +17,6 @@ const DEF_SPIRITS = [
 ];
 const DEF_SOFT = ['Coca-Cola', 'Coke Zero', 'Lemonade', 'Lemonade Zero', 'Tonic', 'Soda', 'Water', 'Cranberry Juice', 'Tropical Juice'];
 const DEF_ADDONS = [
-  { label: 'Upgrade to Ultimate (unlimited cocktails & mocktails)', desc: 'All-event unlimited cocktail & mocktail service — no time limit', price: '', on: false },
   { label: 'Toast package', desc: 'Chilled Prosecco poured for every guest during speeches for the toast', price: '', on: false },
   { label: 'Personalised bar accessories', desc: 'Bar mats (keepsake), drinks coasters, cocktail napkins & cocktail toppers/stirrers printed with event name, logo or monogram', price: '', on: false },
   { label: 'Flair bartending show', desc: 'Theatrical bar performance (subject to venue)', price: '', on: false },
@@ -37,11 +36,24 @@ function withIds(arr) { return arr.map(v => ({ id: uid(), text: v, on: true }));
 function spiritsWithIds(rows) { return rows.map(r => ({ id: uid(), cat: r.cat, on: true, items: withIds(r.items) })); }
 function addonsWithIds(arr) { return arr.map(a => ({ id: uid(), ...a })); }
 
+// Base price-per-head defaults (60% margin at ~£7.50 alcohol). Raised for
+// safety until real event data lands — bring down knowingly, not by guess.
+// { glass, plastic } per package. Suggested only — the typed base always wins.
+const PPH = {
+  'Premium': { glass: 45, plastic: 35 },
+  'Ultimate': { glass: 55, plastic: 45 },
+  'Full Bar': { glass: 40, plastic: 30 },
+  'Cocktail Experience': { glass: 24, plastic: 20 },
+  'Welcome Drinks Only': { glass: 15, plastic: 12 },
+  'Bar Only (client supplies alcohol)': { glass: 15, plastic: 12 },
+  'Custom': { glass: 0, plastic: 0 },
+};
+
 function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
     enquiryId: null, client: '', etype: 'Wedding Reception', venue: '', edate: '', etime: '', guests: '',
-    pkg: 'Premium', duration: '', setup: '',
+    pkg: 'Full Bar', duration: '', setup: '',
     wdOn: true, wdDur: '2 hours', wdItems: withIds(DEF_WD),
     inclItems: withIds(DEF_INCL),
     spiritRows: spiritsWithIds(DEF_SPIRITS),
@@ -49,13 +61,13 @@ function freshState() {
     nct: 3, nmt: 2, cocktailNames: ['', '', ''], mocktailNames: ['', ''],
     addons: addonsWithIds(DEF_ADDONS),
     compItems: withIds(DEF_COMP),
-    notes: '', base: '', disc: '',
+    notes: '', base: '', disc: '', glassware: 'glass',
     // ── Internal costing (never printed on client quote) ──
     // Each line has: { id, category, name, qty, unitCost, inventoryId? }
     // inventoryId links to a live Inventory Item so unit cost stays current
     // if we edit before saving. Free-text lines don't need it.
     costLines: [],
-    marginPct: '',
+    marginPct: '60',
   };
 }
 
@@ -389,7 +401,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <Field label="Guests"><input type="number" style={inputStyle} value={s.guests} onChange={e => set({ guests: e.target.value })} /></Field>
             <Field label="Package">
               <select style={selStyle} value={s.pkg} onChange={e => set({ pkg: e.target.value })}>
-                {['Premium', 'Ultimate', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Cocktail Experience', 'Custom'].map(o => <option key={o}>{o}</option>)}
+                {['Premium', 'Ultimate', 'Full Bar', 'Cocktail Experience', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Custom'].map(o => <option key={o}>{o}</option>)}
               </select>
             </Field>
           </ThreeCol>
@@ -451,6 +463,27 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={s.notes} onChange={e => set({ notes: e.target.value })} placeholder="Any notes or conditions…" />
 
           <SectionHead>Pricing</SectionHead>
+          <TwoCol>
+            <Field label="Glassware">
+              <select style={selStyle} value={s.glassware} onChange={e => set({ glassware: e.target.value })}>
+                <option value="glass">Real glass</option>
+                <option value="plastic">Plastic</option>
+              </select>
+            </Field>
+            <Field label="Target margin %"><input type="number" style={inputStyle} value={s.marginPct} onChange={e => set({ marginPct: e.target.value })} step="5" /></Field>
+          </TwoCol>
+          {(() => {
+            const g = Number(s.guests) || 0;
+            const pph = (PPH[s.pkg] || { glass: 0, plastic: 0 })[s.glassware] || 0;
+            const suggested = g * pph;
+            if (!g || !pph) return null;
+            return (
+              <div style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#7a6300', margin: '4px 0 10px' }}>
+                Suggested base: <strong>{gbp(suggested)}</strong> &nbsp;({g} × £{pph}/head, {s.glassware}) &nbsp;
+                <button type="button" onClick={() => set({ base: String(suggested) })} style={{ background: 'none', border: '1px solid var(--gold)', color: '#7a6300', borderRadius: 4, padding: '2px 8px', fontSize: 11, cursor: 'pointer', marginLeft: 4 }}>Use</button>
+              </div>
+            );
+          })()}
           <ThreeCol>
             <Field label="Base price (£)"><input type="number" style={inputStyle} value={s.base} onChange={e => set({ base: e.target.value })} step="50" /></Field>
             <Field label="Discount (£)"><input type="number" style={inputStyle} value={s.disc} onChange={e => set({ disc: e.target.value })} step="10" /></Field>
@@ -871,29 +904,37 @@ function QuotePreview({ s, addonTotal, total, dep }) {
 
         {/* Package summary — what this specific package includes.
             Makes it crystal clear to the client what they're getting,
-            especially the Premium/Ultimate distinction. */}
-        {(s.pkg === 'Premium' || s.pkg === 'Ultimate') && (
+            what each package includes for this event. */}
+        {s.pkg !== 'Custom' && (
           <div style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderLeft: '3px solid var(--gold)', padding: '14px 18px', borderRadius: '0 6px 6px 0', marginTop: 22 }}>
             <div style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 500, marginBottom: 8, letterSpacing: '.02em' }}>
               The <em style={{ color: 'var(--gold)' }}>{s.pkg}</em> Package
             </div>
-            {s.pkg === 'Premium' ? (
-              <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
-                <div><strong>1 hour welcome drinks</strong> — served on arrival to greet your guests</div>
-                <div><strong>2 hours cocktail &amp; mocktail service</strong> — bespoke cocktails and mocktails from your bar menu</div>
-                <div><strong>Full open bar for the remainder of your event</strong> — beers, wines, spirits and soft drinks throughout the evening</div>
-                <div style={{ marginTop: 6, color: '#666', fontStyle: 'italic' }}>Want unlimited cocktails throughout the whole event? Upgrade to Ultimate — see enhancements below.</div>
-              </div>
-            ) : (
-              <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
-                <div><strong>1 hour welcome drinks</strong> — served on arrival to greet your guests</div>
-                <div><strong>Unlimited cocktails &amp; mocktails throughout your event</strong> — no time limit on cocktail service</div>
-                <div><strong>Full open bar throughout</strong> — beers, wines, spirits and soft drinks alongside cocktails</div>
-              </div>
-            )}
+            <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
+              {(s.nct > 0 || s.nmt > 0) && (
+                <div><strong>{s.nct} cocktail{s.nct!==1?'s':''} &amp; {s.nmt} mocktail{s.nmt!==1?'s':''}</strong> — chosen from our menu at your tasting</div>
+              )}
+              {s.pkg === 'Premium' && (
+                <div><strong>2 hours cocktail &amp; mocktail service</strong> — bespoke drinks from your chosen menu</div>
+              )}
+              {s.pkg === 'Ultimate' && (
+                <div><strong>Unlimited cocktail &amp; mocktail service all evening</strong> — no time limit on your bar</div>
+              )}
+              {s.pkg === 'Full Bar' && (
+                <div><strong>Full open bar</strong> — house spirits, beers, wines and soft drinks throughout your event</div>
+              )}
+              {s.pkg === 'Cocktail Experience' && (
+                <div><strong>Cocktail &amp; mocktail service</strong> — a curated menu for your event</div>
+              )}
+              {s.pkg === 'Welcome Drinks Only' && (
+                <div><strong>Reception drinks service</strong> — welcome cocktails and mocktails on arrival</div>
+              )}
+              {s.pkg === 'Bar Only (client supplies alcohol)' && (
+                <div><strong>Professional bar service</strong> — our team, bar and expertise; you supply the alcohol</div>
+              )}
+            </div>
           </div>
         )}
-
         {/* What's included */}
         {inclActive.length > 0 && (
           <>
@@ -961,17 +1002,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
           </>
         )}
 
-        {/* Add-ons */}
-        {activeAddons.length > 0 && (
-          <>
-            <div style={sectionHead}>Extras &amp; add-ons</div>
-            {activeAddons.map(a => (
-              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', borderBottom: '1px solid #f0eee8', color: '#333' }}>
-                <span>{a.label}</span><span style={{ fontWeight: 500 }}>{gbp(parseFloat(a.price))}</span>
-              </div>
-            ))}
-          </>
-        )}
+        {/* Add-ons are folded into the package total — not itemised on the client quote */}
 
         {/* Complimentary */}
         {compActive.length > 0 && (
@@ -990,13 +1021,9 @@ function QuotePreview({ s, addonTotal, total, dep }) {
       {/* ── Pricing block (light, legible, with bank details) ── */}
       <div className="print-avoid-break" style={{ background: '#faf9f6', color: '#1c1b18', padding: '26px 44px', borderTop: '1px solid #e8e6e0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
-          <span>Base package</span><span>{gbp(parseFloat(s.base) || 0)}</span>
+          <span>Package total</span><span>{gbp((parseFloat(s.base) || 0) + addonTotal)}</span>
         </div>
-        {addonTotal > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
-            <span>Extras / add-ons</span><span>{gbp(addonTotal)}</span>
-          </div>
-        )}
+        {/* Extras embedded in the package price — shown as one figure to the client */}
         {parseFloat(s.disc) > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
             <span>Discount</span><span>−{gbp(parseFloat(s.disc))}</span>

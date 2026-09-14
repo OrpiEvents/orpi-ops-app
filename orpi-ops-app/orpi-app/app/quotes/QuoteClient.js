@@ -6,7 +6,10 @@ let idCounter = 0;
 const uid = () => `item_${++idCounter}_${Date.now()}`;
 
 const DEF_WD = ['Budweiser / Peroni', 'Ombre Juices', 'Pimms Cocktails', 'Prosecco'];
-const DEF_INCL = ['Full open bar service', 'Bespoke cocktails', 'Mocktails', 'Full soft drinks range', 'Complete glassware', 'Ice & garnishes', 'Bar décor', 'Personalised bar menus', 'Pre-event drinks tasting', 'Minimum 4 ORPI staff', 'Dry ice', 'Bubble smoke gun'];
+// Extra inclusions typed per-quote. The main "what's included" list is now
+// GENERATED from the package + toggles (see buildInclusions) so the client PDF
+// can never promise glassware on a plastics job or a tasting they don't get.
+const DEF_EXTRA_INCL = [];
 const DEF_SPIRITS = [
   { cat: 'Vodka', items: ['Absolut'] },
   { cat: 'Whiskey', items: ['Jameson'] },
@@ -36,8 +39,68 @@ function withIds(arr) { return arr.map(v => ({ id: uid(), text: v, on: true }));
 function spiritsWithIds(rows) { return rows.map(r => ({ id: uid(), cat: r.cat, on: true, items: withIds(r.items) })); }
 function addonsWithIds(arr) { return arr.map(a => ({ id: uid(), ...a })); }
 
-// Base price-per-head defaults (60% margin at ~£7.50 alcohol). Raised for
-// safety until real event data lands — bring down knowingly, not by guess.
+// ── Cost model ───────────────────────────────────────────────
+// Per-head figures pulled from real Event Costing rows in Notion, weighted
+// across completed events (Jul 2025 – Aug 2026). Change them here, once.
+//   Alcohol  £7.50  historical weighted average, alcohol only
+//   Mixers   £1.00  16 events / 2,150 guests (weighted £0.89, median £1.00)
+//   Ice      £1.00  18 events / 2,966 guests (weighted £0.94, median £1.00)
+//   Garnish  £0.50  ESTIMATE — Notion has no Garnish cost type yet, so this is
+//                   the only line still guessed. Add the type and it goes real.
+// Drinkware is per unit, not per head. Actual glassware spend runs £2.49/head
+// weighted, which at £0.65 a glass implies ~3.8 glasses a head — hence the
+// default of 4, not the 5 the old panel assumed.
+const COST = {
+  alcoholPerHead: 7.50,
+  mixersPerHead: 1.00,
+  icePerHead: 1.00,
+  garnishPerHead: 0.50,
+  glassRate: 0.65,
+  plasticRate: 0.15,
+  staffRate: 16,
+  leadRate: 18,
+  prepRate: 16,            // shadow rate — prep is absorbed by directors
+  setupHrs: 4,             // on site 4 hours before service
+  packdownHrs: 1.5,
+  tastingThreshold: 150,   // guests at/above which a tasting is included
+  tastingChargePerHead: 20,
+  tastingIngredientsPerHead: 10,
+  tastingStaffHours: 3,
+  tastingDefaultGuests: 4,
+};
+
+// Drinkware presets → units per head. "Mixed" is the normal ORPI night:
+// real glass through service, plastics for the late-night tail.
+const DRINKWARE = {
+  mixed:   { label: 'Glass + late-night plastics', glass: 4, plastic: 1.5 },
+  glass:   { label: 'Glassware only',              glass: 5, plastic: 0 },
+  plastic: { label: 'Plastics only',               glass: 0, plastic: 6 },
+};
+
+// Every cost that should be considered before a quote goes out. `auto` lines
+// are computed by the model and resolve themselves; the rest need either a
+// one-off cost line or an explicit "n/a" before the margin figure commits.
+const COST_CHECKS = [
+  { key: 'alcohol',     label: 'Alcohol',                   auto: true },
+  { key: 'mixers',      label: 'Mixers & soft drinks',      auto: true },
+  { key: 'ice',         label: 'Ice',                       auto: true },
+  { key: 'garnish',     label: 'Garnishes & sundries',      auto: true },
+  { key: 'drinkware',   label: 'Glassware / plastics',      auto: true },
+  { key: 'staff',       label: 'Staff (incl. set-up)',      auto: true },
+  { key: 'tasting',     label: 'Drinks tasting',            auto: 'conditional' },
+  { key: 'travel',      label: 'Staff travel (receipts)' },
+  { key: 'van',         label: 'Van, fuel & parking' },
+  { key: 'prints',      label: 'Printed menus & signage' },
+  { key: 'barhire',     label: 'Bar hire, structure & décor' },
+  { key: 'equipment',   label: 'Equipment hire' },
+  { key: 'accom',       label: 'Accommodation' },
+  { key: 'contingency', label: 'Contingency' },
+];
+
+// Base price-per-head defaults. NOTE: these were set against the old
+// alcohol-only cost model. True cost per head is now ~£17–18 on a mid-size
+// event, so Premium still clears 60% but the cheaper packages do not —
+// revisit this table before leaning on the suggested-price button.
 // { glass, plastic } per package. Suggested only — the typed base always wins.
 const PPH = {
   'Premium': { glass: 45, plastic: 35 },
@@ -49,19 +112,163 @@ const PPH = {
   'Custom': { glass: 0, plastic: 0 },
 };
 
+// Default crew at 1 per 50 guests: one lead, the rest bartenders. Returned
+// only when the user hasn't set their own crew — staffRows === null means
+// "use the default", any array means they've taken control of it.
+function defaultCrew(guests) {
+  const g = Number(guests) || 0;
+  if (!g) return [];
+  const n = Math.max(1, Math.ceil(g / 50));
+  const crew = [{ id: 'crew_lead', role: 'Lead bartender', count: 1, rate: COST.leadRate }];
+  if (n > 1) crew.push({ id: 'crew_bar', role: 'Bartender', count: n - 1, rate: COST.staffRate });
+  return crew;
+}
+function crewFor(s) {
+  return Array.isArray(s.staffRows) ? s.staffRows : defaultCrew(s.guests);
+}
+function num(v, fallback = 0) {
+  const n = parseFloat(v);
+  return isNaN(n) ? fallback : n;
+}
+function hoursFrom(text) {
+  return parseFloat(String(text || '').replace(/[^0-9.]/g, '')) || 0;
+}
+
+// Is a tasting part of this quote? 'auto' follows the guest threshold; the
+// other three are manual overrides for the odd case.
+function tastingState(s) {
+  const g = Number(s.guests) || 0;
+  if (s.tastingMode === 'included') return 'included';
+  if (s.tastingMode === 'charged') return 'charged';
+  if (s.tastingMode === 'none') return 'none';
+  return g >= COST.tastingThreshold ? 'included' : 'none';
+}
+
+// The single source of truth for what this event costs us. Both the internal
+// panel and the generated client inclusions read from here, so the two can't
+// drift apart.
+function computeCosts(s) {
+  const g = Number(s.guests) || 0;
+  const serviceHrs = hoursFrom(s.duration);
+  const setupHrs = num(s.setupHrs, COST.setupHrs);
+  const packdownHrs = num(s.packdownHrs, COST.packdownHrs);
+  const paidHrs = setupHrs + serviceHrs + packdownHrs;
+
+  const crew = crewFor(s);
+  const headcount = crew.reduce((n, r) => n + num(r.count), 0);
+  const crewCostPerHour = crew.reduce((sum, r) => sum + num(r.count) * num(r.rate), 0);
+  const staffCost = crewCostPerHour * paidHrs;
+
+  // Prep is real time that currently costs no cash — the directors absorb it.
+  // Shown as a shadow figure so it's visible without distorting margin. Put a
+  // rate in the box the day someone starts getting paid for it.
+  const prepHrs = num(s.prepHrs);
+  const prepRate = num(s.prepRate, 0);
+  const prepCost = prepHrs * prepRate;
+  const prepShadow = prepHrs * COST.prepRate;
+
+  const isClientAlcohol = s.pkg === 'Bar Only (client supplies alcohol)';
+  const alcPerHead = isClientAlcohol ? 0 : COST.alcoholPerHead;
+  const alcCost = alcPerHead * g;
+  const mixersCost = COST.mixersPerHead * g;
+  const iceCost = COST.icePerHead * g;
+  const garnishCost = COST.garnishPerHead * g;
+
+  const glassPerHead = num(s.glassPerHead, DRINKWARE.mixed.glass);
+  const plasticPerHead = num(s.plasticPerHead, DRINKWARE.mixed.plastic);
+  const glassCost = glassPerHead * COST.glassRate * g;
+  const plasticCost = plasticPerHead * COST.plasticRate * g;
+  const drinkwareCost = glassCost + plasticCost;
+
+  const tasting = tastingState(s);
+  const tGuests = num(s.tastingGuests, COST.tastingDefaultGuests);
+  const tastingCost = tasting === 'none' ? 0
+    : tGuests * COST.tastingIngredientsPerHead + COST.tastingStaffHours * COST.staffRate;
+  const tastingCharge = tasting === 'charged' ? tGuests * COST.tastingChargePerHead : 0;
+
+  const oneOffs = s.costLines.reduce((sum, l) => sum + num(l.qty) * num(l.unitCost), 0);
+
+  const internalCost = alcCost + mixersCost + iceCost + garnishCost
+    + drinkwareCost + staffCost + prepCost + tastingCost + oneOffs;
+
+  return {
+    g, serviceHrs, setupHrs, packdownHrs, paidHrs, crew, headcount, crewCostPerHour,
+    staffCost, prepHrs, prepCost, prepShadow, isClientAlcohol, alcPerHead, alcCost,
+    mixersCost, iceCost, garnishCost, glassPerHead, plasticPerHead, glassCost,
+    plasticCost, drinkwareCost, tasting, tGuests, tastingCost, tastingCharge,
+    oneOffs, internalCost,
+    costPerHead: g ? internalCost / g : 0,
+  };
+}
+
+// Which checklist lines are still hanging. Auto lines resolve themselves; a
+// manual line is settled by an "n/a" tick or by a one-off cost tagged to it.
+function unresolvedChecks(s) {
+  const tagged = new Set(s.costLines.map(l => l.check).filter(Boolean));
+  return COST_CHECKS.filter(c => {
+    if (c.auto) return false; // tasting included/charged is costed in the model
+    if ((s.costChecks || {})[c.key] === 'na') return false;
+    return !tagged.has(c.key);
+  });
+}
+
+// The client-facing inclusions list, generated rather than typed, so it always
+// matches the quote it's printed on.
+function buildInclusions(s) {
+  const c = computeCosts(s);
+  const out = [];
+
+  if (s.nct > 0 || s.nmt > 0) {
+    out.push(`${s.nct} bespoke cocktail${s.nct !== 1 ? 's' : ''} & ${s.nmt} mocktail${s.nmt !== 1 ? 's' : ''} from our menu`);
+  }
+  out.push(c.headcount
+    ? `Professional bar team — ${c.headcount} ORPI staff for your ${c.g} guests`
+    : 'Professional bar staff scaled to your guest count');
+
+  if (c.glassPerHead > 0 && c.plasticPerHead > 0) out.push('Standard glassware, with premium disposables late in the night');
+  else if (c.glassPerHead > 0) out.push('Standard glassware throughout');
+  else if (c.plasticPerHead > 0) out.push('Premium disposable barware throughout');
+
+  out.push('Cubed & crushed ice');
+  out.push('Garnishes, straws & napkins');
+  out.push('Bar caddies & bar-top styling');
+  out.push('Standard back-bar décor');
+  out.push('Bespoke printed menus');
+  out.push('Set-up, service & pack-down');
+  out.push('Stock planning & bar management');
+  if (!c.isClientAlcohol) out.push('House spirits, beer & wine');
+  out.push('Full soft drinks & mixer range');
+  if (c.tasting === 'included') out.push('Pre-event drinks tasting');
+  if (s.wdOn) out.push(`${s.wdDur} of welcome drinks on arrival`);
+
+  s.inclItems.filter(i => i.on && i.text.trim()).forEach(i => out.push(i.text.trim()));
+  return out;
+}
+
 function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
     enquiryId: null, client: '', etype: 'Wedding Reception', venue: '', edate: '', etime: '', guests: '',
     pkg: 'Full Bar', duration: '', setup: '',
+    // Paid staff hours are set-up + service + pack-down, not service alone.
+    // Service comes from `duration`; these two are the parts that were missing.
+    setupHrs: String(COST.setupHrs), packdownHrs: String(COST.packdownHrs),
+    // Prep (batching, syrups, garnish prep) is currently absorbed by the
+    // directors, so it carries hours but no rate. Set a rate to make it real.
+    prepHrs: '', prepRate: '',
+    // null = use the 1-per-50 default crew; an array = Ruds has set it himself
+    staffRows: null,
+    drinkware: 'mixed', glassPerHead: DRINKWARE.mixed.glass, plasticPerHead: DRINKWARE.mixed.plastic,
+    tastingMode: 'auto', tastingGuests: COST.tastingDefaultGuests,
+    costChecks: {},
     wdOn: true, wdDur: '2 hours', wdItems: withIds(DEF_WD),
-    inclItems: withIds(DEF_INCL),
+    inclItems: withIds(DEF_EXTRA_INCL),
     spiritRows: spiritsWithIds(DEF_SPIRITS),
     softItems: withIds(DEF_SOFT),
     nct: 3, nmt: 2, cocktailNames: ['', '', ''], mocktailNames: ['', ''],
     addons: addonsWithIds(DEF_ADDONS),
     compItems: withIds(DEF_COMP),
-    notes: '', base: '', disc: '', glassware: 'glass',
+    notes: '', base: '', disc: '',
     // ── Internal costing (never printed on client quote) ──
     // Each line has: { id, category, name, qty, unitCost, inventoryId? }
     // inventoryId links to a live Inventory Item so unit cost stays current
@@ -84,6 +291,8 @@ export default function QuoteClient({ userEmail }) {
   // wiped when loading the template; brand structure carries over.
   const TEMPLATE_FIELDS = [
     'salesPerson', 'pkg', 'duration', 'setup',
+    'setupHrs', 'packdownHrs', 'drinkware', 'glassPerHead', 'plasticPerHead',
+    'tastingMode', 'tastingGuests',
     'wdOn', 'wdDur', 'wdItems',
     'inclItems', 'spiritRows', 'softItems',
     'nct', 'nmt', 'addons', 'compItems',
@@ -216,6 +425,7 @@ export default function QuoteClient({ userEmail }) {
       qty: '',
       unitCost: '',
       inventoryId: null,
+      check: null,   // ties this line to a COST_CHECKS key, if it came from one
       ...partial,
     };
     setS(prev => ({ ...prev, costLines: [...prev.costLines, line] }));
@@ -232,96 +442,13 @@ export default function QuoteClient({ userEmail }) {
     setS(prev => ({ ...prev, costLines: prev.costLines.filter(l => l.id !== id) }));
   }
 
-  // Suggests default consumption for a given package + guest count. Starting
-  // values are industry-typical; refine over the season as real data lands.
-  //   Premium (3hr cocktail window + open bar remainder):
-  //     - Cocktails: 2.5 per guest across the window
-  //     - Beer: 1.5 bottles per guest for the full event
-  //     - Wine: 0.4 bottles per guest
-  //     - Spirit measures (for open bar): 3 per guest × 25ml = ~75ml
-  //   Ultimate (unlimited cocktails throughout):
-  //     - Cocktails: 4 per guest across the event
-  //     - Beer: 1 bottle per guest (people drink more cocktails)
-  //     - Wine: 0.3 bottles per guest
-  //     - Spirit measures: 3.5 per guest
-  //
-  // These are per-guest numbers we multiply by guest count. Spirit mix
-  // (which spirit gets what share of measures) is a separate ratio the
-  // user picks by selecting brands.
-  function suggestConsumption(pkg, guests) {
-    const g = Number(guests) || 0;
-    if (!g) return null;
-    const isUltimate = pkg === 'Ultimate';
-    return {
-      cocktailsTotal: Math.ceil(g * (isUltimate ? 4 : 2.5)),
-      beerBottles: Math.ceil(g * (isUltimate ? 1.0 : 1.5)),
-      wineBottles: Math.ceil(g * (isUltimate ? 0.3 : 0.4)),
-      spiritMeasures: Math.ceil(g * (isUltimate ? 3.5 : 3.0)),
-      // Cocktail production uses ~60ml spirit per cocktail on average
-      cocktailSpiritMl: Math.ceil(g * (isUltimate ? 4 : 2.5) * 60),
-      // 1 bottle spirit = 700ml → measures per bottle for open bar (25ml) = 28
-      // For cocktails at 60ml → 11 cocktails per bottle
-      staffCount: g > 150 ? Math.ceil(g / 40) + 1 : Math.ceil(g / 40),
-      glassMainCount: Math.ceil(g * 1.5),
-      glassWelcomeCount: g,
-    };
-  }
-
-  // Populates cost lines with suggested defaults based on current package + guests.
-  // Non-destructive: adds new lines rather than replacing existing ones so a
-  // second click doesn't wipe manual edits.
-  function seedFromDefaults() {
-    const c = suggestConsumption(s.pkg, s.guests);
-    if (!c) { alert('Enter guest count first.'); return; }
-    const seed = [
-      { category: 'Alcohol', name: 'Spirits (mixed — see brand selection)', qty: Math.ceil((c.cocktailSpiritMl + c.spiritMeasures * 25) / 700), unitCost: '' },
-      { category: 'Alcohol', name: 'Beer (bottles)', qty: c.beerBottles, unitCost: '' },
-      { category: 'Alcohol', name: 'Wine (bottles)', qty: c.wineBottles, unitCost: '' },
-      { category: 'Staff', name: 'Bartenders', qty: c.staffCount, unitCost: '' },
-      { category: 'Staff', name: 'Lead bartender', qty: 1, unitCost: '' },
-      { category: 'Glassware', name: 'Main event glassware', qty: c.glassMainCount, unitCost: '' },
-      { category: 'Glassware', name: 'Welcome drinks glassware', qty: c.glassWelcomeCount, unitCost: '' },
-      { category: 'Mixers', name: 'Soft drinks & mixers (bulk)', qty: 1, unitCost: '' },
-      { category: 'Ice', name: 'Ice (kg)', qty: Math.ceil((Number(s.guests) || 0) * 0.75), unitCost: '' },
-      { category: 'Logistics', name: 'Van, fuel, parking', qty: 1, unitCost: '' },
-    ];
-    setS(prev => ({
-      ...prev,
-      costLines: [
-        ...prev.costLines,
-        ...seed.map(l => ({ id: uid(), inventoryId: null, ...l })),
-      ],
-    }));
-  }
-
-  // Pulls the currently-selected alcohol brands from the client-facing
-  // quote's spirit rows into stock-linked cost lines, so unit cost comes
-  // from live Inventory Items. This is the "one entry, both sides" move —
-  // brands the client sees are the brands you're costed against.
-  function syncFromBrands() {
-    const added = [];
-    for (const row of s.spiritRows) {
-      if (!row.on) continue;
-      for (const item of row.items) {
-        if (!item.on || !item.text.trim()) continue;
-        // Try to match against inventory (loose match: brand name contained in item)
-        const match = stockItems.find(inv =>
-          inv.name.toLowerCase() === item.text.trim().toLowerCase() ||
-          inv.name.toLowerCase().includes(item.text.trim().toLowerCase()) ||
-          item.text.trim().toLowerCase().includes(inv.name.toLowerCase())
-        );
-        added.push({
-          id: uid(),
-          category: 'Alcohol',
-          name: match ? match.name : `${row.cat}: ${item.text.trim()}`,
-          qty: '',
-          unitCost: match?.averageUnitCost || '',
-          inventoryId: match?.id || null,
-        });
-      }
-    }
-    if (!added.length) { alert('No brands selected on the client quote to sync.'); return; }
-    setS(prev => ({ ...prev, costLines: [...prev.costLines, ...added] }));
+  // Toggles a checklist line between "not applicable" and unresolved.
+  function toggleCheck(key) {
+    setS(prev => {
+      const next = { ...(prev.costChecks || {}) };
+      if (next[key] === 'na') delete next[key]; else next[key] = 'na';
+      return { ...prev, costChecks: next };
+    });
   }
 
   return (
@@ -333,13 +460,13 @@ export default function QuoteClient({ userEmail }) {
         saveAsTemplate={saveAsTemplate} clearTemplate={clearTemplate} templateMsg={templateMsg}
         stockItems={stockItems}
         addCostLine={addCostLine} updateCostLine={updateCostLine} removeCostLine={removeCostLine}
-        seedFromDefaults={seedFromDefaults} syncFromBrands={syncFromBrands}
+        toggleCheck={toggleCheck}
       />
     </AppShell>
   );
 }
 
-function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, saveAsTemplate, clearTemplate, templateMsg, stockItems, addCostLine, updateCostLine, removeCostLine, seedFromDefaults, syncFromBrands }) {
+function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, saveAsTemplate, clearTemplate, templateMsg, stockItems, addCostLine, updateCostLine, removeCostLine, toggleCheck }) {
   return (
     <div>
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -420,7 +547,11 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           </div>
           <EditableList items={s.wdItems} onChange={items => set({ wdItems: items })} addLabel="+ Add item" />
 
-          <SectionHead>Inclusions</SectionHead>
+          <SectionHead>Extra inclusions</SectionHead>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, lineHeight: 1.5 }}>
+            The main included-in-your-package list is generated from the package, crew and
+            drinkware, so it always matches this quote. Add anything extra here.
+          </div>
           <EditableList items={s.inclItems} onChange={items => set({ inclItems: items })} addLabel="+ Add inclusion" />
 
           <SectionHead>Spirits &amp; alcohol</SectionHead>
@@ -463,23 +594,23 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={s.notes} onChange={e => set({ notes: e.target.value })} placeholder="Any notes or conditions…" />
 
           <SectionHead>Pricing</SectionHead>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+            Crew, hours, drinkware and tasting all live in the cost panel to the right —
+            change them there and both this quote and the margin update together.
+          </div>
           <TwoCol>
-            <Field label="Glassware">
-              <select style={selStyle} value={s.glassware} onChange={e => set({ glassware: e.target.value })}>
-                <option value="glass">Real glass</option>
-                <option value="plastic">Plastic</option>
-              </select>
-            </Field>
             <Field label="Target margin %"><input type="number" style={inputStyle} value={s.marginPct} onChange={e => set({ marginPct: e.target.value })} step="5" /></Field>
+            <Field label="Cost per head"><input style={{ ...inputStyle, background: 'var(--off)', color: 'var(--muted)' }} value={gbp(computeCosts(s).costPerHead)} disabled /></Field>
           </TwoCol>
           {(() => {
             const g = Number(s.guests) || 0;
-            const pph = (PPH[s.pkg] || { glass: 0, plastic: 0 })[s.glassware] || 0;
+            const tier = s.drinkware === 'plastic' ? 'plastic' : 'glass';
+            const pph = (PPH[s.pkg] || { glass: 0, plastic: 0 })[tier] || 0;
             const suggested = g * pph;
             if (!g || !pph) return null;
             return (
               <div style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#7a6300', margin: '4px 0 10px' }}>
-                Suggested base: <strong>{gbp(suggested)}</strong> &nbsp;({g} × £{pph}/head, {s.glassware}) &nbsp;
+                Suggested base: <strong>{gbp(suggested)}</strong> &nbsp;({g} × £{pph}/head, {tier}) &nbsp;
                 <button type="button" onClick={() => set({ base: String(suggested) })} style={{ background: 'none', border: '1px solid var(--gold)', color: '#7a6300', borderRadius: 4, padding: '2px 8px', fontSize: 11, cursor: 'pointer', marginLeft: 4 }}>Use</button>
               </div>
             );
@@ -514,7 +645,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           s={s} set={set} stockItems={stockItems}
           total={total}
           addCostLine={addCostLine} updateCostLine={updateCostLine} removeCostLine={removeCostLine}
-          seedFromDefaults={seedFromDefaults} syncFromBrands={syncFromBrands}
+          toggleCheck={toggleCheck}
         />
 
         <QuotePreview s={s} addonTotal={addonTotal} total={total} dep={dep} />
@@ -531,83 +662,215 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
 // the unit cost auto-populates from Notion Average Unit Cost.
 //
 // The bottom summary computes suggested client price = cost / (1 - margin/100).
-function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostLine, updateCostLine, removeCostLine, seedFromDefaults, syncFromBrands }) {
-  // ── Auto-calculated cost from the pricing model ──────────────────────
-  // Everything derives from guests, staff hours, glassware and alcohol/head.
-  // No manual data entry needed to get a margin read — but one-off costs
-  // (unusual logistics, a specific hire) can still be added below.
-  const g = Number(s.guests) || 0;
-  const hours = parseFloat(String(s.duration || '').replace(/[^0-9.]/g, '')) || 0;
-  const glassPerHead = s.glassware === 'plastic' ? 5 * 0.10 : 5 * 0.65;
-  const staffCount = g ? Math.max(1, Math.ceil(g / 50)) : 0;
-  const staffCost = staffCount * hours * 16;
-  const isClientAlcohol = s.pkg === 'Bar Only (client supplies alcohol)';
-  const alcPerHead = isClientAlcohol ? 0 : 7.5;
-
-  const alcCost = alcPerHead * g;
-  const glassCost = glassPerHead * g;
-  const oneOffs = s.costLines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
-  const internalCost = alcCost + glassCost + staffCost + oneOffs;
-  const costPerHead = g ? internalCost / g : 0;
+function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostLine, updateCostLine, removeCostLine, toggleCheck }) {
+  const c = computeCosts(s);
+  const pending = unresolvedChecks(s);
+  const tagged = new Set(s.costLines.map(l => l.check).filter(Boolean));
 
   const marginPct = parseFloat(s.marginPct);
   const validMargin = !isNaN(marginPct) && marginPct >= 0 && marginPct < 100;
-  const suggested = validMargin ? internalCost / (1 - marginPct / 100) : null;
+  const suggested = validMargin ? c.internalCost / (1 - marginPct / 100) : null;
   const actualQuote = Number(clientTotal) || 0;
-  const actualMargin = actualQuote > 0 && internalCost > 0 ? ((actualQuote - internalCost) / actualQuote) * 100 : null;
+  const actualMargin = actualQuote > 0 && c.internalCost > 0 ? ((actualQuote - c.internalCost) / actualQuote) * 100 : null;
   const belowTarget = validMargin && actualMargin != null && actualMargin < marginPct;
 
   const line = { display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', color: '#444' };
   const muted = { color: 'var(--muted)' };
+  const head = { fontSize: 9, fontWeight: 600, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--muted)', margin: '16px 0 7px' };
+  const mini = { width: 42, padding: '3px 5px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, textAlign: 'right' };
+  const miniWide = { flex: 1, minWidth: 0, padding: '3px 5px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11 };
+
+  function setCrew(rows) { set({ staffRows: rows }); }
+  function updateCrew(i, patch) { setCrew(c.crew.map((r, idx) => idx === i ? { ...r, ...patch } : r)); }
+  function addCrew() { setCrew([...c.crew, { id: `crew_${Date.now()}`, role: 'Bar back', count: 1, rate: COST.staffRate }]); }
+  function removeCrew(i) { setCrew(c.crew.filter((_, idx) => idx !== i)); }
+
+  function pickDrinkware(mode) {
+    const d = DRINKWARE[mode];
+    set({ drinkware: mode, glassPerHead: d.glass, plasticPerHead: d.plastic });
+  }
 
   return (
-    <div className="no-print" style={{ background: '#faf9f6', border: '1px solid var(--border)', borderRadius: 8, padding: 16, alignSelf: 'start', position: 'sticky', top: 20 }}>
+    <div className="no-print" style={{ background: '#faf9f6', border: '1px solid var(--border)', borderRadius: 8, padding: 16, alignSelf: 'start', position: 'sticky', top: 20, maxHeight: 'calc(100vh - 40px)', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>Cost &amp; margin</div>
         <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Team only</div>
       </div>
-      <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.45 }}>
-        Calculated from guests, hours and glassware. Never shown on the client PDF.
+      <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, lineHeight: 1.45 }}>
+        Calculated from guests, hours and drinkware. Never shown on the client PDF.
       </p>
 
-      {(!g || !hours) && (
-        <div style={{ background: '#fff', border: '1px dashed var(--border)', borderRadius: 6, padding: 12, textAlign: 'center', fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+      {(!c.g || !c.serviceHrs) && (
+        <div style={{ background: '#fff', border: '1px dashed var(--border)', borderRadius: 6, padding: 12, textAlign: 'center', fontSize: 11.5, color: 'var(--muted)', margin: '12px 0', lineHeight: 1.5 }}>
           Enter <strong>guests</strong> and <strong>duration</strong> to see the cost.
         </div>
       )}
 
-      {/* auto cost lines */}
-      <div style={{ marginBottom: 6 }}>
-        {!isClientAlcohol && (
-          <div style={line}><span style={muted}>Alcohol · £{alcPerHead.toFixed(2)}/head</span><span>{gbp(alcCost)}</span></div>
-        )}
-        <div style={line}><span style={muted}>Glassware · {s.glassware === 'plastic' ? '5 × 10p' : '5 × 65p'}</span><span>{gbp(glassCost)}</span></div>
-        <div style={line}><span style={muted}>Staff · {staffCount} × {hours || 0}h × £16</span><span>{gbp(staffCost)}</span></div>
-        {oneOffs > 0 && (
-          <div style={line}><span style={muted}>One-off costs</span><span>{gbp(oneOffs)}</span></div>
+      {/* ── Crew & hours ─────────────────────────────────────────────── */}
+      <div style={head}>Crew &amp; hours</div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', marginBottom: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9.5, color: 'var(--muted)', marginBottom: 2 }}>Set-up</div>
+          <input type="number" step="0.5" value={s.setupHrs} onChange={e => set({ setupHrs: e.target.value })} style={{ ...mini, width: '100%' }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9.5, color: 'var(--muted)', marginBottom: 2 }}>Service</div>
+          <input value={c.serviceHrs || ''} disabled title="From the Duration field" style={{ ...mini, width: '100%', background: 'var(--off)', color: 'var(--muted)' }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9.5, color: 'var(--muted)', marginBottom: 2 }}>Pack-down</div>
+          <input type="number" step="0.5" value={s.packdownHrs} onChange={e => set({ packdownHrs: e.target.value })} style={{ ...mini, width: '100%' }} />
+        </div>
+      </div>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)', marginBottom: 8, fontStyle: 'italic' }}>
+        {c.paidHrs}h paid per crew member
+      </div>
+
+      {c.crew.map((r, i) => (
+        <div key={r.id || i} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+          <input value={r.role} onChange={e => updateCrew(i, { role: e.target.value })} placeholder="Role" style={miniWide} />
+          <input type="number" min="0" value={r.count} onChange={e => updateCrew(i, { count: e.target.value })} style={{ ...mini, width: 36 }} />
+          <span style={{ fontSize: 10, color: 'var(--muted)' }}>×£</span>
+          <input type="number" min="0" step="0.5" value={r.rate} onChange={e => updateCrew(i, { rate: e.target.value })} style={{ ...mini, width: 44 }} />
+          <button onClick={() => removeCrew(i)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12, padding: '0 2px' }} title="Remove">✕</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+        <button onClick={addCrew} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 10.5, cursor: 'pointer', padding: 0 }}>+ Add crew</button>
+        {Array.isArray(s.staffRows) && (
+          <button onClick={() => set({ staffRows: null })} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 10.5, cursor: 'pointer', padding: 0 }}>reset to 1 per 50</button>
         )}
       </div>
 
-      {/* one-off cost lines (optional) */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>Prep hours</span>
+        <input type="number" min="0" step="0.5" value={s.prepHrs} onChange={e => set({ prepHrs: e.target.value })} placeholder="0" style={{ ...mini, width: 36 }} />
+        <span style={{ fontSize: 10, color: 'var(--muted)' }}>×£</span>
+        <input type="number" min="0" step="0.5" value={s.prepRate} onChange={e => set({ prepRate: e.target.value })} placeholder="0" style={{ ...mini, width: 44 }} />
+      </div>
+      {c.prepHrs > 0 && c.prepCost === 0 && (
+        <div style={{ fontSize: 10, color: '#8a7a3a', fontStyle: 'italic', marginBottom: 8, lineHeight: 1.45 }}>
+          Absorbed by directors — {gbp(c.prepShadow)} of unpaid time, not in the cost below.
+        </div>
+      )}
+
+      {/* ── Drinkware ────────────────────────────────────────────────── */}
+      <div style={head}>Drinkware</div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 7 }}>
+        {Object.keys(DRINKWARE).map(k => (
+          <button key={k} onClick={() => pickDrinkware(k)} title={DRINKWARE[k].label}
+            style={{ flex: 1, padding: '5px 2px', fontSize: 10, borderRadius: 5, cursor: 'pointer',
+              border: s.drinkware === k ? '1px solid var(--gold)' : '1px solid var(--border)',
+              background: s.drinkware === k ? 'var(--gold-bg)' : '#fff',
+              color: s.drinkware === k ? '#7a6300' : 'var(--muted)', fontWeight: s.drinkware === k ? 600 : 400 }}>
+            {k === 'mixed' ? 'Mixed' : k === 'glass' ? 'Glass' : 'Plastic'}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>Glass/head</span>
+          <input type="number" min="0" step="0.5" value={s.glassPerHead} onChange={e => set({ glassPerHead: e.target.value })} style={{ ...mini, width: 40 }} />
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>Plastic/head</span>
+          <input type="number" min="0" step="0.5" value={s.plasticPerHead} onChange={e => set({ plasticPerHead: e.target.value })} style={{ ...mini, width: 40 }} />
+        </div>
+      </div>
+
+      {/* ── Tasting ──────────────────────────────────────────────────── */}
+      <div style={head}>Drinks tasting</div>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+        <select value={s.tastingMode} onChange={e => set({ tastingMode: e.target.value })}
+          style={{ flex: 1, minWidth: 0, padding: '3px 5px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, background: '#fff' }}>
+          <option value="auto">Auto ({COST.tastingThreshold}+ guests)</option>
+          <option value="included">Included</option>
+          <option value="charged">Charged</option>
+          <option value="none">Not offered</option>
+        </select>
+        <input type="number" min="0" value={s.tastingGuests} onChange={e => set({ tastingGuests: e.target.value })} title="People attending the tasting" style={{ ...mini, width: 36 }} />
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontStyle: 'italic', marginBottom: 4, lineHeight: 1.45 }}>
+        {c.tasting === 'none' ? 'No tasting on this quote.'
+          : c.tasting === 'included' ? `Included — costs us ${gbp(c.tastingCost)} for ${c.tGuests}.`
+          : `Charge ${gbp(c.tastingCharge)} (${c.tGuests} × £${COST.tastingChargePerHead}) — costs us ${gbp(c.tastingCost)}.`}
+      </div>
+      {c.tasting === 'charged' && c.tastingCharge < c.tastingCost && (
+        <div style={{ background: '#fef6e4', color: '#b8720a', borderRadius: 5, padding: '6px 9px', fontSize: 10, marginBottom: 4, lineHeight: 1.45 }}>
+          You'd be {gbp(c.tastingCost - c.tastingCharge)} down on this tasting. Raise the fee or cut the attendee count.
+        </div>
+      )}
+
+      {/* ── Cost lines ───────────────────────────────────────────────── */}
+      <div style={head}>Costs</div>
+      <div style={{ marginBottom: 6 }}>
+        {!c.isClientAlcohol && <div style={line}><span style={muted}>Alcohol · £{c.alcPerHead.toFixed(2)}/head</span><span>{gbp(c.alcCost)}</span></div>}
+        <div style={line}><span style={muted}>Mixers · £{COST.mixersPerHead.toFixed(2)}/head</span><span>{gbp(c.mixersCost)}</span></div>
+        <div style={line}><span style={muted}>Ice · £{COST.icePerHead.toFixed(2)}/head</span><span>{gbp(c.iceCost)}</span></div>
+        <div style={line}><span style={muted}>Garnishes · £{COST.garnishPerHead.toFixed(2)}/head</span><span>{gbp(c.garnishCost)}</span></div>
+        {c.glassPerHead > 0 && <div style={line}><span style={muted}>Glassware · {c.glassPerHead} × {Math.round(COST.glassRate * 100)}p</span><span>{gbp(c.glassCost)}</span></div>}
+        {c.plasticPerHead > 0 && <div style={line}><span style={muted}>Plastics · {c.plasticPerHead} × {Math.round(COST.plasticRate * 100)}p</span><span>{gbp(c.plasticCost)}</span></div>}
+        <div style={line}><span style={muted}>Staff · {c.headcount} × {c.paidHrs}h</span><span>{gbp(c.staffCost)}</span></div>
+        {c.prepCost > 0 && <div style={line}><span style={muted}>Prep · {c.prepHrs}h</span><span>{gbp(c.prepCost)}</span></div>}
+        {c.tastingCost > 0 && <div style={line}><span style={muted}>Drinks tasting · {c.tGuests} guests</span><span>{gbp(c.tastingCost)}</span></div>}
+        {c.oneOffs > 0 && <div style={line}><span style={muted}>One-off costs</span><span>{gbp(c.oneOffs)}</span></div>}
+      </div>
+
       {s.costLines.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           {s.costLines.map(l => (
-            <CostLineRow key={l.id} l={l} stockItems={stockItems} update={p => updateCostLine(l.id, p)} remove={() => removeCostLine(l.id)} />
+            <CostLineRow key={l.id} l={l} stockItems={stockItems} update={patch => updateCostLine(l.id, patch)} remove={() => removeCostLine(l.id)} />
           ))}
         </div>
       )}
-      <button onClick={() => addCostLine({ category: 'Other' })} style={{ width: '100%', background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px', fontSize: 11, cursor: 'pointer', marginBottom: 14, color: 'var(--muted)' }}>
+      <button onClick={() => addCostLine({ category: 'Other' })} style={{ width: '100%', background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px', fontSize: 11, cursor: 'pointer', marginBottom: 4, color: 'var(--muted)' }}>
         + Add a one-off cost
       </button>
 
-      {/* summary */}
-      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: 12 }}>
+      {/* ── Cost checklist ───────────────────────────────────────────────
+          Not a to-do list you can tick past. Every line here has to be in the
+          model, priced, or explicitly marked n/a before the margin figure
+          below will commit — which is what stops a cost being forgotten. */}
+      <div style={{ ...head, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span>Cost checklist</span>
+        <span style={{ color: pending.length ? '#b8720a' : '#2e7d32', letterSpacing: 0, textTransform: 'none', fontSize: 10 }}>
+          {pending.length ? `${pending.length} unresolved` : 'all clear'}
+        </span>
+      </div>
+      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', marginBottom: 12 }}>
+        {COST_CHECKS.map(chk => {
+          const isAuto = !!chk.auto;
+          const na = (s.costChecks || {})[chk.key] === 'na';
+          const added = tagged.has(chk.key);
+          const done = isAuto || na || added;
+          return (
+            <div key={chk.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid var(--off)', fontSize: 11 }}>
+              <span style={{ color: done ? '#2e7d32' : '#c9a227', fontSize: 11, width: 11 }}>{done ? '✓' : '○'}</span>
+              <span style={{ flex: 1, color: na ? 'var(--muted)' : '#333', textDecoration: na ? 'line-through' : 'none' }}>{chk.label}</span>
+              {isAuto ? (
+                <span style={{ fontSize: 9.5, color: 'var(--muted)', fontStyle: 'italic' }}>in model</span>
+              ) : added ? (
+                <span style={{ fontSize: 9.5, color: '#2e7d32' }}>priced</span>
+              ) : (
+                <span style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => addCostLine({ category: 'Other', name: chk.label, check: chk.key, qty: 1 })}
+                    style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 9.5, cursor: 'pointer', padding: 0 }}>add</button>
+                  <button onClick={() => toggleCheck(chk.key)}
+                    style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 9.5, cursor: 'pointer', padding: 0 }}>{na ? 'undo' : 'n/a'}</button>
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Summary ──────────────────────────────────────────────────── */}
+      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: 12, opacity: pending.length ? 0.55 : 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, fontWeight: 600 }}>
-          <span>Total cost</span>
-          <span>{gbp(internalCost)}</span>
+          <span>Total cost</span><span>{gbp(c.internalCost)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 10, color: 'var(--muted)' }}>
-          <span>per head</span><span>{gbp(costPerHead)}</span>
+          <span>per head</span><span>{gbp(c.costPerHead)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 8 }}>
           <span style={{ color: 'var(--muted)' }}>Target margin</span>
@@ -639,6 +902,11 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
           </div>
         )}
       </div>
+      {pending.length > 0 && (
+        <div style={{ fontSize: 10.5, color: '#b8720a', marginTop: 7, lineHeight: 1.5, fontStyle: 'italic' }}>
+          {pending.length} cost{pending.length === 1 ? '' : 's'} not yet accounted for — price {pending.length === 1 ? 'it' : 'them'} or mark n/a and this margin is trustworthy.
+        </div>
+      )}
     </div>
   );
 }
@@ -830,7 +1098,7 @@ function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFracti
 function QuotePreview({ s, addonTotal, total, dep }) {
   const docLabels = { quote: 'Quotation', deposit: 'Deposit Invoice', balance: 'Balance Invoice' };
   const wdActive = s.wdItems.filter(i => i.on && i.text.trim());
-  const inclActive = s.inclItems.filter(i => i.on && i.text.trim());
+  const inclusions = buildInclusions(s);
   const softActive = s.softItems.filter(i => i.on && i.text.trim());
   const compActive = s.compItems.filter(i => i.on && i.text.trim());
   const activeSpirits = s.spiritRows.filter(r => r.on).map(r => ({ cat: r.cat, items: r.items.filter(i => i.on && i.text.trim()) })).filter(r => r.items.length);
@@ -936,19 +1204,24 @@ function QuotePreview({ s, addonTotal, total, dep }) {
             </div>
           </div>
         )}
-        {/* What's included */}
-        {inclActive.length > 0 && (
-          <>
-            <div style={sectionHead}>What's included</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '5px 24px', fontSize: 12, color: '#333' }}>
-              {inclActive.map(i => (
-                <span key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
-                  <span style={{ display: 'inline-block', width: 3, height: 3, background: 'var(--gold)', borderRadius: '50%', flexShrink: 0 }}></span>
-                  {i.text}
-                </span>
+        {/* ── Included in your package ──
+            Generated from the package, crew and drinkware rather than typed, so
+            it can't promise glassware on a plastics job or a tasting the client
+            isn't getting. Boxed and ticked so it reads as value, not small print. */}
+        {inclusions.length > 0 && (
+          <div className="print-avoid-break" style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderRadius: 8, padding: '18px 22px', marginTop: 24 }}>
+            <div style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, marginBottom: 12 }}>
+              Included in your package
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2px 22px' }}>
+              {inclusions.map((text, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '4px 0', fontSize: 11.5, color: '#333', lineHeight: 1.45 }}>
+                  <span style={{ color: 'var(--gold)', fontSize: 11, lineHeight: 1.45, flexShrink: 0 }}>✓</span>
+                  <span>{text}</span>
+                </div>
               ))}
             </div>
-          </>
+          </div>
         )}
 
         {/* Welcome drinks */}

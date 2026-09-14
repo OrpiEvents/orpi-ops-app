@@ -71,16 +71,64 @@ const STOCK_CAT = [
 ];
 const stockCatFor = c => (STOCK_CAT.find(([re]) => re.test(c || '')) || [])[1] || null;
 
-// Stock names carry sizes ("Absolut Vodka 1L") while quotes say "Absolut", so
-// an exact match would flag almost everything as new. Contains-either-way, with
-// a floor of 3 characters so "gin" doesn't match half the list.
+// Strip everything that differs between how a quote names a drink and how
+// stock does: sizes, punctuation, and the category words that appear in half
+// the list. "Absolut Vodka 1L" and "Absolut" both reduce to "absolut".
+function normName(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019'`.,()\-]/g, ' ')
+    .replace(/\b\d+(\.\d+)?\s*(cl|ml|l|ltr|litre|litres)\b/g, ' ')
+    .replace(/\b(vodka|gin|rum|whisky|whiskey|bourbon|tequila|cognac|brandy|liqueur|beer|lager|cider|wine|prosecco|champagne|bottles?|cans?|premium|original|dry|the|and)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = row;
+  }
+  return prev[b.length];
+}
+const ratio = (a, b) => (!a || !b ? 0 : 1 - levenshtein(a, b) / Math.max(a.length, b.length));
+
+// How close is what was typed to a stock item? 1 = certain, 0 = unrelated.
+// Compared against the whole normalised name and against its first word, so
+// "Absolut" scores full marks against "Absolut Vodka 1L" without "Ciroc
+// Coconut" scoring highly against "Ciroc Red Berry".
+function matchScore(typed, stockName) {
+  const t = normName(typed), s = normName(stockName);
+  if (!t || !s || t.length < 3) return 0;
+  if (t === s) return 1;
+  if (s.includes(t) || t.includes(s)) return 0.95;
+  return Math.max(ratio(t, s), ratio(t, s.split(' ')[0] || ''));
+}
+
+// Anything at or above this is treated as the same product. Below it but above
+// SUGGEST_AT, we ask rather than assume.
+const SAME_AT = 0.9;
+const SUGGEST_AT = 0.62;
+
 function inStock(name, options) {
-  const n = (name || '').trim().toLowerCase();
-  if (n.length < 3) return false;
-  return options.some(o => {
-    const s = o.name.toLowerCase();
-    return s.includes(n) || n.includes(s);
-  });
+  return options.some(o => matchScore(name, o.name) >= SAME_AT);
+}
+
+// Closest stock items to what was typed, for the "did you mean" step.
+function nearMatches(name, options) {
+  return options
+    .map(o => ({ o, score: matchScore(name, o.name) }))
+    .filter(x => x.score >= SUGGEST_AT && x.score < SAME_AT)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(x => x.o);
 }
 
 function withIds(arr) { return arr.map(v => ({ id: uid(), text: v, on: true })); }
@@ -655,8 +703,38 @@ export default function QuoteClient({ userEmail }) {
         }),
       }).then(r => r.json());
       if (res.error) throw new Error(res.error);
-      setSaveMsg('✓ Saved to Notion');
-      setTimeout(() => setSaveMsg(''), 3000);
+
+      // Anything on this quote that stock has never heard of becomes a draft
+      // inventory row, ticked "Needs setup". No size, no price — those get
+      // filled in by whoever buys it, which is the only person who knows
+      // whether it's the 70cl or the 1L.
+      const drinks = [
+        ...s.spiritRows.filter(r => r.on).flatMap(r =>
+          r.items.filter(i => i.on && i.text.trim()).map(i => ({ name: i.text.trim(), cat: stockCatFor(r.cat) }))),
+        ...s.softItems.filter(i => i.on && i.text.trim()).map(i => ({ name: i.text.trim(), cat: 'Mixer' })),
+        ...s.wdItems.filter(i => i.on && i.text.trim()).map(i => ({ name: i.text.trim(), cat: null })),
+      ];
+      const seen = new Set();
+      const drafts = drinks.filter(d => {
+        const k = d.name.toLowerCase();
+        if (seen.has(k) || inStock(d.name, stockItems)) return false;
+        seen.add(k);
+        return true;
+      });
+
+      let extra = '';
+      if (drafts.length) {
+        const r = await fetch('/api/inventory/draft', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: drafts }),
+        }).then(x => x.json()).catch(() => ({ error: 'request failed' }));
+        extra = r.error
+          ? ` · couldn't add ${drafts.length} new product${drafts.length === 1 ? '' : 's'} to Inventory`
+          : ` · ${r.created} new product${r.created === 1 ? '' : 's'} added to Inventory, needs setup`;
+      }
+
+      setSaveMsg('✓ Saved to Notion' + extra);
+      setTimeout(() => setSaveMsg(''), 6000);
     } catch (err) {
       alert('Save failed: ' + err.message);
     } finally {
@@ -1429,6 +1507,8 @@ function Combobox({ value, onChange, options, placeholder, prefer }) {
     .slice(0, 8);
 
   const known = inStock(value, options);
+  // Close but not certain: ask before a near-duplicate gets created.
+  const near = known ? [] : nearMatches(text, options);
 
   function commit(name) { onChange(name); setDraft(null); setOpen(false); }
 
@@ -1454,10 +1534,21 @@ function Combobox({ value, onChange, options, placeholder, prefer }) {
               {o.category && <div style={{ fontSize: 9.5, color: 'var(--muted)' }}>{o.category}</div>}
             </div>
           ))}
+          {q && !known && near.length > 0 && (
+            <div style={{ padding: '6px 9px', borderTop: '1px solid var(--off)', background: '#fffdf6' }}>
+              <div style={{ fontSize: 9.5, color: 'var(--muted)', marginBottom: 3 }}>Did you mean</div>
+              {near.map(o => (
+                <div key={o.id} onMouseDown={e => { e.preventDefault(); commit(o.name); }}
+                  style={{ fontSize: 11.5, padding: '3px 0', cursor: 'pointer', color: '#7a6300', fontWeight: 500 }}>
+                  {o.name}
+                </div>
+              ))}
+            </div>
+          )}
           {q && !known && (
             <div onMouseDown={e => { e.preventDefault(); commit(text.trim()); }}
-              style={{ padding: '6px 9px', cursor: 'pointer', fontSize: 11, color: '#7a6300', background: 'var(--gold-bg)' }}>
-              Use “{text.trim()}” — new, not in inventory yet
+              style={{ padding: '6px 9px', cursor: 'pointer', fontSize: 11, color: near.length ? 'var(--muted)' : '#7a6300', background: near.length ? '#fff' : 'var(--gold-bg)', borderTop: '1px solid var(--off)' }}>
+              No — add “{text.trim()}” as a new product
             </div>
           )}
         </div>

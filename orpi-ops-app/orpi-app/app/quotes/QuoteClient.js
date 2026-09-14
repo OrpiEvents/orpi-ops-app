@@ -69,6 +69,34 @@ const COST = {
   tastingDefaultGuests: 4,
 };
 
+// ── What the £7.50 is actually made of ──────────────────────────────
+// Every alcohol line ever logged in Event Costing, split by category. Syrups
+// were miscategorised as Alcohol (£0.05/head) and are stripped out here — they
+// belong under mixers. That leaves a £7.45 base.
+// Components switch off when the client quote doesn't include them, which is
+// why dropping wine from a package actually moves the cost.
+const ALCOHOL_MIX = [
+  { key: 'spirits',  label: 'Spirits',  perHead: 6.07, tiered: true },
+  { key: 'beer',     label: 'Beer',     perHead: 0.54 },
+  { key: 'liqueurs', label: 'Liqueurs', perHead: 0.44 },
+  { key: 'prosecco', label: 'Prosecco', perHead: 0.30 },
+  { key: 'wine',     label: 'Wine',     perHead: 0.10 },
+];
+
+// Spirit grade multiplier, applied to the spirits component only — upgrading
+// the vodka doesn't make the beer cost more.
+// Derived from real purchase prices: premium brands (Grey Goose, Ciroc,
+// Hennessy, Black Label, Woodford, Bombay) run £34.95/litre against £21.62 for
+// the house list, and past events blend the two at roughly 46/54. Index 1.00
+// is that historical blend, which is what produced the £7.50 figure — so
+// "premium" is an uplift on the blend, not on a clean house baseline.
+const SPIRIT_TIERS = {
+  house:    { label: 'House',    index: 0.83, note: 'Absolut, Gordon\'s, Jameson, Bacardi' },
+  standard: { label: 'Standard', index: 1.00, note: 'the house/premium mix we actually book' },
+  premium:  { label: 'Premium',  index: 1.33, note: 'Grey Goose, Ciroc, Black Label throughout' },
+  luxury:   { label: 'Luxury',   index: 1.85, note: 'estimate — no luxury events logged yet' },
+};
+
 // Drinkware presets → units per head. "Mixed" is the normal ORPI night:
 // real glass through service, plastics for the late-night tail.
 const DRINKWARE = {
@@ -134,6 +162,48 @@ function hoursFrom(text) {
   return parseFloat(String(text || '').replace(/[^0-9.]/g, '')) || 0;
 }
 
+// Which alcohol components this quote actually includes. Driven by the spirit
+// rows on the client-facing quote, so a package without wine isn't costed for
+// wine — and the printed inclusions can't claim it either.
+function alcoholParts(s) {
+  const rows = (s.spiritRows || []).filter(r => r.on && r.items.some(i => i.on && i.text.trim()));
+  const has = re => rows.some(r => re.test(r.cat));
+  const toastOn = (s.addons || []).some(a => a.on && /toast/i.test(a.label));
+  const beer = has(/beer|lager|cider/i);
+  const wine = has(/\bwine\b/i);
+  const prosecco = has(/prosecco|champagne|sparkl|fizz/i) || toastOn;
+  const spirits = rows.some(r => !/beer|lager|cider|\bwine\b|prosecco|champagne|sparkl|fizz/i.test(r.cat));
+  return { spirits, beer, wine, prosecco, liqueurs: spirits };
+}
+
+// The client-facing phrase for the alcohol line, built from what's actually on.
+function alcoholLine(s) {
+  const parts = alcoholParts(s);
+  const grade = SPIRIT_TIERS[s.spiritTier] ? SPIRIT_TIERS[s.spiritTier].label : 'House';
+  const bits = [];
+  if (parts.spirits) bits.push(`${grade === 'Standard' ? 'House' : grade} spirits`);
+  if (parts.beer) bits.push('beer');
+  if (parts.wine) bits.push('wine');
+  if (parts.prosecco) bits.push('prosecco');
+  if (!bits.length) return null;
+  if (bits.length === 1) return bits[0];
+  return bits.slice(0, -1).join(', ') + ' & ' + bits[bits.length - 1];
+}
+
+// Alcohol cost per head: sum the live components, tier the spirits, and let a
+// typed override beat the lot.
+function alcoholPerHead(s) {
+  if (s.pkg === 'Bar Only (client supplies alcohol)') return 0;
+  const manual = parseFloat(s.alcoholOverride);
+  if (!isNaN(manual) && manual >= 0) return manual;
+  const parts = alcoholParts(s);
+  const tier = SPIRIT_TIERS[s.spiritTier] || SPIRIT_TIERS.standard;
+  return ALCOHOL_MIX.reduce((sum, m) => {
+    if (!parts[m.key]) return sum;
+    return sum + m.perHead * (m.tiered ? tier.index : 1);
+  }, 0);
+}
+
 // Is a tasting part of this quote? 'auto' follows the guest threshold; the
 // other three are manual overrides for the odd case.
 function tastingState(s) {
@@ -168,8 +238,10 @@ function computeCosts(s) {
   const prepShadow = prepHrs * COST.prepRate;
 
   const isClientAlcohol = s.pkg === 'Bar Only (client supplies alcohol)';
-  const alcPerHead = isClientAlcohol ? 0 : COST.alcoholPerHead;
+  const alcPerHead = alcoholPerHead(s);
   const alcCost = alcPerHead * g;
+  const alcParts = alcoholParts(s);
+  const alcManual = !isNaN(parseFloat(s.alcoholOverride)) && parseFloat(s.alcoholOverride) >= 0;
   const mixersCost = COST.mixersPerHead * g;
   const iceCost = COST.icePerHead * g;
   const garnishCost = COST.garnishPerHead * g;
@@ -194,6 +266,7 @@ function computeCosts(s) {
   return {
     g, serviceHrs, setupHrs, packdownHrs, paidHrs, crew, headcount, crewCostPerHour,
     staffCost, prepHrs, prepCost, prepShadow, isClientAlcohol, alcPerHead, alcCost,
+    alcParts, alcManual,
     mixersCost, iceCost, garnishCost, glassPerHead, plasticPerHead, glassCost,
     plasticCost, drinkwareCost, tasting, tGuests, tastingCost, tastingCharge,
     oneOffs, internalCost,
@@ -236,7 +309,8 @@ function buildInclusions(s) {
   out.push('Bespoke printed menus');
   out.push('Set-up, service & pack-down');
   out.push('Stock planning & bar management');
-  if (!c.isClientAlcohol) out.push('House spirits, beer & wine');
+  const alc = c.isClientAlcohol ? null : alcoholLine(s);
+  if (alc) out.push(alc.charAt(0).toUpperCase() + alc.slice(1));
   out.push('Full soft drinks & mixer range');
   if (c.tasting === 'included') out.push('Pre-event drinks tasting');
   if (s.wdOn) out.push(`${s.wdDur} of welcome drinks on arrival`);
@@ -260,6 +334,8 @@ function freshState() {
     staffRows: null,
     drinkware: 'mixed', glassPerHead: DRINKWARE.mixed.glass, plasticPerHead: DRINKWARE.mixed.plastic,
     tastingMode: 'auto', tastingGuests: COST.tastingDefaultGuests,
+    // Spirit grade drives the alcohol cost per head. Override beats it outright.
+    spiritTier: 'standard', alcoholOverride: '',
     costChecks: {},
     wdOn: true, wdDur: '2 hours', wdItems: withIds(DEF_WD),
     inclItems: withIds(DEF_EXTRA_INCL),
@@ -292,7 +368,7 @@ export default function QuoteClient({ userEmail }) {
   const TEMPLATE_FIELDS = [
     'salesPerson', 'pkg', 'duration', 'setup',
     'setupHrs', 'packdownHrs', 'drinkware', 'glassPerHead', 'plasticPerHead',
-    'tastingMode', 'tastingGuests',
+    'tastingMode', 'tastingGuests', 'spiritTier',
     'wdOn', 'wdDur', 'wdItems',
     'inclItems', 'spiritRows', 'softItems',
     'nct', 'nmt', 'addons', 'compItems',
@@ -752,6 +828,61 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
         <div style={{ fontSize: 10, color: '#8a7a3a', fontStyle: 'italic', marginBottom: 8, lineHeight: 1.45 }}>
           Absorbed by directors — {gbp(c.prepShadow)} of unpaid time, not in the cost below.
         </div>
+      )}
+
+      {/* ── Alcohol ──────────────────────────────────────────────────────
+          Upgrading the spirit list moves the spirits component only. Beer,
+          wine and prosecco are flat, and switch off entirely when the package
+          doesn't include them. */}
+      {!c.isClientAlcohol && (
+        <>
+          <div style={head}>Alcohol</div>
+          <div style={{ display: 'flex', gap: 3, marginBottom: 7 }}>
+            {Object.keys(SPIRIT_TIERS).map(k => (
+              <button key={k} onClick={() => set({ spiritTier: k })} title={SPIRIT_TIERS[k].note}
+                style={{ flex: 1, padding: '5px 1px', fontSize: 9.5, borderRadius: 5, cursor: 'pointer',
+                  border: s.spiritTier === k ? '1px solid var(--gold)' : '1px solid var(--border)',
+                  background: s.spiritTier === k ? 'var(--gold-bg)' : '#fff',
+                  color: s.spiritTier === k ? '#7a6300' : 'var(--muted)',
+                  fontWeight: s.spiritTier === k ? 600 : 400, opacity: c.alcManual ? 0.45 : 1 }}>
+                {SPIRIT_TIERS[k].label}
+              </button>
+            ))}
+          </div>
+          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', marginBottom: 6 }}>
+            {ALCOHOL_MIX.map(m => {
+              const on = c.alcParts[m.key];
+              const tier = SPIRIT_TIERS[s.spiritTier] || SPIRIT_TIERS.standard;
+              const v = m.perHead * (m.tiered ? tier.index : 1);
+              return (
+                <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, padding: '2px 0', color: on ? '#444' : 'var(--muted)' }}>
+                  <span style={{ textDecoration: on ? 'none' : 'line-through' }}>
+                    {m.label}{m.tiered && on && tier.index !== 1 ? ` · ×${tier.index}` : ''}
+                  </span>
+                  <span>{on ? '£' + v.toFixed(2) : 'not included'}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>
+              {c.alcManual ? 'Override' : 'Per head'}
+            </span>
+            <input type="number" min="0" step="0.25" value={s.alcoholOverride}
+              onChange={e => set({ alcoholOverride: e.target.value })}
+              placeholder={c.alcPerHead.toFixed(2)}
+              title="Type a figure to override the tiered calculation"
+              style={{ ...mini, width: 56, borderColor: c.alcManual ? 'var(--gold)' : 'var(--border)' }} />
+            {c.alcManual && (
+              <button onClick={() => set({ alcoholOverride: '' })} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 10, cursor: 'pointer', padding: 0 }}>clear</button>
+            )}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', fontStyle: 'italic', marginBottom: 4, lineHeight: 1.45 }}>
+            {c.alcManual
+              ? 'Typed figure — tiers ignored until you clear it.'
+              : `${SPIRIT_TIERS[s.spiritTier] ? SPIRIT_TIERS[s.spiritTier].note : ''} · £${c.alcPerHead.toFixed(2)}/head`}
+          </div>
+        </>
       )}
 
       {/* ── Drinkware ────────────────────────────────────────────────── */}

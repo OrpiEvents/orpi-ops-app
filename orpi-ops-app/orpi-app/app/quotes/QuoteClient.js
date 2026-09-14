@@ -35,6 +35,54 @@ const DEF_ADDONS = [
 ];
 const DEF_COMP = ['Dry ice', 'Bubble smoke gun'];
 
+// Half-hour slots from late morning through to 4am, because bars close late.
+// Stored as minutes-from-midnight so a 1am finish is 25 hours, not "earlier
+// than the start".
+const TIME_SLOTS = (() => {
+  const out = [];
+  for (let m = 11 * 60; m <= 28 * 60; m += 30) {
+    const h24 = Math.floor(m / 60) % 24;
+    const mins = m % 60;
+    const ampm = h24 >= 12 ? 'pm' : 'am';
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    out.push({ v: m, label: `${h12}${mins ? ':' + String(mins).padStart(2, '0') : ''}${ampm}` });
+  }
+  return out;
+})();
+const slotLabel = v => (TIME_SLOTS.find(t => t.v === Number(v)) || {}).label || '';
+
+const DURATIONS = (() => {
+  const out = [];
+  for (let h = 1; h <= 12; h += 0.5) out.push(`${h} hour${h === 1 ? '' : 's'}`);
+  return out;
+})();
+
+// Inventory Items uses broad categories (Spirit, Mixer, Liqueur, Wine, Beer,
+// Prosecco, Champagne, Garnish, Other). Our quote rows are finer-grained, so
+// map ours onto theirs to rank the right stock to the top.
+const STOCK_CAT = [
+  [/vodka|whisk|rum|gin|tequila|bourbon|brandy|cognac|spirit/i, 'Spirit'],
+  [/liqueur|aperol|passoa|kahlua/i, 'Liqueur'],
+  [/prosecco/i, 'Prosecco'],
+  [/champagne/i, 'Champagne'],
+  [/\bwine\b/i, 'Wine'],
+  [/beer|lager|cider/i, 'Beer'],
+  [/soft|mixer|juice|tonic|soda/i, 'Mixer'],
+];
+const stockCatFor = c => (STOCK_CAT.find(([re]) => re.test(c || '')) || [])[1] || null;
+
+// Stock names carry sizes ("Absolut Vodka 1L") while quotes say "Absolut", so
+// an exact match would flag almost everything as new. Contains-either-way, with
+// a floor of 3 characters so "gin" doesn't match half the list.
+function inStock(name, options) {
+  const n = (name || '').trim().toLowerCase();
+  if (n.length < 3) return false;
+  return options.some(o => {
+    const s = o.name.toLowerCase();
+    return s.includes(n) || n.includes(s);
+  });
+}
+
 function withIds(arr) { return arr.map(v => ({ id: uid(), text: v, on: true })); }
 function spiritsWithIds(rows) { return rows.map(r => ({ id: uid(), cat: r.cat, on: true, items: withIds(r.items) })); }
 function addonsWithIds(arr) { return arr.map(a => ({ id: uid(), ...a })); }
@@ -460,6 +508,8 @@ function freshState() {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
     enquiryId: null, client: '', etype: 'Wedding Reception', venue: '', edate: '', etime: '', guests: '',
     pkg: 'Full Bar', duration: '', setup: '',
+    // Bar open/close as half-hour slots. Picking both fills etime and duration.
+    startMin: '', endMin: '',
     // Paid staff hours are set-up + service + pack-down, not service alone.
     // Service comes from `duration`; these two are the parts that were missing.
     setupHrs: String(COST.setupHrs), packdownHrs: String(COST.packdownHrs),
@@ -502,7 +552,7 @@ export default function QuoteClient({ userEmail }) {
   // things (name, date, guests, base price, invoice number) are always
   // wiped when loading the template; brand structure carries over.
   const TEMPLATE_FIELDS = [
-    'salesPerson', 'pkg', 'duration', 'setup',
+    'salesPerson', 'pkg', 'duration', 'setup', 'startMin', 'endMin',
     'setupHrs', 'packdownHrs', 'drinkware', 'glassPerHead', 'plasticPerHead',
     'tastingMode', 'tastingGuests', 'spiritTier',
     'wdOn', 'wdDur', 'wdItems',
@@ -679,6 +729,19 @@ export default function QuoteClient({ userEmail }) {
 }
 
 function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, saveAsTemplate, clearTemplate, templateMsg, stockItems, addCostLine, updateCostLine, removeCostLine, toggleCheck }) {
+  // Open and close times drive both the client-facing range and the service
+  // hours the cost model bills against — set once, used twice.
+  function setTimes(startMin, endMin) {
+    const a = Number(startMin), b = Number(endMin);
+    const patch = { startMin, endMin };
+    if (startMin && endMin && b > a) {
+      const hrs = (b - a) / 60;
+      patch.etime = `${slotLabel(a)} – ${slotLabel(b)}`;
+      patch.duration = `${hrs} hour${hrs === 1 ? '' : 's'}`;
+    }
+    set(patch);
+  }
+
   return (
     <div>
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -736,18 +799,43 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <Field label="Event date"><input type="date" style={inputStyle} value={s.edate} onChange={e => set({ edate: e.target.value })} /></Field>
           </TwoCol>
           <ThreeCol>
-            <Field label="Time (start–end)"><input style={inputStyle} value={s.etime} onChange={e => set({ etime: e.target.value })} placeholder="4:30pm – 11:30pm" /></Field>
             <Field label="Guests"><input type="number" style={inputStyle} value={s.guests} onChange={e => set({ guests: e.target.value })} /></Field>
             <Field label="Package">
               <select style={selStyle} value={s.pkg} onChange={e => set({ pkg: e.target.value })}>
                 {['Premium', 'Ultimate', 'Full Bar', 'Cocktail Experience', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Custom'].map(o => <option key={o}>{o}</option>)}
               </select>
             </Field>
+            <Field label="Setup access">
+              <select style={selStyle} value={s.setup} onChange={e => set({ setup: e.target.value })}>
+                <option value="">TBC</option>
+                {TIME_SLOTS.map(t => <option key={t.v} value={t.label}>{t.label}</option>)}
+                {s.setup && !TIME_SLOTS.some(t => t.label === s.setup) && <option value={s.setup}>{s.setup}</option>}
+              </select>
+            </Field>
           </ThreeCol>
-          <TwoCol>
-            <Field label="Duration"><input style={inputStyle} value={s.duration} onChange={e => set({ duration: e.target.value })} placeholder="7 hours" /></Field>
-            <Field label="Setup access time"><input style={inputStyle} value={s.setup} onChange={e => set({ setup: e.target.value })} placeholder="3:00pm" /></Field>
-          </TwoCol>
+          {/* Picking both ends fills in the printed time range and the duration
+              the cost model reads. Duration stays editable for a TBC quote. */}
+          <ThreeCol>
+            <Field label="Bar opens">
+              <select style={selStyle} value={s.startMin} onChange={e => setTimes(e.target.value, s.endMin)}>
+                <option value="">TBC</option>
+                {TIME_SLOTS.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Bar closes">
+              <select style={selStyle} value={s.endMin} onChange={e => setTimes(s.startMin, e.target.value)}>
+                <option value="">TBC</option>
+                {TIME_SLOTS.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Duration">
+              <select style={selStyle} value={s.duration} onChange={e => set({ duration: e.target.value })}>
+                <option value="">TBC</option>
+                {DURATIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                {s.duration && !DURATIONS.includes(s.duration) && <option value={s.duration}>{s.duration}</option>}
+              </select>
+            </Field>
+          </ThreeCol>
 
           <SectionHead>Welcome drinks</SectionHead>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
@@ -757,7 +845,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
               {['1 hour', '1.5 hours', '2 hours', '2.5 hours', '3 hours'].map(o => <option key={o}>{o}</option>)}
             </select>
           </div>
-          <EditableList items={s.wdItems} onChange={items => set({ wdItems: items })} addLabel="+ Add item" />
+          <EditableList items={s.wdItems} onChange={items => set({ wdItems: items })} addLabel="+ Add item" stock={stockItems} />
 
           <SectionHead>Extra inclusions</SectionHead>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, lineHeight: 1.5 }}>
@@ -767,10 +855,18 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <EditableList items={s.inclItems} onChange={items => set({ inclItems: items })} addLabel="+ Add inclusion" />
 
           <SectionHead>Spirits &amp; alcohol</SectionHead>
-          <SpiritEditor rows={s.spiritRows} onChange={rows => set({ spiritRows: rows })} />
+          <SpiritEditor rows={s.spiritRows} onChange={rows => set({ spiritRows: rows })} stock={stockItems} />
+          <NewStockNote
+            names={[
+              ...s.spiritRows.flatMap(r => r.items.map(i => i.text)),
+              ...s.softItems.map(i => i.text),
+              ...s.wdItems.map(i => i.text),
+            ]}
+            stock={stockItems}
+          />
 
           <SectionHead>Soft drinks &amp; mixers</SectionHead>
-          <EditableList items={s.softItems} onChange={items => set({ softItems: items })} addLabel="+ Add item" />
+          <EditableList items={s.softItems} onChange={items => set({ softItems: items })} addLabel="+ Add item" stock={stockItems} prefer="mixer" />
 
           <SectionHead>Cocktails &amp; mocktails</SectionHead>
           <TwoCol>
@@ -1308,7 +1404,75 @@ function CostLineRow({ l, stockItems, update, remove }) {
 }
 
 // ---- Reusable editors ------------------------------------------------------
-function EditableList({ items, onChange, addLabel }) {
+
+// Inventory-backed text field. Picks from stock, but never blocks typing — a
+// brand we've not bought before has to be quotable the moment a client asks
+// for it. Anything not in inventory gets a gold dot so it's obvious later.
+function Combobox({ value, onChange, options, placeholder, prefer }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(null); // null = mirror the committed value
+  const text = draft == null ? (value || '') : draft;
+  const q = text.trim().toLowerCase();
+
+  const related = (a, b) => {
+    if (!a || !b) return false;
+    const x = a.toLowerCase(), y = b.toLowerCase();
+    return x.includes(y) || y.includes(x);
+  };
+  // Category matches float up rather than filtering the rest out — an
+  // inventory category that doesn't line up with our row name shouldn't hide
+  // the whole list.
+  const rank = o => (q && o.name.toLowerCase().startsWith(q) ? -4 : 0) + (related(o.category, prefer) ? -2 : 0);
+  const list = options
+    .filter(o => !q || o.name.toLowerCase().includes(q))
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+    .slice(0, 8);
+
+  const known = inStock(value, options);
+
+  function commit(name) { onChange(name); setDraft(null); setOpen(false); }
+
+  return (
+    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      <input
+        value={text}
+        placeholder={placeholder}
+        onChange={e => { setDraft(e.target.value); onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => { setOpen(false); setDraft(null); }, 140)}
+        style={{ ...miniInput, width: '100%', paddingRight: 18 }}
+      />
+      {(value || '').trim() !== '' && !known && (
+        <span title="Not in inventory yet" style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, borderRadius: '50%', background: 'var(--gold)', pointerEvents: 'none' }} />
+      )}
+      {open && (list.length > 0 || (q && !known)) && (
+        <div style={{ position: 'absolute', zIndex: 40, top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 6, marginTop: 2, boxShadow: '0 4px 14px rgba(0,0,0,.09)', maxHeight: 210, overflowY: 'auto' }}>
+          {list.map(o => (
+            <div key={o.id} onMouseDown={e => { e.preventDefault(); commit(o.name); }}
+              style={{ padding: '6px 9px', cursor: 'pointer', borderBottom: '1px solid var(--off)' }}>
+              <div style={{ fontSize: 11.5 }}>{o.name}</div>
+              {o.category && <div style={{ fontSize: 9.5, color: 'var(--muted)' }}>{o.category}</div>}
+            </div>
+          ))}
+          {q && !known && (
+            <div onMouseDown={e => { e.preventDefault(); commit(text.trim()); }}
+              style={{ padding: '6px 9px', cursor: 'pointer', fontSize: 11, color: '#7a6300', background: 'var(--gold-bg)' }}>
+              Use “{text.trim()}” — new, not in inventory yet
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Counts what's been typed in that stock doesn't know about, so new products
+// can be added to Notion in one go rather than hunted for later.
+function countNew(names, stock) {
+  return names.filter(n => n && n.trim() && !inStock(n, stock || [])).length;
+}
+
+function EditableList({ items, onChange, addLabel, stock, prefer }) {
   function update(id, patch) { onChange(items.map(i => i.id === id ? { ...i, ...patch } : i)); }
   function remove(id) { onChange(items.filter(i => i.id !== id)); }
   function add() { onChange([...items, { id: uid(), text: '', on: true }]); }
@@ -1317,7 +1481,9 @@ function EditableList({ items, onChange, addLabel }) {
       {items.map(item => (
         <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>
           <input type="checkbox" checked={item.on} onChange={e => update(item.id, { on: e.target.checked })} />
-          <input style={{ ...miniInput, flex: 1 }} value={item.text} onChange={e => update(item.id, { text: e.target.value })} />
+          {stock
+            ? <Combobox value={item.text} onChange={v => update(item.id, { text: v })} options={stock} prefer={stockCatFor(prefer)} placeholder="Search stock or type a new one" />
+            : <input style={{ ...miniInput, flex: 1 }} value={item.text} onChange={e => update(item.id, { text: e.target.value })} />}
           <button onClick={() => remove(item.id)} style={rmBtn}>✕</button>
         </div>
       ))}
@@ -1326,7 +1492,7 @@ function EditableList({ items, onChange, addLabel }) {
   );
 }
 
-function SpiritEditor({ rows, onChange }) {
+function SpiritEditor({ rows, onChange, stock }) {
   function updateRow(id, patch) { onChange(rows.map(r => r.id === id ? { ...r, ...patch } : r)); }
   function removeRow(id) { onChange(rows.filter(r => r.id !== id)); }
   function addRow() { onChange([...rows, { id: uid(), cat: 'New category', on: true, items: [{ id: uid(), text: '', on: true }] }]); }
@@ -1352,7 +1518,9 @@ function SpiritEditor({ rows, onChange }) {
             {row.items.map(item => (
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>
                 <input type="checkbox" checked={item.on} onChange={e => updateItem(row.id, item.id, { on: e.target.checked })} />
-                <input style={{ ...miniInput, flex: 1 }} value={item.text} onChange={e => updateItem(row.id, item.id, { text: e.target.value })} />
+                {stock
+                  ? <Combobox value={item.text} onChange={v => updateItem(row.id, item.id, { text: v })} options={stock} prefer={stockCatFor(row.cat)} placeholder="Search stock or type a new one" />
+                  : <input style={{ ...miniInput, flex: 1 }} value={item.text} onChange={e => updateItem(row.id, item.id, { text: e.target.value })} />}
                 <button onClick={() => removeItem(row.id, item.id)} style={rmBtn}>✕</button>
               </div>
             ))}
@@ -1361,6 +1529,18 @@ function SpiritEditor({ rows, onChange }) {
         </div>
       ))}
       <button onClick={addRow} style={addLinkStyle}>+ Add category</button>
+    </div>
+  );
+}
+
+function NewStockNote({ names, stock }) {
+  if (!stock || !stock.length) return null;
+  const n = countNew(names, stock);
+  if (!n) return null;
+  return (
+    <div style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold)', borderRadius: 6, padding: '7px 10px', fontSize: 11, color: '#7a6300', margin: '6px 0 4px', lineHeight: 1.5 }}>
+      {n} drink{n === 1 ? '' : 's'} on this quote {n === 1 ? 'is' : 'are'} not in inventory yet (marked with a dot).
+      Quote away — just add {n === 1 ? 'it' : 'them'} to Inventory Items before you buy, so the costing picks {n === 1 ? 'it' : 'them'} up.
     </div>
   );
 }

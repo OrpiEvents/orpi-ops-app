@@ -532,107 +532,108 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
 //
 // The bottom summary computes suggested client price = cost / (1 - margin/100).
 function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostLine, updateCostLine, removeCostLine, seedFromDefaults, syncFromBrands }) {
-  const CATEGORIES = ['Alcohol', 'Mixers', 'Ice', 'Staff', 'Glassware', 'Logistics', 'Bar Hire/Decor', 'Marketing/Print', 'Contingency', 'Other'];
-  const internalCost = s.costLines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
+  // ── Auto-calculated cost from the pricing model ──────────────────────
+  // Everything derives from guests, staff hours, glassware and alcohol/head.
+  // No manual data entry needed to get a margin read — but one-off costs
+  // (unusual logistics, a specific hire) can still be added below.
+  const g = Number(s.guests) || 0;
+  const hours = parseFloat(String(s.duration || '').replace(/[^0-9.]/g, '')) || 0;
+  const glassPerHead = s.glassware === 'plastic' ? 5 * 0.10 : 5 * 0.65;
+  const staffCount = g ? Math.max(1, Math.ceil(g / 50)) : 0;
+  const staffCost = staffCount * hours * 16;
+  const isClientAlcohol = s.pkg === 'Bar Only (client supplies alcohol)';
+  const alcPerHead = isClientAlcohol ? 0 : 7.5;
+
+  const alcCost = alcPerHead * g;
+  const glassCost = glassPerHead * g;
+  const oneOffs = s.costLines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
+  const internalCost = alcCost + glassCost + staffCost + oneOffs;
+  const costPerHead = g ? internalCost / g : 0;
+
   const marginPct = parseFloat(s.marginPct);
   const validMargin = !isNaN(marginPct) && marginPct >= 0 && marginPct < 100;
   const suggested = validMargin ? internalCost / (1 - marginPct / 100) : null;
   const actualQuote = Number(clientTotal) || 0;
-  const actualMargin = actualQuote > 0 && internalCost > 0
-    ? ((actualQuote - internalCost) / actualQuote) * 100
-    : null;
+  const actualMargin = actualQuote > 0 && internalCost > 0 ? ((actualQuote - internalCost) / actualQuote) * 100 : null;
   const belowTarget = validMargin && actualMargin != null && actualMargin < marginPct;
 
-  // Group lines by category for display so alcohol / staff / glassware
-  // stay visually distinct, matching how you'd actually think about the cost.
-  const grouped = {};
-  s.costLines.forEach(l => {
-    if (!grouped[l.category]) grouped[l.category] = [];
-    grouped[l.category].push(l);
-  });
+  const line = { display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', color: '#444' };
+  const muted = { color: 'var(--muted)' };
 
   return (
     <div className="no-print" style={{ background: '#faf9f6', border: '1px solid var(--border)', borderRadius: 8, padding: 16, alignSelf: 'start', position: 'sticky', top: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>Internal costing</div>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>Cost &amp; margin</div>
         <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Team only</div>
       </div>
-      <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.45 }}>
-        Cost every part of the event before quoting. Nothing here appears on the client PDF.
+      <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.45 }}>
+        Calculated from guests, hours and glassware. Never shown on the client PDF.
       </p>
 
-      {/* Seed + sync buttons */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-        <button onClick={seedFromDefaults} style={{ flex: 1, background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px', fontSize: 11, cursor: 'pointer' }} title="Add default lines based on package and guest count">
-          + Suggest lines
-        </button>
-        <button onClick={syncFromBrands} style={{ flex: 1, background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px', fontSize: 11, cursor: 'pointer' }} title="Pull selected brands from the client quote into cost lines">
-          ↔ Sync brands
-        </button>
-      </div>
-
-      {/* Cost lines grouped by category */}
-      {Object.keys(grouped).length === 0 ? (
-        <div style={{ background: '#fff', border: '1px dashed var(--border)', borderRadius: 6, padding: 14, textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-          No cost lines yet.<br />Tap "+ Suggest lines" to start.
+      {(!g || !hours) && (
+        <div style={{ background: '#fff', border: '1px dashed var(--border)', borderRadius: 6, padding: 12, textAlign: 'center', fontSize: 11.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+          Enter <strong>guests</strong> and <strong>duration</strong> to see the cost.
         </div>
-      ) : (
-        CATEGORIES.filter(cat => grouped[cat]).map(cat => {
-          const lines = grouped[cat];
-          const catSubtotal = lines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
-          return (
-            <div key={cat} style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4, paddingBottom: 2, borderBottom: '1px solid var(--border)' }}>
-                <span>{cat}</span><span>{gbp(catSubtotal)}</span>
-              </div>
-              {lines.map(l => (
-                <CostLineRow key={l.id} l={l} stockItems={stockItems} update={p => updateCostLine(l.id, p)} remove={() => removeCostLine(l.id)} />
-              ))}
-            </div>
-          );
-        })
       )}
 
-      {/* Add-line row */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-        <select onChange={e => { if (e.target.value) { addCostLine({ category: e.target.value }); e.target.value = ''; } }} defaultValue="" style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 5, fontSize: 11, background: '#fff' }}>
-          <option value="">+ Add line…</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+      {/* auto cost lines */}
+      <div style={{ marginBottom: 6 }}>
+        {!isClientAlcohol && (
+          <div style={line}><span style={muted}>Alcohol · £{alcPerHead.toFixed(2)}/head</span><span>{gbp(alcCost)}</span></div>
+        )}
+        <div style={line}><span style={muted}>Glassware · {s.glassware === 'plastic' ? '5 × 10p' : '5 × 65p'}</span><span>{gbp(glassCost)}</span></div>
+        <div style={line}><span style={muted}>Staff · {staffCount} × {hours || 0}h × £16</span><span>{gbp(staffCost)}</span></div>
+        {oneOffs > 0 && (
+          <div style={line}><span style={muted}>One-off costs</span><span>{gbp(oneOffs)}</span></div>
+        )}
       </div>
 
-      {/* Summary */}
+      {/* one-off cost lines (optional) */}
+      {s.costLines.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {s.costLines.map(l => (
+            <CostLineRow key={l.id} l={l} stockItems={stockItems} update={p => updateCostLine(l.id, p)} remove={() => removeCostLine(l.id)} />
+          ))}
+        </div>
+      )}
+      <button onClick={() => addCostLine({ category: 'Other' })} style={{ width: '100%', background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px', fontSize: 11, cursor: 'pointer', marginBottom: 14, color: 'var(--muted)' }}>
+        + Add a one-off cost
+      </button>
+
+      {/* summary */}
       <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-          <span style={{ color: 'var(--muted)' }}>Total internal cost</span>
-          <span style={{ fontWeight: 600 }}>{gbp(internalCost)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, fontWeight: 600 }}>
+          <span>Total cost</span>
+          <span>{gbp(internalCost)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 10, color: 'var(--muted)' }}>
+          <span>per head</span><span>{gbp(costPerHead)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 8 }}>
           <span style={{ color: 'var(--muted)' }}>Target margin</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="number" min="0" max="99" step="1" placeholder="—"
-              value={s.marginPct}
+            <input type="number" min="0" max="99" step="1" placeholder="—" value={s.marginPct}
               onChange={e => set({ marginPct: e.target.value })}
               style={{ width: 50, padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 12, textAlign: 'right' }} />
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>%</span>
           </div>
         </div>
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
-          <span style={{ color: 'var(--gold)', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', fontSize: 10 }}>Suggested price</span>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: actualQuote > 0 ? 10 : 0 }}>
+          <span style={{ color: 'var(--gold)', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', fontSize: 10 }}>Price to hit margin</span>
           <span style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500 }}>{suggested != null ? gbp(suggested) : '—'}</span>
         </div>
         {actualQuote > 0 && (
-          <div style={{ background: belowTarget ? '#fef6e4' : 'var(--off)', borderRadius: 5, padding: '6px 8px', fontSize: 11 }}>
+          <div style={{ background: belowTarget ? '#fef6e4' : '#f2f6f2', borderRadius: 5, padding: '8px 10px', fontSize: 11 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--muted)' }}>
-              <span>Actual quote</span><span>{gbp(actualQuote)}</span>
+              <span>Your quote</span><span>{gbp(actualQuote)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, color: belowTarget ? '#b8720a' : 'var(--text)', fontWeight: 500 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontWeight: 600, fontSize: 13, color: belowTarget ? '#b8720a' : '#2e7d32' }}>
               <span>Actual margin</span>
-              <span>{actualMargin == null ? '—' : `${actualMargin.toFixed(1)}%`}</span>
+              <span>{actualMargin == null ? '—' : `${actualMargin.toFixed(0)}%`}</span>
             </div>
             {belowTarget && (
               <div style={{ fontSize: 10, color: '#b8720a', marginTop: 3, fontStyle: 'italic' }}>
-                {(marginPct - actualMargin).toFixed(1)}pp below target
+                {(marginPct - actualMargin).toFixed(0)}pp below your {marginPct}% target
               </div>
             )}
           </div>

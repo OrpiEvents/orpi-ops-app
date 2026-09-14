@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabaseBrowser";
-import DRINKS_DATA from "@/data/drinks-data.json";
+import DRINKS_DATA from "./drinks-data.json";
 
 // Run sheet — Setup, Brief, Loading out, Coming back.
 //

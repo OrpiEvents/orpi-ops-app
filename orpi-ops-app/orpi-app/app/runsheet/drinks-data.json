@@ -1,0 +1,6680 @@
+{
+"generatedAt": "2026-09-14",
+"drinks": [
+{
+"name": "Amaretto Sour",
+"type": "Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Lemon Wheel and Cherry",
+"ing": [
+{
+"n": "Disaronno",
+"q": 60.0,
+"u": "ml",
+"s": "Disaronno 70cl",
+"sec": "Cocktail spirits",
+"c": 1.5429
+},
+{
+"n": "Fresh Lime",
+"q": 30.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.195
+},
+{
+"n": "Lemon Wheel Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Lemons (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0375
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+},
+{
+"n": "Foamer",
+"q": 3.0,
+"u": "drop",
+"s": "Foamer 150ml",
+"sec": "Garnish & consumables",
+"c": 0.014
+},
+{
+"n": "Angostura Bitters",
+"q": 1.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.06
+}
+],
+"cost": 1.94
+},
+{
+"name": "Aperol Spritz",
+"type": "Welcome Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Orange Slice",
+"ing": [
+{
+"n": "Aperol",
+"q": 50.0,
+"u": "ml",
+"s": "Aperol 1L",
+"sec": "Cocktail spirits",
+"c": 0.6
+},
+{
+"n": "Prosecco",
+"q": 75.0,
+"u": "ml",
+"s": "Freixenet Prosecco 75cl",
+"sec": "Cocktail spirits",
+"c": 0.723
+},
+{
+"n": "Fever-Tree Soda Water",
+"q": 25.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.1062
+},
+{
+"n": "Orange Wedge",
+"q": 1.0,
+"u": "wedge",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 1.47
+},
+{
+"name": "Apple & Blackberry Spritz",
+"type": "Welcome Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Blackberry and Apple Wedge",
+"ing": [
+{
+"n": "Sour Apple Liqueur",
+"q": 15.0,
+"u": "ml",
+"s": "Sour Apple Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.2786
+},
+{
+"n": "Creme de Mure",
+"q": 20.0,
+"u": "ml",
+"s": "Boudier Creme de Mure 50cl",
+"sec": "Cocktail spirits",
+"c": 0.71
+},
+{
+"n": "Soave Wine",
+"q": 30.0,
+"u": "ml",
+"s": "Soave White Wine 75cl",
+"sec": "Cocktail spirits",
+"c": 0.34
+},
+{
+"n": "Prosecco",
+"q": 75.0,
+"u": "ml",
+"s": "Freixenet Prosecco 75cl",
+"sec": "Cocktail spirits",
+"c": 0.723
+},
+{
+"n": "Apple Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Fresh Apples (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Blackberry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Blackberries (150g)",
+"sec": "Garnish & consumables",
+"c": 0.0733
+}
+],
+"cost": 2.17
+},
+{
+"name": "Añejo Almond Old Fashioned",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel",
+"ing": [
+{
+"n": "Disaronno",
+"q": 10.0,
+"u": "ml",
+"s": "Disaronno 70cl",
+"sec": "Cocktail spirits",
+"c": 0.2571
+},
+{
+"n": "Añejo Tequila",
+"q": 50.0,
+"u": "ml",
+"s": "Añejo Tequila 70cl",
+"sec": "Cocktail spirits",
+"c": 3.2143
+},
+{
+"n": "Orange Peel Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Orange Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Orange Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+}
+],
+"cost": 3.63
+},
+{
+"name": "B52",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Standard",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Kahlua",
+"q": 15.0,
+"u": "ml",
+"s": "Kahlua Coffee Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.2698
+},
+{
+"n": "Baileys Irish Cream",
+"q": 15.0,
+"u": "ml",
+"s": "Baileys Irish Cream 70cl (shots)",
+"sec": "Cocktail spirits",
+"c": 0.3429
+},
+{
+"n": "Grand Marnier",
+"q": 15.0,
+"u": "ml",
+"s": "Grand Marnier 70cl",
+"sec": "Cocktail spirits",
+"c": 0.5571
+}
+],
+"cost": 1.17
+},
+{
+"name": "Baby Guinness",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Premium",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Kahlua",
+"q": 25.0,
+"u": "ml",
+"s": "Kahlua Coffee Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.4496
+},
+{
+"n": "Baileys Irish Cream",
+"q": 25.0,
+"u": "ml",
+"s": "Baileys Irish Cream 70cl (shots)",
+"sec": "Cocktail spirits",
+"c": 0.5714
+}
+],
+"cost": 1.02
+},
+{
+"name": "Bahama Mama",
+"type": "Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Pineapple Wedge, Cherry and Mint",
+"ing": [
+{
+"n": "Dark Rum",
+"q": 22.5,
+"u": "ml",
+"s": "Dark Rum 70cl",
+"sec": "Cocktail spirits",
+"c": 0.6348
+},
+{
+"n": "Malibu",
+"q": 15.0,
+"u": "ml",
+"s": "Malibu Coconut Rum 1L",
+"sec": "Cocktail spirits",
+"c": 0.2046
+},
+{
+"n": "Coffee Liqueur (Kahlua)",
+"q": 7.5,
+"u": "ml",
+"s": "Kahlua Coffee Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.1349
+},
+{
+"n": "Pineapple Juice",
+"q": 90.0,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.18
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Fresh Mint Garnish",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+},
+{
+"n": "Pineapple Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Fresh Pineapple (whole)",
+"sec": "Garnish & consumables",
+"c": 0.1667
+}
+],
+"cost": 1.56
+},
+{
+"name": "Banoffee Old Fashioned",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel and Caramel Drizzle",
+"ing": [
+{
+"n": "Bourbon",
+"q": 50.0,
+"u": "ml",
+"s": "Jim Beam Bourbon 70cl",
+"sec": "Cocktail spirits",
+"c": 1.2564
+},
+{
+"n": "Banana Liqueur",
+"q": 15.0,
+"u": "ml",
+"s": "Banana Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.3
+},
+{
+"n": "Toffee Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Toffee Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1214
+},
+{
+"n": "Chocolate Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Chocolate Bitters 100ml",
+"sec": "Garnish & consumables",
+"c": 0.24
+},
+{
+"n": "Orange Peel Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Caramel Drizzle",
+"q": 1.0,
+"u": "piece",
+"s": "Caramel Sauce (1kg)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 2.06
+},
+{
+"name": "Bergamot Coastal Spritz",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Premium",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Lime Slices",
+"ing": [
+{
+"n": "Everleaf Marine",
+"q": 50.0,
+"u": "ml",
+"s": "Everleaf Marine 50cl",
+"sec": "Cocktail spirits",
+"c": 2.3
+},
+{
+"n": "Light Tonic",
+"q": 150.0,
+"u": "ml",
+"s": "Fever-Tree Refreshingly Light Tonic 200ml",
+"sec": "Mixers & juices",
+"c": 0.7275
+},
+{
+"n": "Lime Slice Garnish",
+"q": 2.0,
+"u": "slice",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0571
+}
+],
+"cost": 3.08
+},
+{
+"name": "Blackberry Mule",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Crushed",
+"method": "BUILD",
+"gar": "Fresh Blackberries and Lime Wedge",
+"ing": [
+{
+"n": "Vodka",
+"q": 50.0,
+"u": "ml",
+"s": "Absolut Vodka 1L",
+"sec": "Cocktail spirits",
+"c": 0.8583
+},
+{
+"n": "Ginger Beer Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Ginger Beer 200ml",
+"sec": "Mixers & juices",
+"c": 0.485
+},
+{
+"n": "Fresh Lime",
+"q": 20.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.13
+},
+{
+"n": "Blackberry Syrup",
+"q": 25.0,
+"u": "ml",
+"s": "Monin Blackberry Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.3036
+},
+{
+"n": "Fresh Blackberries Garnish",
+"q": 3.0,
+"u": "piece",
+"s": "Fresh Blackberries (150g)",
+"sec": "Garnish & consumables",
+"c": 0.22
+},
+{
+"n": "Lime Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 2.03
+},
+{
+"name": "Bramble",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Crushed",
+"method": "SHAKE",
+"gar": "Fresh Blackberries and Lemon Slice",
+"ing": [
+{
+"n": "Creme de Mure",
+"q": 15.0,
+"u": "ml",
+"s": "Boudier Creme de Mure 50cl",
+"sec": "Cocktail spirits",
+"c": 0.5325
+},
+{
+"n": "Gin",
+"q": 40.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.576
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Lemon Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Lemons (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0375
+},
+{
+"n": "Fresh Blackberries Garnish",
+"q": 3.0,
+"u": "piece",
+"s": "Fresh Blackberries (150g)",
+"sec": "Garnish & consumables",
+"c": 0.22
+}
+],
+"cost": 1.6
+},
+{
+"name": "Carajillo",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "",
+"ing": [
+{
+"n": "Tequila Blanco",
+"q": 30.0,
+"u": "ml",
+"s": "El Jimador Tequila Blanco 70cl",
+"sec": "Cocktail spirits",
+"c": 0.7431
+},
+{
+"n": "Licor 43",
+"q": 30.0,
+"u": "ml",
+"s": "Licor 43 70cl",
+"sec": "Cocktail spirits",
+"c": 0.9429
+},
+{
+"n": "Fresh Espresso",
+"q": 45.0,
+"u": "ml",
+"s": "Fresh Espresso",
+"sec": "Chilled — critical",
+"c": 0.27
+},
+{
+"n": "Pinch of Salt",
+"q": 1.0,
+"u": "piece",
+"s": "Salt (750g)",
+"sec": "Garnish & consumables",
+"c": 0.0025
+}
+],
+"cost": 1.96
+},
+{
+"name": "Chai-Spiced Martini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Standard",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Cinnamon Stick",
+"ing": [
+{
+"n": "Vanilla Vodka",
+"q": 50.0,
+"u": "ml",
+"s": "Absolut Vanilla 70cl",
+"sec": "Cocktail spirits",
+"c": 1.3171
+},
+{
+"n": "Royal Chai Mix",
+"q": 100.0,
+"u": "ml",
+"s": "Royal Chai Mix 400g",
+"sec": "Mixers & juices",
+"c": 0.15
+},
+{
+"n": "French Vanilla Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Simply French Vanilla Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.0699
+}
+],
+"cost": 1.54
+},
+{
+"name": "Chai-Spiced Old Fashioned",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel",
+"ing": [
+{
+"n": "Bourbon",
+"q": 60.0,
+"u": "ml",
+"s": "Jim Beam Bourbon 70cl",
+"sec": "Cocktail spirits",
+"c": 1.5077
+},
+{
+"n": "Chai Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Chai Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.15
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+},
+{
+"n": "Orange Peel Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 1.82
+},
+{
+"name": "Cherry Blossom",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Premium",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Strawberry",
+"ing": [
+{
+"n": "Everleaf Mountain",
+"q": 50.0,
+"u": "ml",
+"s": "Everleaf Mountain 50cl",
+"sec": "Cocktail spirits",
+"c": 2.3
+},
+{
+"n": "Light Tonic",
+"q": 150.0,
+"u": "ml",
+"s": "Fever-Tree Refreshingly Light Tonic 200ml",
+"sec": "Mixers & juices",
+"c": 0.7275
+},
+{
+"n": "Strawberry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Strawberries (400g)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 3.13
+},
+{
+"name": "Cherry Martini",
+"type": "Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Cherry",
+"ing": [
+{
+"n": "Disaronno",
+"q": 60.0,
+"u": "ml",
+"s": "Disaronno 70cl",
+"sec": "Cocktail spirits",
+"c": 1.5429
+},
+{
+"n": "Popcorn Syrup",
+"q": 30.0,
+"u": "ml",
+"s": "Monin Popcorn Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.3339
+},
+{
+"n": "Cherry Good",
+"q": 60.0,
+"u": "ml",
+"s": "Cherry Good Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.15
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+}
+],
+"cost": 2.21
+},
+{
+"name": "Chilli Margarita",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Premium",
+"glass": "Margarita",
+"ice": "None",
+"method": "SHAKE",
+"gar": "",
+"ing": [
+{
+"n": "Tequila Blanco",
+"q": 50.0,
+"u": "ml",
+"s": "El Jimador Tequila Blanco 70cl",
+"sec": "Cocktail spirits",
+"c": 1.2386
+},
+{
+"n": "Spicy Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "1883 Maison Spicy Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.1599
+},
+{
+"n": "Mango Juice",
+"q": 25.0,
+"u": "ml",
+"s": "Rubicon Mango 1L",
+"sec": "Mixers & juices",
+"c": 0.032
+},
+{
+"n": "Lime Juice",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Tajin Rim",
+"q": 1.0,
+"u": "piece",
+"s": "Tajin (400g)",
+"sec": "Garnish & consumables",
+"c": 0.0917
+}
+],
+"cost": 1.68
+},
+{
+"name": "Chocolate Orange",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Standard",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "JJ Whitley Chocolate Orange Vodka",
+"q": 25.0,
+"u": "ml",
+"s": "JJ Whitley Chocolate Orange Vodka 70cl",
+"sec": "Mixers & juices",
+"c": 0.3443
+}
+],
+"cost": 0.34
+},
+{
+"name": "Chocolate Orange Martini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Premium",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Chocolate Syrup Drizzle",
+"ing": [
+{
+"n": "Cointreau",
+"q": 15.0,
+"u": "ml",
+"s": "Cointreau Orange 50cl",
+"sec": "Cocktail spirits",
+"c": 0.57
+},
+{
+"n": "Vodka",
+"q": 50.0,
+"u": "ml",
+"s": "Absolut Vodka 1L",
+"sec": "Cocktail spirits",
+"c": 0.8583
+},
+{
+"n": "Fresh Espresso",
+"q": 35.0,
+"u": "ml",
+"s": "Fresh Espresso",
+"sec": "Chilled — critical",
+"c": 0.21
+},
+{
+"n": "Chocolate Syrup",
+"q": 5.0,
+"u": "ml",
+"s": "Monin Chocolate Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0607
+},
+{
+"n": "Hot Chocolate Powder",
+"q": 1.0,
+"u": "spoon",
+"s": "Hot Chocolate Powder (1kg)",
+"sec": "Garnish & consumables",
+"c": 0.03
+}
+],
+"cost": 1.73
+},
+{
+"name": "Citrus Garden",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Rosemary Sprig and Grapefruit Slice",
+"ing": [
+{
+"n": "Gin",
+"q": 50.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.72
+},
+{
+"n": "Indian Tonic Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Indian Tonic Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.485
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Grapefruit Juice",
+"q": 20.0,
+"u": "ml",
+"s": "Grapefruit Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.05
+},
+{
+"n": "Rosemary Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Rosemary Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1357
+},
+{
+"n": "Rosemary Sprig Garnish",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Rosemary (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.06
+},
+{
+"n": "Grapefruit Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Grapefruit (garnish)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 1.62
+},
+{
+"name": "Classic Mojito",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Crushed",
+"method": "MUDDLE",
+"gar": "",
+"ing": [
+{
+"n": "White Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.9
+},
+{
+"n": "Simple Syrup",
+"q": 25.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1755
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Fresh Mint Leaves",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 1.71
+},
+{
+"name": "Coconut Lychee Martini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Premium",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Edible Flower",
+"ing": [
+{
+"n": "Coconut Vodka (Ciroc)",
+"q": 50.0,
+"u": "ml",
+"s": "Ciroc Coconut 70cl",
+"sec": "Cocktail spirits",
+"c": 2.0957
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Lychee Juice",
+"q": 100.0,
+"u": "ml",
+"s": "Rubicon Lychee 1L",
+"sec": "Mixers & juices",
+"c": 0.128
+},
+{
+"n": "Edible Flower Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Edible Flowers (box)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 2.46
+},
+{
+"name": "Coconut Rum Punch",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Premium",
+"glass": "Coupe",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Toasted Coconut Flakes",
+"ing": [
+{
+"n": "Malibu",
+"q": 50.0,
+"u": "ml",
+"s": "Malibu Coconut Rum 1L",
+"sec": "Cocktail spirits",
+"c": 0.6821
+},
+{
+"n": "Pineapple Juice",
+"q": 45.0,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.09
+},
+{
+"n": "Grenadine",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Grenadine Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.0579
+},
+{
+"n": "Ginger Beer Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Ginger Beer 200ml",
+"sec": "Mixers & juices",
+"c": 0.485
+},
+{
+"n": "Orange Juice",
+"q": 45.0,
+"u": "ml",
+"s": "Orange Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.045
+},
+{
+"n": "Toasted Coconut Flakes Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Toasted Coconut Flakes (200g)",
+"sec": "Garnish & consumables",
+"c": 0.075
+}
+],
+"cost": 1.44
+},
+{
+"name": "Cosmopolitan",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Standard",
+"glass": "Martini",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Lime Wedge or Orange Peel Twist",
+"ing": [
+{
+"n": "Triple Sec",
+"q": 15.0,
+"u": "ml",
+"s": "Riviera Triple Sec 70cl",
+"sec": "Cocktail spirits",
+"c": 0.2567
+},
+{
+"n": "Vodka",
+"q": 40.0,
+"u": "ml",
+"s": "Absolut Vodka 1L",
+"sec": "Cocktail spirits",
+"c": 0.6867
+},
+{
+"n": "Cranberry Juice",
+"q": 30.0,
+"u": "ml",
+"s": "Tesco Cranberry Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0297
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Lime Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 1.1
+},
+{
+"name": "Cuba Libre",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Lime Wedge",
+"ing": [
+{
+"n": "Coca-Cola Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Untitled",
+"sec": "Cocktail spirits",
+"c": 0.0
+},
+{
+"n": "Golden Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Golden Rum 70cl",
+"sec": "Cocktail spirits",
+"c": 1.4286
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Lime Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+}
+],
+"cost": 1.67
+},
+{
+"name": "Dark & Stormy",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Flower",
+"ing": [
+{
+"n": "Spiced Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Captain Morgans Spiced Rum 1L",
+"sec": "Cocktail spirits",
+"c": 0.7743
+},
+{
+"n": "Ginger Ale Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Ginger Ale 200ml",
+"sec": "Mixers & juices",
+"c": 0.485
+},
+{
+"n": "Flower Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Edible Flowers (box)",
+"sec": "Garnish & consumables",
+"c": 0.1
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+}
+],
+"cost": 1.48
+},
+{
+"name": "Elderflower Collins",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Lemon Slice and Edible Flowers",
+"ing": [
+{
+"n": "Gin",
+"q": 40.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.576
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Elderflower Cordial",
+"q": 20.0,
+"u": "ml",
+"s": "Belvoir Farm Elderflower Cordial 500ml",
+"sec": "Mixers & juices",
+"c": 0.17
+},
+{
+"n": "Edible Flowers Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Edible Flowers (box)",
+"sec": "Garnish & consumables",
+"c": 0.1
+},
+{
+"n": "Lemon Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Lemons (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0375
+}
+],
+"cost": 1.54
+},
+{
+"name": "Elderflower Mint Spritz",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Mint Sprig",
+"ing": [
+{
+"n": "Sparkling Wine (Non-Alcoholic)",
+"q": 60.0,
+"u": "ml",
+"s": "Nozecco 70cl",
+"sec": "Cocktail spirits",
+"c": 0.3214
+},
+{
+"n": "Elderflower Cordial",
+"q": 30.0,
+"u": "ml",
+"s": "Belvoir Farm Elderflower Cordial 500ml",
+"sec": "Mixers & juices",
+"c": 0.255
+},
+{
+"n": "Soda Water",
+"q": 30.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.1275
+},
+{
+"n": "Fresh Mint Leaves",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 0.75
+},
+{
+"name": "Ember Glow",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Everleaf Forest",
+"q": 35.0,
+"u": "ml",
+"s": "Everleaf Forest 50cl",
+"sec": "Cocktail spirits",
+"c": 1.61
+},
+{
+"n": "Chilli Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "1883 Maison Spicy Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.2399
+},
+{
+"n": "Orange Purée",
+"q": 20.0,
+"u": "ml",
+"s": "Orange Puree 1L",
+"sec": "Mixers & juices",
+"c": 0.2198
+},
+{
+"n": "Fever-Tree Ginger Beer Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Ginger Beer 200ml",
+"sec": "Mixers & juices",
+"c": 0.485
+},
+{
+"n": "Yellow Flower Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Edible Flowers (box)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 2.65
+},
+{
+"name": "Espresso Martini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Standard",
+"glass": "Martini",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "3 Coffee Beans",
+"ing": [
+{
+"n": "Coffee Liqueur (Kahlua)",
+"q": 15.0,
+"u": "ml",
+"s": "Kahlua Coffee Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.2698
+},
+{
+"n": "Vodka",
+"q": 50.0,
+"u": "ml",
+"s": "Absolut Vodka 1L",
+"sec": "Cocktail spirits",
+"c": 0.8583
+},
+{
+"n": "Fresh Espresso",
+"q": 30.0,
+"u": "ml",
+"s": "Fresh Espresso",
+"sec": "Chilled — critical",
+"c": 0.18
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Coffee Beans Garnish",
+"q": 3.0,
+"u": "piece",
+"s": "Coffee Beans Garnish (250g)",
+"sec": "Garnish & consumables",
+"c": 0.015
+}
+],
+"cost": 1.39
+},
+{
+"name": "French 75",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Standard",
+"glass": "Champagne Flute",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Lemon Twist",
+"ing": [
+{
+"n": "Gin",
+"q": 30.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.432
+},
+{
+"n": "Champagne Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Lanson Brut 75cl Champagne",
+"sec": "Cocktail spirits",
+"c": 3.9973
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Lemon Twist Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Lemons (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0375
+}
+],
+"cost": 4.63
+},
+{
+"name": "Frozen Daiquiri",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Premium",
+"glass": "Coupe",
+"ice": "Crushed",
+"method": "BLEND",
+"gar": "Lime Wheel",
+"ing": [
+{
+"n": "White Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.9
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Simple Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1053
+},
+{
+"n": "Lime Wheel Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 1.2
+},
+{
+"name": "Garden Spritz",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Cucumber ribbon and lime wheel",
+"ing": [
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Elderflower Cordial",
+"q": 10.0,
+"u": "ml",
+"s": "Belvoir Farm Elderflower Cordial 500ml",
+"sec": "Mixers & juices",
+"c": 0.085
+},
+{
+"n": "Fresh Cucumber Water",
+"q": 75.0,
+"u": "ml",
+"s": "Fresh Cucumber",
+"sec": "Garnish & consumables",
+"c": 1.75
+},
+{
+"n": "Lime Wheel Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+},
+{
+"n": "Cucumber Ribbon Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Cucumber",
+"sec": "Garnish & consumables",
+"c": 0.0233
+}
+],
+"cost": 2.38
+},
+{
+"name": "Gin & Basil Spritz",
+"type": "Welcome Cocktail",
+"cat": "Gin",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Basil Leaf",
+"ing": [
+{
+"n": "Dry Gin",
+"q": 45.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.648
+},
+{
+"n": "Basil Sugar Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Basil Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.15
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Bitter Lemon Tonic",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Bitter Lemon 200ml",
+"sec": "Mixers & juices",
+"c": 0.8
+},
+{
+"n": "Basil Leaf Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Basil (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 1.71
+},
+{
+"name": "Glazed Doughnut",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Standard",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "JJ Whitley Glazed Doughnut Vodka",
+"q": 25.0,
+"u": "ml",
+"s": "JJ Whitley Glazed Doughnut Vodka 70cl",
+"sec": "Cocktail spirits",
+"c": 0.5
+}
+],
+"cost": 0.5
+},
+{
+"name": "Golden Spritz",
+"type": "Welcome Cocktail",
+"cat": "Gin",
+"tier": "Premium",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Red Apple Slice",
+"ing": [
+{
+"n": "Dry Gin",
+"q": 30.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.432
+},
+{
+"n": "Sherry",
+"q": 22.5,
+"u": "ml",
+"s": "Dry Sherry (Fino) 75cl",
+"sec": "Cocktail spirits",
+"c": 0.36
+},
+{
+"n": "Cava Sparkling Wine",
+"q": 45.0,
+"u": "ml",
+"s": "Cava 75cl",
+"sec": "Cocktail spirits",
+"c": 0.48
+},
+{
+"n": "Apple Juice",
+"q": 22.5,
+"u": "ml",
+"s": "Apple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0563
+},
+{
+"n": "Ginger Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Ginger Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1084
+},
+{
+"n": "Red Apple Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Apples (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 1.48
+},
+{
+"name": "Guava Splash",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Mint Sprig",
+"ing": [
+{
+"n": "Guava Nectar",
+"q": 45.0,
+"u": "ml",
+"s": "Rubicon Guava Nectar 1L",
+"sec": "Mixers & juices",
+"c": 0.081
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Soda Water Finish",
+"q": 240.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 1.02
+},
+{
+"n": "Fresh Mint Leaves",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 1.25
+},
+{
+"name": "Honey & Ginger Smash",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Crushed",
+"method": "MUDDLE",
+"gar": "Mint Sprig and Candied Ginger",
+"ing": [
+{
+"n": "Whiskey",
+"q": 50.0,
+"u": "ml",
+"s": "Jameson 1L",
+"sec": "Cocktail spirits",
+"c": 1.1391
+},
+{
+"n": "Fresh Lime",
+"q": 20.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.13
+},
+{
+"n": "Honey Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Honey Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2036
+},
+{
+"n": "Ginger Beer Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Ginger Beer 200ml",
+"sec": "Mixers & juices",
+"c": 0.485
+},
+{
+"n": "Fresh Mint Garnish",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Candied Ginger Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Candied Ginger (200g)",
+"sec": "Garnish & consumables",
+"c": 0.0875
+},
+{
+"n": "Fresh Ginger Slices",
+"q": 2.0,
+"u": "slice",
+"s": "Fresh Ginger (root)",
+"sec": "Garnish & consumables",
+"c": 0.03
+}
+],
+"cost": 2.13
+},
+{
+"name": "Honey Old Fashioned",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel",
+"ing": [
+{
+"n": "Bourbon",
+"q": 60.0,
+"u": "ml",
+"s": "Jim Beam Bourbon 70cl",
+"sec": "Cocktail spirits",
+"c": 1.5077
+},
+{
+"n": "Honey Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Honey Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1357
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+},
+{
+"n": "Orange Peel Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 1.81
+},
+{
+"name": "Hugo Spritz",
+"type": "Welcome Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Mint Sprig and Lime Slice",
+"ing": [
+{
+"n": "Prosecco",
+"q": 100.0,
+"u": "ml",
+"s": "Freixenet Prosecco 75cl",
+"sec": "Cocktail spirits",
+"c": 0.964
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Elderflower Cordial",
+"q": 50.0,
+"u": "ml",
+"s": "Belvoir Farm Elderflower Cordial 500ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Soda Water",
+"q": 50.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.2125
+},
+{
+"n": "Fresh Mint Leaves",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Lime Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 1.78
+},
+{
+"name": "Jager Bomb",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Standard",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Jägermeister",
+"q": 25.0,
+"u": "ml",
+"s": "Untitled",
+"sec": "Cocktail spirits",
+"c": 0.0
+},
+{
+"n": "Energy Drink",
+"q": 125.0,
+"u": "ml",
+"s": "Energy Drink 250ml",
+"sec": "Mixers & juices",
+"c": 0.55
+}
+],
+"cost": 0.55
+},
+{
+"name": "Lemon Ginger Spritz",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Ginger Syrup",
+"q": 25.0,
+"u": "ml",
+"s": "Monin Ginger Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2711
+},
+{
+"n": "Honey Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Honey Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2036
+},
+{
+"n": "Fresh Lime",
+"q": 30.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.195
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+}
+],
+"cost": 1.09
+},
+{
+"name": "Lychee & Rose Spritz",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Lychee Juice",
+"q": 60.0,
+"u": "ml",
+"s": "Rubicon Lychee 1L",
+"sec": "Mixers & juices",
+"c": 0.0768
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Rose Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Rose Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2036
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+}
+],
+"cost": 0.77
+},
+{
+"name": "Lychee Martini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Standard",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Flower",
+"ing": [
+{
+"n": "Pink Gin",
+"q": 50.0,
+"u": "ml",
+"s": "Gordons Pink Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.8838
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Lychee Juice",
+"q": 100.0,
+"u": "ml",
+"s": "Rubicon Lychee 1L",
+"sec": "Mixers & juices",
+"c": 0.128
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Flower Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Edible Flowers (box)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 1.25
+},
+{
+"name": "Lychee Pearl",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Martini Vibrante",
+"q": 25.0,
+"u": "ml",
+"s": "Martini Vibrante 75cl",
+"sec": "Cocktail spirits",
+"c": 0.3
+},
+{
+"n": "Everleaf Marine",
+"q": 25.0,
+"u": "ml",
+"s": "Everleaf Marine 50cl",
+"sec": "Cocktail spirits",
+"c": 1.15
+},
+{
+"n": "Rubicon Lychee Juice",
+"q": 30.0,
+"u": "ml",
+"s": "Rubicon Lychee 1L",
+"sec": "Mixers & juices",
+"c": 0.0384
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Monin Lavender Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Lavender Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2036
+},
+{
+"n": "Dianthus Leaf Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Edible Flowers (box)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 1.89
+},
+{
+"name": "Lychee Spritz",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Lychee Juice",
+"q": 100.0,
+"u": "ml",
+"s": "Rubicon Lychee 1L",
+"sec": "Mixers & juices",
+"c": 0.128
+},
+{
+"n": "Lemonade Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Schweppes Lemonade 2L",
+"sec": "Mixers & juices",
+"c": 0.08
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+}
+],
+"cost": 0.34
+},
+{
+"name": "Mai Tai",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Crushed",
+"method": "SHAKE",
+"gar": "Mint Sprig, Lime wheel and Cherry",
+"ing": [
+{
+"n": "White Rum",
+"q": 15.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.27
+},
+{
+"n": "Dark Rum",
+"q": 30.0,
+"u": "ml",
+"s": "Dark Rum 70cl",
+"sec": "Cocktail spirits",
+"c": 0.8464
+},
+{
+"n": "Orange Curacao (Cointreau)",
+"q": 15.0,
+"u": "ml",
+"s": "Cointreau Orange 50cl",
+"sec": "Cocktail spirits",
+"c": 0.57
+},
+{
+"n": "Pineapple Juice",
+"q": 15.0,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.03
+},
+{
+"n": "Fresh Lime",
+"q": 20.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.13
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+},
+{
+"n": "Fresh Mint Garnish",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Lime Wheel Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 2.02
+},
+{
+"name": "Mango & Cardamon Daiquiri",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Premium",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Cardamon Pod",
+"ing": [
+{
+"n": "White Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.9
+},
+{
+"n": "Simple Syrup (qty TBC)",
+"q": 0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0
+},
+{
+"n": "Fresh Lime (qty TBC)",
+"q": 0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0
+},
+{
+"n": "Mango Purée",
+"q": 25.0,
+"u": "ml",
+"s": "Monin Mango Puree 1L",
+"sec": "Mixers & juices",
+"c": 0.3565
+},
+{
+"n": "Cardamom Powder (qty TBC)",
+"q": 0,
+"u": "spoon",
+"s": "Cardamom Powder (100g)",
+"sec": "Garnish & consumables",
+"c": 0.0
+},
+{
+"n": "Cardamom Pod Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Cardamom Pods (100g)",
+"sec": "Garnish & consumables",
+"c": 0.015
+}
+],
+"cost": 1.27
+},
+{
+"name": "Mango Lime Spritz",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Mint Sprig",
+"ing": [
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Mango Purée",
+"q": 25.0,
+"u": "ml",
+"s": "Monin Mango Puree 1L",
+"sec": "Mixers & juices",
+"c": 0.3565
+},
+{
+"n": "Simple Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1053
+},
+{
+"n": "Fresh Mint Leaves",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 1.03
+},
+{
+"name": "Mango Mojito",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Crushed",
+"method": "MUDDLE",
+"gar": "Mint sprig and mango slice",
+"ing": [
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Mango Purée",
+"q": 25.0,
+"u": "ml",
+"s": "Monin Mango Puree 1L",
+"sec": "Mixers & juices",
+"c": 0.3565
+},
+{
+"n": "Fresh Mint Leaves",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Fresh Mint Sprig Garnish",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 1.04
+},
+{
+"name": "Maple Old Fashioned",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel",
+"ing": [
+{
+"n": "Bourbon",
+"q": 60.0,
+"u": "ml",
+"s": "Jim Beam Bourbon 70cl",
+"sec": "Cocktail spirits",
+"c": 1.5077
+},
+{
+"n": "Maple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Maple Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.12
+},
+{
+"n": "Orange Peel Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+}
+],
+"cost": 1.79
+},
+{
+"name": "Margarita",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Standard",
+"glass": "Coupe",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Lime Wedge",
+"ing": [
+{
+"n": "Triple Sec",
+"q": 22.5,
+"u": "ml",
+"s": "Riviera Triple Sec 70cl",
+"sec": "Cocktail spirits",
+"c": 0.3851
+},
+{
+"n": "Tequila Blanco",
+"q": 45.0,
+"u": "ml",
+"s": "El Jimador Tequila Blanco 70cl",
+"sec": "Cocktail spirits",
+"c": 1.1147
+},
+{
+"n": "Agave Syrup",
+"q": 5.0,
+"u": "ml",
+"s": "Monin Agave Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0785
+},
+{
+"n": "Fresh Lime",
+"q": 22.5,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1462
+},
+{
+"n": "Lime Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+},
+{
+"n": "Salt Rim",
+"q": 1.0,
+"u": "piece",
+"s": "Salt (750g)",
+"sec": "Garnish & consumables",
+"c": 0.0025
+}
+],
+"cost": 1.76
+},
+{
+"name": "Mexican Mule",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Lime Wedge",
+"ing": [
+{
+"n": "Tequila Blanco",
+"q": 50.0,
+"u": "ml",
+"s": "El Jimador Tequila Blanco 70cl",
+"sec": "Cocktail spirits",
+"c": 1.2386
+},
+{
+"n": "Ginger Beer Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Ginger Beer 200ml",
+"sec": "Mixers & juices",
+"c": 0.485
+},
+{
+"n": "Fresh Lime",
+"q": 20.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.13
+},
+{
+"n": "Lime Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 1.88
+},
+{
+"name": "Mint Julep",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Crushed",
+"method": "MUDDLE",
+"gar": "Mint Bouquet",
+"ing": [
+{
+"n": "Bourbon",
+"q": 70.0,
+"u": "ml",
+"s": "Jim Beam Bourbon 70cl",
+"sec": "Cocktail spirits",
+"c": 1.759
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Fresh Mint Leaves",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+},
+{
+"n": "Mint Bouquet Garnish",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 2.05
+},
+{
+"name": "Negroni",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel Twist",
+"ing": [
+{
+"n": "Campari",
+"q": 30.0,
+"u": "ml",
+"s": "Campari 70cl",
+"sec": "Cocktail spirits",
+"c": 0.8846
+},
+{
+"n": "Sweet Vermouth",
+"q": 30.0,
+"u": "ml",
+"s": "Martini Rosso Vermouth 75cl",
+"sec": "Cocktail spirits",
+"c": 0.42
+},
+{
+"n": "Gin",
+"q": 30.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.432
+},
+{
+"n": "Orange Peel Twist Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 1.78
+},
+{
+"name": "New York Sour",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Red Wine Float",
+"ing": [
+{
+"n": "Red Wine Float",
+"q": 15.0,
+"u": "ml",
+"s": "Mucho Mas Red Wine 75cl",
+"sec": "Cocktail spirits",
+"c": 0.112
+},
+{
+"n": "Whiskey",
+"q": 50.0,
+"u": "ml",
+"s": "Jameson 1L",
+"sec": "Cocktail spirits",
+"c": 1.1391
+},
+{
+"n": "Simple Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1053
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Foamer",
+"q": 3.0,
+"u": "drop",
+"s": "Foamer 150ml",
+"sec": "Garnish & consumables",
+"c": 0.014
+}
+],
+"cost": 1.53
+},
+{
+"name": "Orange Blossom",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Premium",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Orange Wedge",
+"ing": [
+{
+"n": "Everleaf Forest",
+"q": 50.0,
+"u": "ml",
+"s": "Everleaf Forest 50cl",
+"sec": "Cocktail spirits",
+"c": 2.3
+},
+{
+"n": "Light Tonic",
+"q": 150.0,
+"u": "ml",
+"s": "Fever-Tree Refreshingly Light Tonic 200ml",
+"sec": "Mixers & juices",
+"c": 0.7275
+},
+{
+"n": "Orange Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 3.07
+},
+{
+"name": "Orange Brûlée",
+"type": "Cocktail",
+"cat": "Liqueur",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Cream Float",
+"ing": [
+{
+"n": "Cognac",
+"q": 22.5,
+"u": "ml",
+"s": "Hennessy VS Cognac 70cl",
+"sec": "Cocktail spirits",
+"c": 0.739
+},
+{
+"n": "Disaronno",
+"q": 45.0,
+"u": "ml",
+"s": "Disaronno 70cl",
+"sec": "Cocktail spirits",
+"c": 1.1571
+},
+{
+"n": "Grand Marnier",
+"q": 45.0,
+"u": "ml",
+"s": "Grand Marnier 70cl",
+"sec": "Cocktail spirits",
+"c": 1.6714
+},
+{
+"n": "Double Cream",
+"q": 7.5,
+"u": "ml",
+"s": "Double Cream 600ml",
+"sec": "Chilled — critical",
+"c": 0.0313
+}
+],
+"cost": 3.6
+},
+{
+"name": "Paloma",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Grapefruit Slice",
+"ing": [
+{
+"n": "Tequila Blanco",
+"q": 50.0,
+"u": "ml",
+"s": "El Jimador Tequila Blanco 70cl",
+"sec": "Cocktail spirits",
+"c": 1.2386
+},
+{
+"n": "Grapefruit Juice",
+"q": 100.0,
+"u": "ml",
+"s": "Grapefruit Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.25
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Pinch of Salt",
+"q": 1.0,
+"u": "piece",
+"s": "Salt (750g)",
+"sec": "Garnish & consumables",
+"c": 0.0025
+},
+{
+"n": "Grapefruit Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Grapefruit (garnish)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 2.11
+},
+{
+"name": "Passionfruit Fizz",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Lemonade Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Schweppes Lemonade 2L",
+"sec": "Mixers & juices",
+"c": 0.08
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Passionfruit Juice",
+"q": 150.0,
+"u": "ml",
+"s": "Rubicon Passionfruit 1L",
+"sec": "Mixers & juices",
+"c": 0.192
+}
+],
+"cost": 0.41
+},
+{
+"name": "Passionfruit Martini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Standard",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Dried Passionfruit",
+"ing": [
+{
+"n": "Vanilla Vodka",
+"q": 50.0,
+"u": "ml",
+"s": "Absolut Vanilla 70cl",
+"sec": "Cocktail spirits",
+"c": 1.3171
+},
+{
+"n": "Passoa",
+"q": 40.0,
+"u": "ml",
+"s": "Passoa Passion 70cl",
+"sec": "Cocktail spirits",
+"c": 0.6737
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Passionfruit Juice",
+"q": 150.0,
+"u": "ml",
+"s": "Rubicon Passionfruit 1L",
+"sec": "Mixers & juices",
+"c": 0.192
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Dried Passionfruit Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Dried Passionfruit Slices",
+"sec": "Garnish & consumables",
+"c": 0.35
+}
+],
+"cost": 2.67
+},
+{
+"name": "Passionfruit Spritz",
+"type": "Welcome Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Passionfruit Juice",
+"q": 60.0,
+"u": "ml",
+"s": "Rubicon Passionfruit 1L",
+"sec": "Mixers & juices",
+"c": 0.0768
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Elderflower Cordial",
+"q": 15.0,
+"u": "ml",
+"s": "Belvoir Farm Elderflower Cordial 500ml",
+"sec": "Mixers & juices",
+"c": 0.1275
+}
+],
+"cost": 0.73
+},
+{
+"name": "Peach Bellini Spritz",
+"type": "Welcome Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Peach Wedge",
+"ing": [
+{
+"n": "Peach Schnapps",
+"q": 15.0,
+"u": "ml",
+"s": "Archers Peach Schnapps 70cl",
+"sec": "Cocktail spirits",
+"c": 0.2049
+},
+{
+"n": "Prosecco",
+"q": 90.0,
+"u": "ml",
+"s": "Freixenet Prosecco 75cl",
+"sec": "Cocktail spirits",
+"c": 0.8676
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "White Peach Purée",
+"q": 35.0,
+"u": "ml",
+"s": "White Peach Puree 1L",
+"sec": "Mixers & juices",
+"c": 0.4991
+},
+{
+"n": "Fresh Lime",
+"q": 7.5,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0488
+},
+{
+"n": "Peach Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Fresh Peaches (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0625
+}
+],
+"cost": 2.11
+},
+{
+"name": "Pear & Cardamom Spritz",
+"type": "Welcome Cocktail",
+"cat": "Liqueur",
+"tier": "Premium",
+"glass": "Champagne Flute",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Pear Wedge on Rim",
+"ing": [
+{
+"n": "Pear & Cognac Liqueur",
+"q": 30.0,
+"u": "ml",
+"s": "Belle de Brillet Pear & Cognac Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 1.3714
+},
+{
+"n": "Viognier White Wine",
+"q": 45.0,
+"u": "ml",
+"s": "Viognier White Wine 75cl",
+"sec": "Cocktail spirits",
+"c": 0.57
+},
+{
+"n": "Soda Water",
+"q": 30.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.1275
+},
+{
+"n": "Pear Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Fresh Pears (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0521
+},
+{
+"n": "Cardamom Pods",
+"q": 2.0,
+"u": "piece",
+"s": "Cardamom Pods (100g)",
+"sec": "Garnish & consumables",
+"c": 0.03
+}
+],
+"cost": 2.15
+},
+{
+"name": "Perfect Manhattan",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Standard",
+"glass": "Coupe",
+"ice": "None",
+"method": "STIR",
+"gar": "Cherry and Orange Twist",
+"ing": [
+{
+"n": "Dry Vermouth",
+"q": 12.5,
+"u": "ml",
+"s": "Dry Vermouth 75cl",
+"sec": "Cocktail spirits",
+"c": 0.15
+},
+{
+"n": "Whiskey",
+"q": 60.0,
+"u": "ml",
+"s": "Jameson 1L",
+"sec": "Cocktail spirits",
+"c": 1.3669
+},
+{
+"n": "Sweet Vermouth (Rosso)",
+"q": 12.5,
+"u": "ml",
+"s": "Martini Rosso Vermouth 75cl",
+"sec": "Cocktail spirits",
+"c": 0.175
+},
+{
+"n": "Orange Twist Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+}
+],
+"cost": 1.94
+},
+{
+"name": "Perfect Pear",
+"type": "Cocktail",
+"cat": "Liqueur",
+"tier": "Standard",
+"glass": "Coupe",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Coconut Flake",
+"ing": [
+{
+"n": "Malibu",
+"q": 10.0,
+"u": "ml",
+"s": "Malibu Coconut Rum 1L",
+"sec": "Cocktail spirits",
+"c": 0.1364
+},
+{
+"n": "White Rum",
+"q": 30.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.54
+},
+{
+"n": "Pear Liqueur",
+"q": 15.0,
+"u": "ml",
+"s": "Belle de Brillet Pear & Cognac Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.6857
+},
+{
+"n": "Coconut Water",
+"q": 25.0,
+"u": "ml",
+"s": "Coconut Water 1L",
+"sec": "Mixers & juices",
+"c": 0.0625
+},
+{
+"n": "Toasted Coconut Flake Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Toasted Coconut Flakes (200g)",
+"sec": "Garnish & consumables",
+"c": 0.075
+}
+],
+"cost": 1.5
+},
+{
+"name": "Picante",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Premium",
+"glass": "Coupe",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Coriander Sprig",
+"ing": [
+{
+"n": "Tequila Reposado",
+"q": 50.0,
+"u": "ml",
+"s": "El Jimador Reposado 70cl",
+"sec": "Cocktail spirits",
+"c": 1.8514
+},
+{
+"n": "Agave Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Agave Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2355
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Fresh Red Chilli",
+"q": 2.0,
+"u": "slice",
+"s": "Fresh Red Chilli",
+"sec": "Garnish & consumables",
+"c": 0.1
+},
+{
+"n": "Fresh Coriander",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Coriander (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.0333
+}
+],
+"cost": 2.38
+},
+{
+"name": "Pineapple Daiquiri",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Standard",
+"glass": "Coupe",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Dehydrated Pineapple",
+"ing": [
+{
+"n": "White Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.9
+},
+{
+"n": "Pineapple Juice",
+"q": 30.0,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.06
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Dehydrated Pineapple Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Dehydrated Pineapple Slices",
+"sec": "Garnish & consumables",
+"c": 0.3
+}
+],
+"cost": 1.49
+},
+{
+"name": "Raspberry Crush",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Standard",
+"glass": "Wine",
+"ice": "Crushed",
+"method": "SHAKE",
+"gar": "Lemon Slice and Raspberry",
+"ing": [
+{
+"n": "Vodka",
+"q": 60.0,
+"u": "ml",
+"s": "Absolut Vodka 1L",
+"sec": "Cocktail spirits",
+"c": 1.03
+},
+{
+"n": "Simple Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1053
+},
+{
+"n": "Raspberry Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Raspberry Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1635
+},
+{
+"n": "Fresh Lime",
+"q": 30.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.195
+},
+{
+"n": "Fresh Raspberry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Raspberries (150g)",
+"sec": "Garnish & consumables",
+"c": 0.0629
+},
+{
+"n": "Lemon Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Lemons (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0375
+}
+],
+"cost": 1.59
+},
+{
+"name": "Raspberry Gimlet",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Standard",
+"glass": "Coupe",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Fresh Raspberries",
+"ing": [
+{
+"n": "Gin",
+"q": 50.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.72
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Raspberry Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Raspberry Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1635
+},
+{
+"n": "Fresh Raspberries Garnish",
+"q": 3.0,
+"u": "piece",
+"s": "Fresh Raspberries (150g)",
+"sec": "Garnish & consumables",
+"c": 0.1886
+}
+],
+"cost": 1.23
+},
+{
+"name": "Royal Pantini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Paan Leaf and Paan Pasand Sweet",
+"ing": [
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Fresh Lime",
+"q": 10.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.065
+},
+{
+"n": "Jeera Powder",
+"q": 1.0,
+"u": "piece",
+"s": "Jeera Powder (100g)",
+"sec": "Garnish & consumables",
+"c": 0.02
+},
+{
+"n": "Paan Leaf Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Paan Leaf (pack)",
+"sec": "Garnish & consumables",
+"c": 0.1
+},
+{
+"n": "Paan Pasand Infused Vodka",
+"q": 60.0,
+"u": "ml",
+"s": "Paan Pasand Infused Vodka 1L",
+"sec": "Garnish & consumables",
+"c": 1.62
+},
+{
+"n": "Paan Pasand Sweet Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Paan Pasand Sweets (pack)",
+"sec": "Garnish & consumables",
+"c": 0.04
+}
+],
+"cost": 2.27
+},
+{
+"name": "Rum Punch",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Orange Slice",
+"ing": [
+{
+"n": "White Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.9
+},
+{
+"n": "Simple Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1053
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Pineapple Juice",
+"q": 100.0,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.2
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+},
+{
+"n": "Orange Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 1.53
+},
+{
+"name": "Rum Rebel",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Green Chilli",
+"ing": [
+{
+"n": "Old Monk Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Old Monk Rum 70cl",
+"sec": "Cocktail spirits",
+"c": 1.2857
+},
+{
+"n": "Thums Up Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Thums Up 750ml",
+"sec": "Mixers & juices",
+"c": 0.2667
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+},
+{
+"n": "Green Chilli Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Green Chilli",
+"sec": "Garnish & consumables",
+"c": 0.05
+}
+],
+"cost": 1.72
+},
+{
+"name": "Saffron Picante",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Coriander and Chilli Slice",
+"ing": [
+{
+"n": "Everleaf Forest",
+"q": 60.0,
+"u": "ml",
+"s": "Everleaf Forest 50cl",
+"sec": "Cocktail spirits",
+"c": 2.76
+},
+{
+"n": "Fresh Lime",
+"q": 20.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.13
+},
+{
+"n": "Agave Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Agave Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2355
+},
+{
+"n": "Fresh Coriander",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Coriander (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.0333
+},
+{
+"n": "Fresh Red Chilli",
+"q": 2.0,
+"u": "slice",
+"s": "Fresh Red Chilli",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 3.26
+},
+{
+"name": "Sambuca",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Standard",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Sambuca",
+"q": 25.0,
+"u": "ml",
+"s": "Sambuca 70cl",
+"sec": "Cocktail spirits",
+"c": 0.5714
+}
+],
+"cost": 0.57
+},
+{
+"name": "Singapore Sling",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Pineapple Wedge and Cherry",
+"ing": [
+{
+"n": "Cointreau",
+"q": 7.5,
+"u": "ml",
+"s": "Cointreau Orange 50cl",
+"sec": "Cocktail spirits",
+"c": 0.285
+},
+{
+"n": "Bénédictine D.O.M.",
+"q": 7.5,
+"u": "ml",
+"s": "Bénédictine D.O.M. 70cl",
+"sec": "Cocktail spirits",
+"c": 0.3429
+},
+{
+"n": "Cherry Liqueur",
+"q": 15.0,
+"u": "ml",
+"s": "Cherry Heering Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.4714
+},
+{
+"n": "Gin",
+"q": 45.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.648
+},
+{
+"n": "Grenadine",
+"q": 2.5,
+"u": "ml",
+"s": "Monin Grenadine Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.0145
+},
+{
+"n": "Pineapple Juice",
+"q": 45.0,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.09
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Pineapple Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Fresh Pineapple (whole)",
+"sec": "Garnish & consumables",
+"c": 0.1667
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+},
+{
+"n": "Angostura Bitters",
+"q": 1.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.06
+}
+],
+"cost": 2.27
+},
+{
+"name": "Smoked Boulevardier",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel Twist",
+"ing": [
+{
+"n": "Campari",
+"q": 30.0,
+"u": "ml",
+"s": "Campari 70cl",
+"sec": "Cocktail spirits",
+"c": 0.8846
+},
+{
+"n": "Sweet Vermouth",
+"q": 30.0,
+"u": "ml",
+"s": "Martini Rosso Vermouth 75cl",
+"sec": "Cocktail spirits",
+"c": 0.42
+},
+{
+"n": "Whiskey",
+"q": 30.0,
+"u": "ml",
+"s": "Jameson 1L",
+"sec": "Cocktail spirits",
+"c": 0.6835
+},
+{
+"n": "Orange Peel Twist Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Hickory or Cherry Wood Smoke",
+"q": 1.0,
+"u": "piece",
+"s": "Smoking Wood Chips (500g)",
+"sec": "Garnish & consumables",
+"c": 0.08
+}
+],
+"cost": 2.11
+},
+{
+"name": "Smoked Old Fashioned",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel",
+"ing": [
+{
+"n": "Bourbon",
+"q": 60.0,
+"u": "ml",
+"s": "Jim Beam Bourbon 70cl",
+"sec": "Cocktail spirits",
+"c": 1.5077
+},
+{
+"n": "Hickory or Cherry Wood Smoke",
+"q": 1.0,
+"u": "piece",
+"s": "Smoking Wood Chips (500g)",
+"sec": "Garnish & consumables",
+"c": 0.08
+},
+{
+"n": "Sugar Cube",
+"q": 1.0,
+"u": "cube",
+"s": "Sugar Cubes (500g)",
+"sec": "Garnish & consumables",
+"c": 0.0109
+},
+{
+"n": "Orange Peel Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+}
+],
+"cost": 1.76
+},
+{
+"name": "Smoked Pineapple Margarita",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Grilled Pineapple Slice",
+"ing": [
+{
+"n": "Mezcal",
+"q": 50.0,
+"u": "ml",
+"s": "Mezcal 70cl",
+"sec": "Cocktail spirits",
+"c": 2.5
+},
+{
+"n": "Fresh Lime",
+"q": 20.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.13
+},
+{
+"n": "Pineapple Juice",
+"q": 30.0,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.06
+},
+{
+"n": "Agave Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Agave Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2355
+},
+{
+"n": "Grilled Pineapple Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Pineapple (whole)",
+"sec": "Garnish & consumables",
+"c": 0.1667
+},
+{
+"n": "Pinch of Salt",
+"q": 1.0,
+"u": "piece",
+"s": "Salt (750g)",
+"sec": "Garnish & consumables",
+"c": 0.0025
+}
+],
+"cost": 3.09
+},
+{
+"name": "Sour Cherry Spritz",
+"type": "Welcome Cocktail",
+"cat": "Liqueur",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Maraschino Cherry",
+"ing": [
+{
+"n": "Prosecco",
+"q": 75.0,
+"u": "ml",
+"s": "Freixenet Prosecco 75cl",
+"sec": "Cocktail spirits",
+"c": 0.723
+},
+{
+"n": "Triple Sec",
+"q": 25.0,
+"u": "ml",
+"s": "Riviera Triple Sec 70cl",
+"sec": "Cocktail spirits",
+"c": 0.4279
+},
+{
+"n": "Cherry Liqueur",
+"q": 25.0,
+"u": "ml",
+"s": "Cherry Heering Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.7857
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Maraschino Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+}
+],
+"cost": 2.45
+},
+{
+"name": "Spiced Mango",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "",
+"ing": [
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Mango Juice",
+"q": 150.0,
+"u": "ml",
+"s": "Rubicon Mango 1L",
+"sec": "Mixers & juices",
+"c": 0.192
+},
+{
+"n": "Spicy Syrup",
+"q": 25.0,
+"u": "ml",
+"s": "1883 Maison Spicy Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.3997
+}
+],
+"cost": 0.75
+},
+{
+"name": "Spiced Paloma",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Casamigos Reposado",
+"q": 50.0,
+"u": "ml",
+"s": "Casamigos Reposado 70cl",
+"sec": "Cocktail spirits",
+"c": 2.9286
+},
+{
+"n": "Fever-Tree Pink Grapefruit Soda",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Pink Grapefruit Soda 200ml",
+"sec": "Mixers & juices",
+"c": 0.8
+},
+{
+"n": "Tajin-infused Agave Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Agave Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2355
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Tajin Rim",
+"q": 1.0,
+"u": "piece",
+"s": "Tajin (400g)",
+"sec": "Garnish & consumables",
+"c": 0.0917
+}
+],
+"cost": 4.15
+},
+{
+"name": "Strawberry Daiquiri",
+"type": "Cocktail",
+"cat": "Rum",
+"tier": "Standard",
+"glass": "Coupe",
+"ice": "None",
+"method": "SHAKE",
+"gar": "Fresh Strawberry",
+"ing": [
+{
+"n": "White Rum",
+"q": 50.0,
+"u": "ml",
+"s": "Bacardi Carta Blanca 1L",
+"sec": "Cocktail spirits",
+"c": 0.9
+},
+{
+"n": "Strawberry Purée",
+"q": 30.0,
+"u": "ml",
+"s": "Strawberry Puree 1L",
+"sec": "Mixers & juices",
+"c": 0.4278
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Fresh Strawberry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Strawberries (400g)",
+"sec": "Garnish & consumables",
+"c": 0.1
+}
+],
+"cost": 1.66
+},
+{
+"name": "Summer Berry Refresher",
+"type": "Mocktail",
+"cat": "Non-Alcoholic",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "MUDDLE",
+"gar": "Fresh mixed berries",
+"ing": [
+{
+"n": "Raspberry Syrup",
+"q": 25.0,
+"u": "ml",
+"s": "Monin Raspberry Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2725
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Fresh Mint",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Fresh Mixed Berries Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Mixed Berries (300g)",
+"sec": "Garnish & consumables",
+"c": 0.2917
+}
+],
+"cost": 1.2
+},
+{
+"name": "Tequila",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Standard",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "Lime Wedge",
+"ing": [
+{
+"n": "Tequila Blanco",
+"q": 25.0,
+"u": "ml",
+"s": "El Jimador Tequila Blanco 70cl",
+"sec": "Cocktail spirits",
+"c": 0.6193
+},
+{
+"n": "Pinch of Salt",
+"q": 1.0,
+"u": "piece",
+"s": "Salt (750g)",
+"sec": "Garnish & consumables",
+"c": 0.0025
+},
+{
+"n": "Lime Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 0.65
+},
+{
+"name": "Tequila Rose",
+"type": "Shooter",
+"cat": "Shooter",
+"tier": "Standard",
+"glass": "Shot",
+"ice": "None",
+"method": "BUILD",
+"gar": "",
+"ing": [
+{
+"n": "Tequila Rose",
+"q": 25.0,
+"u": "ml",
+"s": "Untitled",
+"sec": "Cocktail spirits",
+"c": 0.0
+}
+],
+"cost": 0.0
+},
+{
+"name": "Tequila Sunrise",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Standard",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Orange slice and Cherry",
+"ing": [
+{
+"n": "Tequila Reposado",
+"q": 50.0,
+"u": "ml",
+"s": "El Jimador Reposado 70cl",
+"sec": "Cocktail spirits",
+"c": 1.8514
+},
+{
+"n": "Orange Juice",
+"q": 100.0,
+"u": "ml",
+"s": "Orange Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1
+},
+{
+"n": "Grenadine",
+"q": 20.0,
+"u": "ml",
+"s": "Monin Grenadine Syrup 1L",
+"sec": "Mixers & juices",
+"c": 0.1158
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+},
+{
+"n": "Orange Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+}
+],
+"cost": 2.2
+},
+{
+"name": "The Meadows",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Crushed",
+"method": "MUDDLE",
+"gar": "Cucumber Ribbon and Mint",
+"ing": [
+{
+"n": "Gin",
+"q": 50.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.72
+},
+{
+"n": "Fresh Lime",
+"q": 20.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.13
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Fresh Mint Garnish",
+"q": 1.0,
+"u": "sprig",
+"s": "Fresh Mint (bunch)",
+"sec": "Garnish & consumables",
+"c": 0.05
+},
+{
+"n": "Cucumber Slices",
+"q": 6.0,
+"u": "slice",
+"s": "Fresh Cucumber",
+"sec": "Garnish & consumables",
+"c": 0.14
+}
+],
+"cost": 1.54
+},
+{
+"name": "The Mithai",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "BUILD",
+"gar": "Dried Rose Petals",
+"ing": [
+{
+"n": "Gin",
+"q": 60.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.864
+},
+{
+"n": "Cardamom Rose Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Cardamom Rose Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.15
+},
+{
+"n": "Rose Lemonade",
+"q": 60.0,
+"u": "ml",
+"s": "Rose Lemonade 750ml",
+"sec": "Mixers & juices",
+"c": 0.2
+},
+{
+"n": "Rose Cordial",
+"q": 5.0,
+"u": "ml",
+"s": "Rose Cordial 50cl",
+"sec": "Mixers & juices",
+"c": 0.08
+},
+{
+"n": "Cardamom Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Cardamom Bitters 100ml",
+"sec": "Garnish & consumables",
+"c": 0.24
+}
+],
+"cost": 1.53
+},
+{
+"name": "The Old Fashioned",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "STIR",
+"gar": "Orange Peel",
+"ing": [
+{
+"n": "Whiskey",
+"q": 60.0,
+"u": "ml",
+"s": "Jameson 1L",
+"sec": "Cocktail spirits",
+"c": 1.3669
+},
+{
+"n": "Orange Peel Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Fresh Oranges (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0417
+},
+{
+"n": "Sugar Cube",
+"q": 1.0,
+"u": "cube",
+"s": "Sugar Cubes (500g)",
+"sec": "Garnish & consumables",
+"c": 0.0109
+},
+{
+"n": "Angostura Bitters",
+"q": 2.0,
+"u": "dash",
+"s": "Angostura Bitters 200ml",
+"sec": "Garnish & consumables",
+"c": 0.12
+}
+],
+"cost": 1.54
+},
+{
+"name": "The Peacock",
+"type": "Cocktail",
+"cat": "Gin",
+"tier": "Premium",
+"glass": "Highball",
+"ice": "Cubed",
+"method": "MUDDLE",
+"gar": "Lime Slices",
+"ing": [
+{
+"n": "Gin",
+"q": 45.0,
+"u": "ml",
+"s": "Gordons Dry Gin 1L",
+"sec": "Cocktail spirits",
+"c": 0.648
+},
+{
+"n": "Soda Water Finish",
+"q": 100.0,
+"u": "ml",
+"s": "Fever-Tree Soda Water 200ml",
+"sec": "Mixers & juices",
+"c": 0.425
+},
+{
+"n": "Agave Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Agave Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.157
+},
+{
+"n": "Fresh Lime",
+"q": 15.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.0975
+},
+{
+"n": "Rosewater",
+"q": 3.0,
+"u": "ml",
+"s": "Rosewater 250ml",
+"sec": "Mixers & juices",
+"c": 0.036
+},
+{
+"n": "Lime Slice Garnish",
+"q": 2.0,
+"u": "slice",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0571
+},
+{
+"n": "Green Cardamom Pods",
+"q": 4.0,
+"u": "piece",
+"s": "Cardamom Pods (100g)",
+"sec": "Garnish & consumables",
+"c": 0.06
+}
+],
+"cost": 1.48
+},
+{
+"name": "Tommy's Margarita",
+"type": "Cocktail",
+"cat": "Tequila",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Lime Wedge",
+"ing": [
+{
+"n": "Tequila Blanco",
+"q": 50.0,
+"u": "ml",
+"s": "El Jimador Tequila Blanco 70cl",
+"sec": "Cocktail spirits",
+"c": 1.2386
+},
+{
+"n": "Agave Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Agave Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.2355
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Lime Wedge Garnish",
+"q": 1.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.0286
+}
+],
+"cost": 1.67
+},
+{
+"name": "Tropical Caipirinha",
+"type": "Cocktail",
+"cat": "Liqueur",
+"tier": "Premium",
+"glass": "Rocks",
+"ice": "Crushed",
+"method": "MUDDLE",
+"gar": "Lime Wedge",
+"ing": [
+{
+"n": "Cachaça",
+"q": 45.0,
+"u": "ml",
+"s": "Leblon Cachaça 70cl",
+"sec": "Cocktail spirits",
+"c": 1.8
+},
+{
+"n": "Malibu",
+"q": 15.0,
+"u": "ml",
+"s": "Malibu Coconut Rum 1L",
+"sec": "Cocktail spirits",
+"c": 0.2046
+},
+{
+"n": "Pineapple Juice",
+"q": 22.5,
+"u": "ml",
+"s": "Pineapple Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.045
+},
+{
+"n": "Simple Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1053
+},
+{
+"n": "Fresh Lime Wedges",
+"q": 4.0,
+"u": "wedge",
+"s": "Lime Garnish (wedges/wheels)",
+"sec": "Garnish & consumables",
+"c": 0.1143
+}
+],
+"cost": 2.27
+},
+{
+"name": "Vanilla Espresso Martini",
+"type": "Cocktail",
+"cat": "Vodka",
+"tier": "Premium",
+"glass": "Martini",
+"ice": "None",
+"method": "SHAKE",
+"gar": "3 Coffee Beans",
+"ing": [
+{
+"n": "Coffee Liqueur (Kahlua)",
+"q": 15.0,
+"u": "ml",
+"s": "Kahlua Coffee Liqueur 70cl",
+"sec": "Cocktail spirits",
+"c": 0.2698
+},
+{
+"n": "Vanilla Vodka",
+"q": 50.0,
+"u": "ml",
+"s": "Absolut Vanilla 70cl",
+"sec": "Cocktail spirits",
+"c": 1.3171
+},
+{
+"n": "Fresh Espresso",
+"q": 30.0,
+"u": "ml",
+"s": "Fresh Espresso",
+"sec": "Chilled — critical",
+"c": 0.18
+},
+{
+"n": "Simple Syrup",
+"q": 10.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.0702
+},
+{
+"n": "Coffee Beans Garnish",
+"q": 3.0,
+"u": "piece",
+"s": "Coffee Beans Garnish (250g)",
+"sec": "Garnish & consumables",
+"c": 0.015
+}
+],
+"cost": 1.85
+},
+{
+"name": "Whisky Sour",
+"type": "Cocktail",
+"cat": "Whiskey",
+"tier": "Standard",
+"glass": "Rocks",
+"ice": "Cubed",
+"method": "SHAKE",
+"gar": "Sliced Lemon and Cherry",
+"ing": [
+{
+"n": "Whiskey",
+"q": 50.0,
+"u": "ml",
+"s": "Jameson 1L",
+"sec": "Cocktail spirits",
+"c": 1.1391
+},
+{
+"n": "Fresh Lime",
+"q": 25.0,
+"u": "ml",
+"s": "Fresh Lime Juice 1L",
+"sec": "Mixers & juices",
+"c": 0.1625
+},
+{
+"n": "Simple Syrup",
+"q": 15.0,
+"u": "ml",
+"s": "Monin Sugar Syrup 70cl",
+"sec": "Mixers & juices",
+"c": 0.1053
+},
+{
+"n": "Lemon Slice Garnish",
+"q": 1.0,
+"u": "slice",
+"s": "Fresh Lemons (6 pack)",
+"sec": "Garnish & consumables",
+"c": 0.0375
+},
+{
+"n": "Cherry Garnish",
+"q": 1.0,
+"u": "piece",
+"s": "Maraschino Cherries (400g jar)",
+"sec": "Garnish & consumables",
+"c": 0.09
+},
+{
+"n": "Foamer",
+"q": 3.0,
+"u": "drop",
+"s": "Foamer 150ml",
+"sec": "Garnish & consumables",
+"c": 0.014
+}
+],
+"cost": 1.55
+}
+],
+"inventory": [
+{
+"n": "Birra Moretti Beer Bottles 330ml",
+"cat": "Beer",
+"v": 330.0,
+"cpm": 0.002575757576,
+"uc": 0.85,
+"size": "330ml",
+"stock": 48.0
+},
+{
+"n": "Budweiser Beer Bottles 300ml",
+"cat": "Beer",
+"v": 300.0,
+"cpm": 0.002633333333,
+"uc": 0.79,
+"size": "300ml",
+"stock": 25.0
+},
+{
+"n": "Estrella Damm Beer 660ml",
+"cat": "Beer",
+"v": 660.0,
+"cpm": 0.00303030303,
+"uc": 2.0,
+"size": "660ml",
+"stock": 12.0
+},
+{
+"n": "Peroni 0% Beer Bottles 330ml",
+"cat": "Beer",
+"v": 330.0,
+"cpm": 0.002393939394,
+"uc": 0.79,
+"size": "330ml",
+"stock": 9.0
+},
+{
+"n": "Peroni Bottles 330ml",
+"cat": "Beer",
+"v": 330.0,
+"cpm": 0.004424242424,
+"uc": 1.46,
+"size": "330ml",
+"stock": 0.0
+},
+{
+"n": "Lanson Brut 75cl Champagne",
+"cat": "Champagne",
+"v": 750.0,
+"cpm": 0.039973333333,
+"uc": 29.98,
+"size": "75cl",
+"stock": 1.0
+},
+{
+"n": "Candied Ginger (200g)",
+"cat": "Garnish",
+"v": 40.0,
+"cpm": 0.0875,
+"uc": 3.5,
+"size": "200g = 40 pieces",
+"stock": 0.0
+},
+{
+"n": "Caramel Sauce (1kg)",
+"cat": "Garnish",
+"v": 50.0,
+"cpm": 0.1,
+"uc": 5.0,
+"size": "1kg = 50 drizzles",
+"stock": 0.0
+},
+{
+"n": "Cardamom Pods (100g)",
+"cat": "Garnish",
+"v": 200.0,
+"cpm": 0.015,
+"uc": 3.0,
+"size": "100g = 200 pods",
+"stock": 0.0
+},
+{
+"n": "Coffee Beans Garnish (250g)",
+"cat": "Garnish",
+"v": 1000.0,
+"cpm": 0.005,
+"uc": 5.0,
+"size": "250g = 1000 beans",
+"stock": 0.0
+},
+{
+"n": "Dehydrated Pineapple Slices",
+"cat": "Garnish",
+"v": 20.0,
+"cpm": 0.3,
+"uc": 6.0,
+"size": "20 slices",
+"stock": 0.0
+},
+{
+"n": "Dried Passionfruit Slices",
+"cat": "Garnish",
+"v": 20.0,
+"cpm": 0.35,
+"uc": 7.0,
+"size": "20 slices",
+"stock": 0.0
+},
+{
+"n": "Edible Flowers (box)",
+"cat": "Garnish",
+"v": 40.0,
+"cpm": 0.1,
+"uc": 4.0,
+"size": "1 box = 40 flowers",
+"stock": 0.0
+},
+{
+"n": "Fresh Apples (6 pack)",
+"cat": "Garnish",
+"v": 48.0,
+"cpm": 0.041666666667,
+"uc": 2.0,
+"size": "6 apples = 48 pieces",
+"stock": 0.0
+},
+{
+"n": "Fresh Basil (bunch)",
+"cat": "Garnish",
+"v": 30.0,
+"cpm": 0.05,
+"uc": 1.5,
+"size": "1 bunch = 30 leaves",
+"stock": 0.0
+},
+{
+"n": "Fresh Blackberries (150g)",
+"cat": "Garnish",
+"v": 30.0,
+"cpm": 0.073333333333,
+"uc": 2.2,
+"size": "150g = 30 berries",
+"stock": 0.0
+},
+{
+"n": "Fresh Coriander (bunch)",
+"cat": "Garnish",
+"v": 30.0,
+"cpm": 0.033333333333,
+"uc": 1.0,
+"size": "1 bunch = 30 sprigs",
+"stock": 0.0
+},
+{
+"n": "Fresh Cucumber",
+"cat": "Garnish",
+"v": 30.0,
+"cpm": 0.023333333333,
+"uc": 0.7,
+"size": "1 cucumber = 30 slices/ribbons",
+"stock": 0.0
+},
+{
+"n": "Fresh Ginger (root)",
+"cat": "Garnish",
+"v": 100.0,
+"cpm": 0.015,
+"uc": 1.5,
+"size": "1 root = 100 slices",
+"stock": 0.0
+},
+{
+"n": "Fresh Grapefruit (garnish)",
+"cat": "Garnish",
+"v": 8.0,
+"cpm": 0.1,
+"uc": 0.8,
+"size": "1 fruit = 8 slices",
+"stock": 0.0
+},
+{
+"n": "Fresh Green Chilli",
+"cat": "Garnish",
+"v": 20.0,
+"cpm": 0.05,
+"uc": 1.0,
+"size": "1 pack = 20 chillies",
+"stock": 0.0
+},
+{
+"n": "Fresh Lemons (6 pack)",
+"cat": "Garnish",
+"v": 48.0,
+"cpm": 0.0375,
+"uc": 1.8,
+"size": "6 lemons = 48 pieces",
+"stock": 0.0
+},
+{
+"n": "Fresh Mint (bunch)",
+"cat": "Garnish",
+"v": 40.0,
+"cpm": 0.05,
+"uc": 2.0,
+"size": "1 bunch = 40 sprigs",
+"stock": 0.0
+},
+{
+"n": "Fresh Oranges (6 pack)",
+"cat": "Garnish",
+"v": 48.0,
+"cpm": 0.041666666667,
+"uc": 2.0,
+"size": "6 oranges = 48 pieces",
+"stock": 0.0
+},
+{
+"n": "Fresh Peaches (6 pack)",
+"cat": "Garnish",
+"v": 48.0,
+"cpm": 0.0625,
+"uc": 3.0,
+"size": "6 peaches = 48 pieces",
+"stock": 0.0
+},
+{
+"n": "Fresh Pears (6 pack)",
+"cat": "Garnish",
+"v": 48.0,
+"cpm": 0.052083333333,
+"uc": 2.5,
+"size": "6 pears = 48 pieces",
+"stock": 0.0
+},
+{
+"n": "Fresh Pineapple (whole)",
+"cat": "Garnish",
+"v": 12.0,
+"cpm": 0.166666666667,
+"uc": 2.0,
+"size": "1 pineapple = 12 slices",
+"stock": 0.0
+},
+{
+"n": "Fresh Raspberries (150g)",
+"cat": "Garnish",
+"v": 35.0,
+"cpm": 0.062857142857,
+"uc": 2.2,
+"size": "150g = 35 berries",
+"stock": 0.0
+},
+{
+"n": "Fresh Red Chilli",
+"cat": "Garnish",
+"v": 20.0,
+"cpm": 0.05,
+"uc": 1.0,
+"size": "1 pack = 20 slices",
+"stock": 0.0
+},
+{
+"n": "Fresh Rosemary (bunch)",
+"cat": "Garnish",
+"v": 25.0,
+"cpm": 0.06,
+"uc": 1.5,
+"size": "1 bunch = 25 sprigs",
+"stock": 0.0
+},
+{
+"n": "Fresh Strawberries (400g)",
+"cat": "Garnish",
+"v": 25.0,
+"cpm": 0.1,
+"uc": 2.5,
+"size": "400g = 25 berries",
+"stock": 0.0
+},
+{
+"n": "Lime Garnish (wedges/wheels)",
+"cat": "Garnish",
+"v": 280.0,
+"cpm": 0.028571428571,
+"uc": 8.0,
+"size": "35 limes = 280 wedges",
+"stock": 0.0
+},
+{
+"n": "Maraschino Cherries (400g jar)",
+"cat": "Garnish",
+"v": 50.0,
+"cpm": 0.09,
+"uc": 4.5,
+"size": "400g = 50 cherries",
+"stock": 0.0
+},
+{
+"n": "Mixed Berries (300g)",
+"cat": "Garnish",
+"v": 12.0,
+"cpm": 0.291666666667,
+"uc": 3.5,
+"size": "300g = 12 servings",
+"stock": 0.0
+},
+{
+"n": "Paan Leaf (pack)",
+"cat": "Garnish",
+"v": 20.0,
+"cpm": 0.1,
+"uc": 2.0,
+"size": "1 pack = 20 leaves",
+"stock": 0.0
+},
+{
+"n": "Paan Pasand Sweets (pack)",
+"cat": "Garnish",
+"v": 50.0,
+"cpm": 0.04,
+"uc": 2.0,
+"size": "1 pack = 50 sweets",
+"stock": 0.0
+},
+{
+"n": "Toasted Coconut Flakes (200g)",
+"cat": "Garnish",
+"v": 40.0,
+"cpm": 0.075,
+"uc": 3.0,
+"size": "200g = 40 servings",
+"stock": 0.0
+},
+{
+"n": "Aperol 1L",
+"cat": "Liqueur",
+"v": 1000.0,
+"cpm": 0.012,
+"uc": 12.0,
+"size": "1L",
+"stock": 4.0
+},
+{
+"n": "Baileys Irish Cream 70cl (shots)",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.022857142857,
+"uc": 16.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Baileys Original 1L",
+"cat": "Liqueur",
+"v": 1000.0,
+"cpm": 0.018,
+"uc": 18.0,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Banana Liqueur 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.02,
+"uc": 14.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Belle de Brillet Pear & Cognac Liqueur 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.045714285714,
+"uc": 32.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Boudier Creme de Cacao 50cl",
+"cat": "Liqueur",
+"v": 500.0,
+"cpm": 0.038,
+"uc": 19.0,
+"size": "50cl",
+"stock": 3.0
+},
+{
+"n": "Boudier Creme de Mure 50cl",
+"cat": "Liqueur",
+"v": 500.0,
+"cpm": 0.0355,
+"uc": 17.75,
+"size": "50cl",
+"stock": 2.0
+},
+{
+"n": "Bénédictine D.O.M. 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.045714285714,
+"uc": 32.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Cherry Heering Liqueur 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.031428571429,
+"uc": 22.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Cointreau Orange 50cl",
+"cat": "Liqueur",
+"v": 500.0,
+"cpm": 0.038,
+"uc": 19.0,
+"size": "50cl",
+"stock": 3.0
+},
+{
+"n": "Disaronno 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.025714285714,
+"uc": 18.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Fiorente Elderflower Liqueur 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.0323,
+"uc": 22.61,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Frangelico 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.028571428571,
+"uc": 20.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Grand Marnier 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.037142857143,
+"uc": 26.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Kahlua Coffee Liqueur 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.017985714286,
+"uc": 12.59,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Licor 43 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.031428571429,
+"uc": 22.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Passoa Passion 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.016842857143,
+"uc": 11.79,
+"size": "70cl",
+"stock": 4.0
+},
+{
+"n": "Riviera Triple Sec 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.017114285714,
+"uc": 11.98,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Sambuca 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.022857142857,
+"uc": 16.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Sheep Dog Peanut Butter Whiskey Liqueur 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.035057142857,
+"uc": 24.54,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Sour Apple Liqueur 70cl",
+"cat": "Liqueur",
+"v": 700.0,
+"cpm": 0.018571428571,
+"uc": 13.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Apple Juice 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.0025,
+"uc": 2.5,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Cherry Good Juice 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.0025,
+"uc": 2.5,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Coconut Water 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.0025,
+"uc": 2.5,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Coke 1.75L Bottle",
+"cat": "Mixer",
+"v": 1750.0,
+"cpm": 0.001594285714,
+"uc": 2.79,
+"size": "1.75L",
+"stock": 5.0
+},
+{
+"n": "Coke Zero 2L Bottle",
+"cat": "Mixer",
+"v": 2000.0,
+"cpm": 0.001075,
+"uc": 2.15,
+"size": "2L",
+"stock": 5.0
+},
+{
+"n": "Energy Drink 250ml",
+"cat": "Mixer",
+"v": 250.0,
+"cpm": 0.0044,
+"uc": 1.1,
+"size": "250ml",
+"stock": 0.0
+},
+{
+"n": "Fever-Tree Bitter Lemon 200ml",
+"cat": "Mixer",
+"v": 200.0,
+"cpm": 0.008,
+"uc": 1.6,
+"size": "200ml",
+"stock": 0.0
+},
+{
+"n": "Fever-Tree Ginger Ale 200ml",
+"cat": "Mixer",
+"v": 200.0,
+"cpm": 0.00485,
+"uc": 0.97,
+"size": "200ml",
+"stock": 0.0
+},
+{
+"n": "Fever-Tree Ginger Beer 200ml",
+"cat": "Mixer",
+"v": 200.0,
+"cpm": 0.00485,
+"uc": 0.97,
+"size": "200ml",
+"stock": 0.0
+},
+{
+"n": "Fever-Tree Indian Tonic Water 200ml",
+"cat": "Mixer",
+"v": 200.0,
+"cpm": 0.00485,
+"uc": 0.97,
+"size": "200ml",
+"stock": 0.0
+},
+{
+"n": "Fever-Tree Pink Grapefruit Soda 200ml",
+"cat": "Mixer",
+"v": 200.0,
+"cpm": 0.008,
+"uc": 1.6,
+"size": "200ml",
+"stock": 0.0
+},
+{
+"n": "Fever-Tree Refreshingly Light Tonic 200ml",
+"cat": "Mixer",
+"v": 200.0,
+"cpm": 0.00485,
+"uc": 0.97,
+"size": "200ml",
+"stock": 0.0
+},
+{
+"n": "Fever-Tree Soda Water 200ml",
+"cat": "Mixer",
+"v": 200.0,
+"cpm": 0.00425,
+"uc": 0.85,
+"size": "200ml",
+"stock": 0.0
+},
+{
+"n": "Fresh Lime Juice 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.0065,
+"uc": 6.5,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Ginger Beer 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.0015,
+"uc": 1.5,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Grapefruit Juice 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.0025,
+"uc": 2.5,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Orange Juice 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.001,
+"uc": 1.0,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Pineapple Juice 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.002,
+"uc": 2.0,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Rose Lemonade 750ml",
+"cat": "Mixer",
+"v": 750.0,
+"cpm": 0.003333333333,
+"uc": 2.5,
+"size": "750ml",
+"stock": 0.0
+},
+{
+"n": "Rubicon Guava Nectar 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.0018,
+"uc": 1.8,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Rubicon Lychee 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00128,
+"uc": 1.28,
+"size": "1L",
+"stock": 16.0
+},
+{
+"n": "Rubicon Mango 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00128,
+"uc": 1.28,
+"size": "1L",
+"stock": 20.0
+},
+{
+"n": "Rubicon Passionfruit 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00128,
+"uc": 1.28,
+"size": "1L",
+"stock": 2.0
+},
+{
+"n": "Schweppes Indian Tonic 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00085,
+"uc": 0.85,
+"size": "1L",
+"stock": 9.0
+},
+{
+"n": "Schweppes Lemonade 2L",
+"cat": "Mixer",
+"v": 2000.0,
+"cpm": 0.0008,
+"uc": 1.6,
+"size": "2L",
+"stock": 6.0
+},
+{
+"n": "Schweppes Slimeline Tonic 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00085,
+"uc": 0.85,
+"size": "1L",
+"stock": 15.0
+},
+{
+"n": "Schweppes Soda Water 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00085,
+"uc": 0.85,
+"size": "1L",
+"stock": 9.0
+},
+{
+"n": "Tesco Cranberry Juice 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00099,
+"uc": 0.99,
+"size": "1L",
+"stock": 7.0
+},
+{
+"n": "Tesco Ginger Ale 1L",
+"cat": "Mixer",
+"v": 1000.0,
+"cpm": 0.00077,
+"uc": 0.77,
+"size": "1L",
+"stock": 13.0
+},
+{
+"n": "Thums Up 750ml",
+"cat": "Mixer",
+"v": 750.0,
+"cpm": 0.002666666667,
+"uc": 2.0,
+"size": "750ml",
+"stock": 0.0
+},
+{
+"n": "1883 Maison Spicy Syrup 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.01599,
+"uc": 15.99,
+"size": "1L",
+"stock": 6.0
+},
+{
+"n": "Angostura Bitters 200ml",
+"cat": "Other",
+"v": 200.0,
+"cpm": 0.06,
+"uc": 12.0,
+"size": "200ml = 200 dashes",
+"stock": 0.0
+},
+{
+"n": "Belvoir Farm Elderflower Cordial 500ml",
+"cat": "Other",
+"v": 500.0,
+"cpm": 0.0085,
+"uc": 4.25,
+"size": "500ml",
+"stock": 0.0
+},
+{
+"n": "Bristol Demerara Syrup 75cl",
+"cat": "Other",
+"v": 750.0,
+"cpm": 0.007586666667,
+"uc": 5.69,
+"size": "75cl",
+"stock": 2.0
+},
+{
+"n": "Bristol Elderflower Syrup 75cl",
+"cat": "Other",
+"v": 750.0,
+"cpm": 0.008653333333,
+"uc": 6.49,
+"size": "75cl",
+"stock": 1.0
+},
+{
+"n": "Cardamom Bitters 100ml",
+"cat": "Other",
+"v": 100.0,
+"cpm": 0.12,
+"uc": 12.0,
+"size": "100ml = 100 dashes",
+"stock": 0.0
+},
+{
+"n": "Cardamom Powder (100g)",
+"cat": "Other",
+"v": 100.0,
+"cpm": 0.035,
+"uc": 3.5,
+"size": "100g = 100 servings",
+"stock": 0.0
+},
+{
+"n": "Cardamom Rose Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.015,
+"uc": 10.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Chocolate Bitters 100ml",
+"cat": "Other",
+"v": 100.0,
+"cpm": 0.12,
+"uc": 12.0,
+"size": "100ml = 100 dashes",
+"stock": 0.0
+},
+{
+"n": "Crushed Hazelnuts (200g)",
+"cat": "Other",
+"v": 40.0,
+"cpm": 0.075,
+"uc": 3.0,
+"size": "200g = 40 rims",
+"stock": 0.0
+},
+{
+"n": "Double Cream 600ml",
+"cat": "Other",
+"v": 600.0,
+"cpm": 0.004166666667,
+"uc": 2.5,
+"size": "600ml",
+"stock": 0.0
+},
+{
+"n": "Everleaf Forest 50cl",
+"cat": "Other",
+"v": 500.0,
+"cpm": 0.046,
+"uc": 23.0,
+"size": "50cl",
+"stock": 0.0
+},
+{
+"n": "Everleaf Marine 50cl",
+"cat": "Other",
+"v": 500.0,
+"cpm": 0.046,
+"uc": 23.0,
+"size": "50cl",
+"stock": 0.0
+},
+{
+"n": "Everleaf Mountain 50cl",
+"cat": "Other",
+"v": 500.0,
+"cpm": 0.046,
+"uc": 23.0,
+"size": "50cl",
+"stock": 0.0
+},
+{
+"n": "Foamer 150ml",
+"cat": "Other",
+"v": 3000.0,
+"cpm": 0.004666666667,
+"uc": 14.0,
+"size": "150ml = 3000 drops",
+"stock": 0.0
+},
+{
+"n": "Fresh Espresso",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.006,
+"uc": 6.0,
+"size": "1L equivalent",
+"stock": 0.0
+},
+{
+"n": "Giffard Chocolate Chip Cookie Syrup 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.00709,
+"uc": 7.09,
+"size": "1L",
+"stock": 1.0
+},
+{
+"n": "Hot Chocolate Powder (1kg)",
+"cat": "Other",
+"v": 200.0,
+"cpm": 0.03,
+"uc": 6.0,
+"size": "1kg = 200 servings",
+"stock": 0.0
+},
+{
+"n": "Jeera Powder (100g)",
+"cat": "Other",
+"v": 100.0,
+"cpm": 0.02,
+"uc": 2.0,
+"size": "100g = 100 servings",
+"stock": 0.0
+},
+{
+"n": "Maple Syrup 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.012,
+"uc": 12.0,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Martini Vibrante 75cl",
+"cat": "Other",
+"v": 750.0,
+"cpm": 0.012,
+"uc": 9.0,
+"size": "75cl",
+"stock": 0.0
+},
+{
+"n": "Milk 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.0013,
+"uc": 1.3,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Monin Agave Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.0157,
+"uc": 10.99,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Basil Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.015,
+"uc": 10.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Blackberry Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.012142857143,
+"uc": 8.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Chai Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.015,
+"uc": 10.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Chocolate Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.012142857143,
+"uc": 8.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Ginger Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.010842857143,
+"uc": 7.59,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Monin Green Mint Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.009,
+"uc": 6.3,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Monin Grenadine Syrup 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.00579,
+"uc": 5.79,
+"size": "1L",
+"stock": 1.0
+},
+{
+"n": "Monin Honey Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.013571428571,
+"uc": 9.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Lavender Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.013571428571,
+"uc": 9.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Lychee Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.010842857143,
+"uc": 7.59,
+"size": "70cl",
+"stock": 2.0
+},
+{
+"n": "Monin Mango Puree 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.01426,
+"uc": 14.26,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Monin Passionfruit Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.0109,
+"uc": 7.63,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Monin Popcorn Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.011128571429,
+"uc": 7.79,
+"size": "70cl",
+"stock": 3.0
+},
+{
+"n": "Monin Raspberry Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.0109,
+"uc": 7.63,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Monin Rose Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.013571428571,
+"uc": 9.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Rosemary Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.013571428571,
+"uc": 9.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Monin Sugar Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.007021428571,
+"uc": 4.92,
+"size": "70cl",
+"stock": 12.0
+},
+{
+"n": "Monin Toffee Syrup 70cl",
+"cat": "Other",
+"v": 700.0,
+"cpm": 0.012142857143,
+"uc": 8.5,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Nutella (750g)",
+"cat": "Other",
+"v": 50.0,
+"cpm": 0.08,
+"uc": 4.0,
+"size": "750g = 50 rims",
+"stock": 0.0
+},
+{
+"n": "Orange Bitters 200ml",
+"cat": "Other",
+"v": 200.0,
+"cpm": 0.06,
+"uc": 12.0,
+"size": "200ml = 200 dashes",
+"stock": 0.0
+},
+{
+"n": "Orange Puree 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.01099,
+"uc": 10.99,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Rose Cordial 50cl",
+"cat": "Other",
+"v": 500.0,
+"cpm": 0.016,
+"uc": 8.0,
+"size": "50cl",
+"stock": 0.0
+},
+{
+"n": "Rosewater 250ml",
+"cat": "Other",
+"v": 250.0,
+"cpm": 0.012,
+"uc": 3.0,
+"size": "250ml",
+"stock": 0.0
+},
+{
+"n": "Royal Chai Mix 400g",
+"cat": "Other",
+"v": 6000.0,
+"cpm": 0.0015,
+"uc": 9.0,
+"size": "400g = 60 drinks",
+"stock": 0.0
+},
+{
+"n": "Salt (750g)",
+"cat": "Other",
+"v": 300.0,
+"cpm": 0.0025,
+"uc": 0.75,
+"size": "750g = 300 pinches",
+"stock": 0.0
+},
+{
+"n": "Simply French Vanilla Syrup 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.00699,
+"uc": 6.99,
+"size": "1L",
+"stock": 1.0
+},
+{
+"n": "Smoking Wood Chips (500g)",
+"cat": "Other",
+"v": 100.0,
+"cpm": 0.08,
+"uc": 8.0,
+"size": "500g = 100 uses",
+"stock": 0.0
+},
+{
+"n": "Strawberry Puree 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.01426,
+"uc": 14.26,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Sugar Cubes (500g)",
+"cat": "Other",
+"v": 110.0,
+"cpm": 0.010909090909,
+"uc": 1.2,
+"size": "500g = 110 cubes",
+"stock": 0.0
+},
+{
+"n": "Tajin (400g)",
+"cat": "Other",
+"v": 60.0,
+"cpm": 0.091666666667,
+"uc": 5.5,
+"size": "400g = 60 rims",
+"stock": 0.0
+},
+{
+"n": "Tequila Rose 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.01399,
+"uc": 13.99,
+"size": "1L",
+"stock": 16.0
+},
+{
+"n": "White Peach Puree 1L",
+"cat": "Other",
+"v": 1000.0,
+"cpm": 0.01426,
+"uc": 14.26,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Cava 75cl",
+"cat": "Prosecco",
+"v": 750.0,
+"cpm": 0.010666666667,
+"uc": 8.0,
+"size": "75cl",
+"stock": 0.0
+},
+{
+"n": "Freixenet Prosecco 75cl",
+"cat": "Prosecco",
+"v": 750.0,
+"cpm": 0.00964,
+"uc": 7.23,
+"size": "75cl",
+"stock": 24.0
+},
+{
+"n": "AU Blue Raspberry 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.017771428571,
+"uc": 12.44,
+"size": "70cl",
+"stock": 2.0
+},
+{
+"n": "AU Watermelon 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.017771428571,
+"uc": 12.44,
+"size": "70cl",
+"stock": 20.0
+},
+{
+"n": "Absolut Citron 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.026628571429,
+"uc": 18.64,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Absolut Vanilla 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.026342857143,
+"uc": 18.44,
+"size": "70cl",
+"stock": 3.0
+},
+{
+"n": "Absolut Vodka 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.017166666667,
+"uc": 17.17,
+"size": "1L",
+"stock": 12.0
+},
+{
+"n": "Archers Peach Schnapps 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.013657142857,
+"uc": 9.56,
+"size": "70cl",
+"stock": 6.0
+},
+{
+"n": "Añejo Tequila 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.064285714286,
+"uc": 45.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Bacardi Carta Blanca 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.018,
+"uc": 18.0,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Bombay Sapphire 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.019844210526,
+"uc": 19.84,
+"size": "1L",
+"stock": 4.0
+},
+{
+"n": "Campari 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.029485714286,
+"uc": 20.64,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Captain Morgans Spiced Rum 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.015486666667,
+"uc": 15.49,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Casamigos Blanco 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.065714285714,
+"uc": 46.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Casamigos Reposado 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.058571428571,
+"uc": 41.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Cazcabel Coffee Tequila Liqueur 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.041428571429,
+"uc": 29.0,
+"size": "70cl",
+"stock": 4.0
+},
+{
+"n": "Ciroc Coconut 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.041914285714,
+"uc": 29.34,
+"size": "70cl",
+"stock": 2.0
+},
+{
+"n": "Ciroc Premium Vodka 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.0405,
+"uc": 28.35,
+"size": "70cl",
+"stock": 6.0
+},
+{
+"n": "Ciroc Red Berry Vodka 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.0405,
+"uc": 28.35,
+"size": "70cl",
+"stock": 3.0
+},
+{
+"n": "Dark Rum 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.028214285714,
+"uc": 19.75,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "El Jimador Reposado 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.037028571429,
+"uc": 25.92,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "El Jimador Tequila Blanco 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.024771428571,
+"uc": 17.34,
+"size": "70cl",
+"stock": 5.0
+},
+{
+"n": "Golden Rum 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.028571428571,
+"uc": 20.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Gordons Dry Gin 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.0144,
+"uc": 14.4,
+"size": "1L",
+"stock": 4.0
+},
+{
+"n": "Gordons Pink Gin 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.017676923077,
+"uc": 17.68,
+"size": "1L",
+"stock": 14.0
+},
+{
+"n": "Grey Goose Vodka 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.035644599303,
+"uc": 24.95,
+"size": "70cl",
+"stock": 14.0
+},
+{
+"n": "Hennessy VS Cognac 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.032842857143,
+"uc": 22.99,
+"size": "70cl",
+"stock": 42.0
+},
+{
+"n": "JJ Whitley Chocolate Orange Vodka 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.013771428571,
+"uc": 9.64,
+"size": "70cl",
+"stock": 4.0
+},
+{
+"n": "JJ Whitley Glazed Doughnut Vodka 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.02,
+"uc": 14.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Jack Daniels Whiskey 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.02125,
+"uc": 21.25,
+"size": "1L",
+"stock": 5.0
+},
+{
+"n": "Jameson 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.022781818182,
+"uc": 22.78,
+"size": "1L",
+"stock": 15.0
+},
+{
+"n": "Jim Beam Bourbon 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.025128571429,
+"uc": 17.59,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Johnnie Walker Black Label 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.026857142857,
+"uc": 18.8,
+"size": "70cl",
+"stock": 33.0
+},
+{
+"n": "Kopparberg Gin Passion/Orange 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.017771428571,
+"uc": 12.44,
+"size": "70cl",
+"stock": 5.0
+},
+{
+"n": "Leblon Cachaça 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.04,
+"uc": 28.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Malibu Coconut Rum 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.013642,
+"uc": 13.64,
+"size": "1L",
+"stock": 3.0
+},
+{
+"n": "Martini Rosso Vermouth 75cl",
+"cat": "Spirit",
+"v": 750.0,
+"cpm": 0.014,
+"uc": 10.5,
+"size": "75cl",
+"stock": 1.0
+},
+{
+"n": "Mezcal 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.05,
+"uc": 35.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Old Monk Rum 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.025714285714,
+"uc": 18.0,
+"size": "70cl",
+"stock": 0.0
+},
+{
+"n": "Paan Pasand Infused Vodka 1L",
+"cat": "Spirit",
+"v": 1000.0,
+"cpm": 0.027,
+"uc": 27.0,
+"size": "1L",
+"stock": 0.0
+},
+{
+"n": "Tamnavulin Single Malt Whisky 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.050714285714,
+"uc": 35.5,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Toki Suntory Whisky 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.042842857143,
+"uc": 29.99,
+"size": "70cl",
+"stock": 1.0
+},
+{
+"n": "Woodford Reserve 70cl",
+"cat": "Spirit",
+"v": 700.0,
+"cpm": 0.034,
+"uc": 23.8,
+"size": "70cl",
+"stock": 4.0
+},
+{
+"n": "19 Crimes Red Wine 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.01,
+"uc": 7.5,
+"size": "75cl",
+"stock": 1.0
+},
+{
+"n": "Dry Sherry (Fino) 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.016,
+"uc": 12.0,
+"size": "75cl",
+"stock": 0.0
+},
+{
+"n": "Dry Vermouth 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.012,
+"uc": 9.0,
+"size": "75cl",
+"stock": 0.0
+},
+{
+"n": "Mucho Mas Red Wine 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.007466666667,
+"uc": 5.6,
+"size": "75cl",
+"stock": 2.0
+},
+{
+"n": "Nozecco 70cl",
+"cat": "Wine",
+"v": 700.0,
+"cpm": 0.005357142857,
+"uc": 3.75,
+"size": "70cl",
+"stock": 3.0
+},
+{
+"n": "Soave White Wine 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.011333333333,
+"uc": 8.5,
+"size": "75cl",
+"stock": 0.0
+},
+{
+"n": "The Guv’nor VIP Red Wine 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.013893333333,
+"uc": 10.42,
+"size": "75cl",
+"stock": 12.0
+},
+{
+"n": "The Guv’nor VIP White Wine 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.013893333333,
+"uc": 10.42,
+"size": "75cl",
+"stock": 12.0
+},
+{
+"n": "The Guv’nor White Wine 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.010666666666666666,
+"uc": 8.0,
+"size": "75cl",
+"stock": 14.0
+},
+{
+"n": "Villa Maria Sauvignon Blanc 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.011666666667,
+"uc": 8.75,
+"size": "75cl",
+"stock": 1.0
+},
+{
+"n": "Viognier White Wine 75cl",
+"cat": "Wine",
+"v": 750.0,
+"cpm": 0.012666666667,
+"uc": 9.5,
+"size": "75cl",
+"stock": 0.0
+}
+],
+"note": "Single source for the run sheet. Regenerate from Notion when recipes change."
+}

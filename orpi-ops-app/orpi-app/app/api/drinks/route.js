@@ -91,6 +91,8 @@ const GSEC = 'Garnish & consumables';
 function sectionFor(name, cat) {
   if (/espresso|cream|milk/i.test(name)) return 'Chilled \u2014 critical';
   if (cat === 'Garnish') return GSEC;
+  // Alcohol-free bottles load like mixers, not like spirits.
+  if (cat === 'Non-Alcoholic') return 'Mixers & juices';
   if (['Spirit', 'Liqueur', 'Wine', 'Prosecco', 'Champagne', 'Beer'].includes(cat)) return 'Cocktail spirits';
   return 'Mixers & juices';
 }

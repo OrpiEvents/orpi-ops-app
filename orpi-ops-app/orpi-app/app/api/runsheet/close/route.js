@@ -50,6 +50,9 @@ const num = p => (typeof p?.number === 'number' ? p.number : null);
 
 // Inventory categories don't line up with cost types one-for-one.
 function costTypeFor(cat) {
+  // Non-Alcoholic covers 0% beers, alcohol-free wines and aperitifs. It must be
+  // checked first — a 0% beer is a mixer cost, not alcohol spend.
+  if (cat === 'Non-Alcoholic') return 'Mixers';
   if (['Spirit', 'Liqueur', 'Wine', 'Prosecco', 'Champagne', 'Beer'].includes(cat)) return 'Alcohol';
   if (['Mixer', 'Soft Drink'].includes(cat)) return 'Mixers';
   if (cat === 'Ice') return 'Ice';

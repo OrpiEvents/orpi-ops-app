@@ -61,7 +61,9 @@ const DISPOSABLE=["Plastic Shot"];
 // Same mapping the close route uses, so a bought-on-the-day item lands under
 // the cost type it would have had if it came off the van.
 const COST_TYPE_BY_CAT={Spirit:"Alcohol",Liqueur:"Alcohol",Wine:"Alcohol",Prosecco:"Alcohol",
- Champagne:"Alcohol",Beer:"Alcohol",Mixer:"Mixers","Soft Drink":"Mixers",Ice:"Ice"};
+ Champagne:"Alcohol",Beer:"Alcohol",Mixer:"Mixers","Soft Drink":"Mixers",Ice:"Ice",
+ // 0% beers, alcohol-free wines and aperitifs — a drink cost, not alcohol spend.
+ "Non-Alcoholic":"Mixers"};
 // Costs that never come out of the van, so nothing else would ever prompt for
 // them. Left unentered, they're what turns into a lump-sum guess later.
 const FINAL_COSTS=[

@@ -67,6 +67,7 @@ const STOCK_CAT = [
   [/champagne/i, 'Champagne'],
   [/\bwine\b/i, 'Wine'],
   [/beer|lager|cider/i, 'Beer'],
+  [/non.?alcohol|alcohol.?free|\b0%/i, 'Non-Alcoholic'],
   [/soft|mixer|juice|tonic|soda/i, 'Mixer'],
 ];
 const stockCatFor = c => (STOCK_CAT.find(([re]) => re.test(c || '')) || [])[1] || null;
@@ -263,12 +264,17 @@ function hoursFrom(text) {
 // wine — and the printed inclusions can't claim it either.
 function alcoholParts(s) {
   const rows = (s.spiritRows || []).filter(r => r.on && r.items.some(i => i.on && i.text.trim()));
-  const has = re => rows.some(r => re.test(r.cat));
+  // "Peroni 0%" matches /beer/ and "Non-Alcoholic Wine" matches /wine/, so
+  // alcohol-free rows are filtered out once, up front, rather than guarded at
+  // every test below.
+  const dry = /non.?alcohol|alcohol.?free|\b0%/i;
+  const wet = rows.filter(r => !dry.test(r.cat));
+  const has = re => wet.some(r => re.test(r.cat));
   const toastOn = (s.addons || []).some(a => a.on && /toast/i.test(a.label));
   const beer = has(/beer|lager|cider/i);
   const wine = has(/\bwine\b/i);
   const prosecco = has(/prosecco|champagne|sparkl|fizz/i) || toastOn;
-  const spirits = rows.some(r => !/beer|lager|cider|\bwine\b|prosecco|champagne|sparkl|fizz/i.test(r.cat));
+  const spirits = wet.some(r => !/beer|lager|cider|\bwine\b|prosecco|champagne|sparkl|fizz/i.test(r.cat));
   return { spirits, beer, wine, prosecco, liqueurs: spirits };
 }
 

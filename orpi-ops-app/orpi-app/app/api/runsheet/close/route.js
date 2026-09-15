@@ -156,6 +156,25 @@ export async function POST(request) {
         }),
       });
       if (res.ok) { written.push(`${c.type} \u00a3${amount.toFixed(2)}`); costed += amount; }
+      else if (c.type === 'Garnish') {
+        // Garnish may not exist as a Cost Type option yet. Rather than lose the
+        // figure, file it under the catch-all and carry on.
+        const retry = await fetch('https://api.notion.com/v1/pages', {
+          method: 'POST', headers: headers(),
+          body: JSON.stringify({
+            parent: { database_id: DB_COSTING },
+            properties: {
+              Name: { title: [{ text: { content: `Garnish \u2014 ${c.note || ''}`.trim() } }] },
+              'Cost Type': { select: { name: 'Other/Misc' } },
+              Cost: { number: amount },
+              '\u{1F4D5} Booking and Events Tracker': { relation: [{ id: bookingId }] },
+            },
+          }),
+        });
+        if (retry.ok) { written.push(`Garnish \u00a3${amount.toFixed(2)} (as Other/Misc)`); costed += amount; }
+        else skipped.push(c.type);
+        await pause(350);
+      }
       else skipped.push(c.type);
       await pause(350);
     }

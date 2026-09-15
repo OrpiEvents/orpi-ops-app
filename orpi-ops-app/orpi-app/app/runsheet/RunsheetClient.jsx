@@ -133,11 +133,12 @@ export default function Runsheet(){
  useEffect(()=>{
   fetch("/api/drinks").then(r=>r.json())
    .then(res=>{
-    if(res.error||!res.drinks?.length)return;
+    if(res.error){setLibSource("error: "+res.error);return;}
+    if(!res.drinks?.length){setLibSource("empty response");return;}
     setLIB(res.drinks);setINV(res.inventory||FALLBACK_INV);
     setLibSource(res.stale?"cached":"notion");
    })
-   .catch(()=>{});
+   .catch(e=>setLibSource("unreachable"));
  },[]);
 
  // Confirmed bookings, so a run sheet can be filled from one rather than
@@ -206,6 +207,7 @@ export default function Runsheet(){
      extraCosts:[
       ...fcEntered.map(c=>({type:c.k,amount:parseFloat(fc[c.k].amount),note:fc[c.k].note||""})),
       ...shopCosts.map(x=>({type:costTypeOf(x.name),amount:x.amount,note:`Bought on the day — ${x.qty?`${x.qty} × `:""}${x.name}`})),
+      ...garnishCosts.map(x=>({type:"Garnish",amount:x.amount,note:x.name})),
      ]})}).then(x=>x.json());
    if(r.alreadyClosed){
     if(confirm("This event was already closed. Closing again will add the costs a second time. Continue?"))return closeEvent(true);
@@ -340,7 +342,9 @@ export default function Runsheet(){
  // Everything that left the van and didn't come back. This is what gets
  // written to Notion — one costing line each, and stock down by the same.
  const usedLines=(()=>{
-  const rows=[...grp.flatMap(g=>g.rows),...gRows];
+  // Stock only. Garnishes are perishable and bought per event, so they carry a
+  // cost rather than a quantity — see garnishCosts below.
+  const rows=grp.flatMap(g=>g.rows);
   return rows.map(r=>({name:r.n,out:out[r.n]??0,in:back[r.n]??0}))
              .filter(l=>l.out-l.in>0);
  })();
@@ -369,6 +373,10 @@ export default function Runsheet(){
   ...buyExtra.map(x=>(x.n||"").trim()),
  ].filter(n=>n).length-shopCosts.length;
  const gTotal=gRows.reduce((t,r)=>t+(parseFloat(gCost[r.n])||0),0);
+ const garnishCosts=gRows
+  .map(r=>({name:r.n,amount:parseFloat(gCost[r.n])||0}))
+  .filter(x=>x.amount>0);
+ const garnishUnpriced=gRows.length-garnishCosts.length;
  const total=picked.reduce((t,d)=>t+cost(d),0);
  const outDone=grp.reduce((t,g)=>t+g.rows.filter(r=>(out[r.n]??0)>0).length,0);
  const outAll=grp.reduce((t,g)=>t+g.rows.length,0);
@@ -481,6 +489,13 @@ export default function Runsheet(){
      <button onClick={()=>up("staff",s=>[...s,{id:Date.now(),name:"",role:"",transport:"Car"}])} className="w-full py-3 rounded-xl border text-sm" style={{borderColor:"#DDD8CE",color:GOLD}}>+ Add person</button></Sec>
 
     <Sec open={open} setOpen={setOpen} k="drinks" title="Drinks" sub={picked.length?`${picked.length} selected`:"None selected"}>
+     {/* Silent fallback is right for a van with no signal, but it hides a
+         broken route — so say which library is on screen. */}
+     {libSource!=="notion"&&(
+      <div className="mb-3 rounded-xl px-3 py-2 text-xs leading-relaxed" style={{background:"#FFF6F5",border:"1px solid #E8B4AE",color:"#8A2E1A"}}>
+       Showing the offline copy of the drinks library ({LIB.length} drinks){libSource==="bundled"?"":` — ${libSource}`}.
+       Anything added in Notion recently won't be here yet.
+      </div>)}
      <button onClick={()=>setPicker(true)} className="w-full py-3 rounded-xl text-white text-sm font-medium mb-4" style={{background:INK}}>Choose drinks</button>
      {!picked.length&&<p className="text-sm text-neutral-400 text-center py-4">Nothing selected yet.</p>}
      {picked.map(d=>{const x=!!expand[d.name];return(<div key={d.name} className="mb-2 rounded-xl" style={{border:"1px solid "+(dirty(d)?GOLD:LINE)}}>
@@ -752,6 +767,17 @@ export default function Runsheet(){
         className="w-full h-9 px-2 mt-2 rounded-lg border text-sm" style={{borderColor:"#EFECE6"}}/>}
      </div>);
    })}
+   {(gTotal>0||garnishUnpriced>0)&&(
+    <div className="mt-3 pt-3 border-t" style={{borderColor:"#EFECE6"}}>
+     <div className="flex justify-between text-sm">
+      <span className="text-neutral-500">Garnishes</span>
+      <span className="tabular-nums">£{gTotal.toFixed(2)}</span>
+     </div>
+     {garnishUnpriced>0&&(
+      <div className="text-xs mt-1" style={{color:"#B8720A"}}>
+       {garnishUnpriced} garnish{garnishUnpriced===1?"":"es"} with no cost — add what they came to on the Out tab.
+      </div>)}
+    </div>)}
    {(shopValue>0||shopUnpriced>0)&&(
     <div className="mt-3 pt-3 border-t" style={{borderColor:"#EFECE6"}}>
      <div className="flex justify-between text-sm">
@@ -765,7 +791,7 @@ export default function Runsheet(){
     </div>)}
    <div className="flex justify-between text-sm mt-3 pt-3 border-t" style={{borderColor:"#EFECE6"}}>
     <span className="text-neutral-500">Entered</span>
-    <span className="tabular-nums">£{(fcValue+shopValue).toFixed(2)}</span>
+    <span className="tabular-nums">£{(fcValue+shopValue+gTotal).toFixed(2)}</span>
    </div>
   </div>}
 
@@ -773,7 +799,7 @@ export default function Runsheet(){
    {closeMsg&&<div className="text-xs mb-2 leading-relaxed" style={{color:closeMsg.startsWith("Closed")?"#2e7d32":"#A8453A"}}>{closeMsg}</div>}
    <div className="flex items-center justify-between mb-2">
     <span className="text-sm text-neutral-500">
-     {usedLines.length?`${usedLines.length} stock line${usedLines.length===1?"":"s"} · £${(usedValue+fcValue+shopValue).toFixed(2)} total`:"Nothing used yet"}
+     {usedLines.length?`${usedLines.length} stock line${usedLines.length===1?"":"s"} · £${(usedValue+fcValue+shopValue+gTotal).toFixed(2)} total`:"Nothing used yet"}
     </span>
     {E.closedAt&&<span className="text-xs" style={{color:"#2e7d32"}}>✓ closed</span>}
    </div>

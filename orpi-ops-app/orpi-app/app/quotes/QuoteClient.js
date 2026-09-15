@@ -1,6 +1,7 @@
 'use client';
 import { stockCategoryFor } from '@/lib/taxonomy';
 import { matchScore, inStock, nearMatches } from '@/lib/matching';
+import { createClient } from '@/lib/supabaseBrowser';
 import { useEffect, useState } from 'react';
 import AppShell from '../AppShell';
 
@@ -488,6 +489,35 @@ function buildClientMessage(s, total) {
   return { text: L.join('\n'), gaps: [...new Set(gaps)] };
 }
 
+// ── Quote drafts ───────────────────────────────────────────────
+// A quote is an hour of decisions — packages, crew, drinkware, the drinks list,
+// the margin. Saving to Notion records the headline figure; this keeps the
+// whole thing, so coming back to change a guest count doesn't mean rebuilding
+// it from scratch.
+//
+// Keyed by enquiry, in the same shared table the run sheet uses, so a quote
+// started on a laptop can be finished anywhere.
+const draftKey = enquiryId => `quote:${enquiryId}`;
+
+async function loadDraft(enquiryId) {
+  if (!enquiryId) return null;
+  try {
+    const { data } = await createClient()
+      .from('app_state').select('value').eq('key', draftKey(enquiryId)).maybeSingle();
+    return data?.value || null;
+  } catch { return null; }
+}
+
+async function saveDraft(enquiryId, state) {
+  if (!enquiryId) return false;
+  try {
+    const { error } = await createClient().from('app_state').upsert({
+      key: draftKey(enquiryId), value: state, updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' });
+    return !error;
+  } catch { return false; }
+}
+
 function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
@@ -588,10 +618,44 @@ export default function QuoteClient({ userEmail }) {
 
   function set(patch) { setS(prev => ({ ...prev, ...patch })); }
 
-  function loadFromEnquiry(id) {
+  const [draftMsg, setDraftMsg] = useState('');
+  const [draftDirty, setDraftDirty] = useState(false);
+
+  // Auto-save once there's an enquiry to file it against. Debounced so it isn't
+  // writing on every keystroke, and quiet about it — the only time you should
+  // notice is when it fails.
+  useEffect(() => {
+    if (!s.enquiryId) return;
+    setDraftDirty(true);
+    const t = setTimeout(async () => {
+      const ok = await saveDraft(s.enquiryId, { ...s, savedAt: new Date().toISOString() });
+      setDraftDirty(false);
+      setDraftMsg(ok ? `Draft saved ${new Date().toLocaleTimeString().slice(0, 5)}` : 'Draft not saved — no connection');
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [s]);
+
+  async function loadFromEnquiry(id) {
     if (!id) return;
     const e = enquiries.find(x => x.id === id);
     if (!e) return;
+
+    // If this enquiry was quoted before, pick up where it was left rather than
+    // starting again. Asks first, because the current quote may be wanted.
+    const saved = await loadDraft(id);
+    if (saved) {
+      const when = saved.savedAt ? new Date(saved.savedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+      const ok = confirm(
+        `There's a saved quote for ${e.name || 'this enquiry'}${when ? ` from ${when}` : ''}.\n\n`
+        + 'Open it? Cancel starts a fresh quote from the enquiry details.'
+      );
+      if (ok) {
+        setS({ ...freshState(), ...saved, enquiryId: id });
+        setDraftMsg('Saved quote opened');
+        return;
+      }
+    }
+
     set({
       enquiryId: e.id, client: e.name || '', venue: e.venue || '',
       edate: e.eventDate || '', guests: e.guestCount ?? '',
@@ -734,6 +798,7 @@ export default function QuoteClient({ userEmail }) {
         s={s} set={set} enquiries={enquiries} loadFromEnquiry={loadFromEnquiry}
         addonTotal={addonTotal} total={total} dep={dep}
         saving={saving} saveMsg={saveMsg} saveToNotion={saveToNotion} resetAll={resetAll}
+        draftMsg={draftMsg} draftDirty={draftDirty}
         saveAsTemplate={saveAsTemplate} clearTemplate={clearTemplate} templateMsg={templateMsg}
         stockItems={stockItems}
         addCostLine={addCostLine} updateCostLine={updateCostLine} removeCostLine={removeCostLine}
@@ -743,7 +808,7 @@ export default function QuoteClient({ userEmail }) {
   );
 }
 
-function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, saveAsTemplate, clearTemplate, templateMsg, stockItems, addCostLine, updateCostLine, removeCostLine, toggleCheck }) {
+function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, draftMsg, draftDirty, saveAsTemplate, clearTemplate, templateMsg, stockItems, addCostLine, updateCostLine, removeCostLine, toggleCheck }) {
   // Open and close times drive both the client-facing range and the service
   // hours the cost model bills against — set once, used twice.
   function setTimes(startMin, endMin) {
@@ -950,6 +1015,18 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <button onClick={resetAll} style={btnOutline}>Reset</button>
           </div>
           {saveMsg && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--success)' }}>{saveMsg}</div>}
+          {/* Quiet unless something's wrong. Saving to Notion records the
+              headline; this is the whole quote, kept so it can be reopened. */}
+          {s.enquiryId && (
+            <div style={{ marginTop: 6, fontSize: 11, color: draftMsg.includes('not saved') ? 'var(--danger)' : 'var(--muted)' }}>
+              {draftDirty ? 'Saving draft…' : (draftMsg || 'Draft saves automatically')}
+            </div>
+          )}
+          {!s.enquiryId && (
+            <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
+              Link an enquiry above and this quote saves itself — otherwise it's lost on refresh.
+            </div>
+          )}
 
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 6 }}>Your default template</div>

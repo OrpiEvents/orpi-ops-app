@@ -74,6 +74,9 @@ function pageToEnquiry(page) {
     quotedSpirits: text(p['Quoted Spirits']),
     quotedBeer: text(p['Quoted Beer']),
     quotedSoftDrinks: text(p['Quoted Soft Drinks']),
+    lostReason: sel(p['Lost Reason']),
+    dateQuoted: dateStart(p['Date Quoted']),
+    dateDecided: dateStart(p['Date Decided']),
   };
 }
 
@@ -90,9 +93,29 @@ export async function createEnquiry(data) {
 }
 
 export async function updateEnquiry(id, data) {
+  const patch = { ...data };
+
+  // Stamp the milestone dates from the status change rather than relying on
+  // anyone remembering. Only ever fills a blank — the first time a quote went
+  // out is the number that matters, so re-saving must not move it.
+  if (data.status === 'Quote Sent' || data.status === 'Won' || data.status === 'Lost') {
+    const current = pageToEnquiry(await notionFetch(`/pages/${id}`));
+    const today = new Date().toISOString().split('T')[0];
+
+    if (data.status === 'Quote Sent' && !current.dateQuoted && patch.dateQuoted === undefined) {
+      patch.dateQuoted = today;
+    }
+    if ((data.status === 'Won' || data.status === 'Lost') && !current.dateDecided && patch.dateDecided === undefined) {
+      patch.dateDecided = today;
+      // Won straight from a quote that was never marked as sent still needs a
+      // quote date, or response time is unmeasurable for the deals you win.
+      if (!current.dateQuoted && patch.dateQuoted === undefined) patch.dateQuoted = today;
+    }
+  }
+
   const page = await notionFetch(`/pages/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ properties: enquiryToProperties(data) }),
+    body: JSON.stringify({ properties: enquiryToProperties(patch) }),
   });
   return pageToEnquiry(page);
 }
@@ -104,9 +127,14 @@ function enquiryToProperties(d) {
   if (d.phone !== undefined && d.phone !== '') props['Phone Number'] = { number: Number(d.phone) || null };
   if (d.venue !== undefined) props['Venue'] = { rich_text: [{ text: { content: d.venue || '' } }] };
   if (d.guestCount !== undefined) props['Guest Count'] = { number: Number(d.guestCount) || null };
-  if (d.eventType !== undefined) props['Event Type'] = { select: { name: d.eventType } };
-  if (d.serviceType !== undefined) props['Service Type'] = { multi_select: [{ name: d.serviceType }] };
-  if (d.source !== undefined) props['Source'] = { select: { name: d.source } };
+  // Notion rejects { select: { name: '' } } — clearing a select needs null. An
+  // enquiry with no event type yet is normal, so this can't be an error.
+  if (d.eventType !== undefined) props['Event Type'] = d.eventType ? { select: { name: d.eventType } } : { select: null };
+  if (d.serviceType !== undefined) props['Service Type'] = d.serviceType ? { multi_select: [{ name: d.serviceType }] } : { multi_select: [] };
+  if (d.source !== undefined) props['Source'] = d.source ? { select: { name: d.source } } : { select: null };
+  if (d.lostReason !== undefined) props['Lost Reason'] = d.lostReason ? { select: { name: d.lostReason } } : { select: null };
+  if (d.dateQuoted !== undefined) props['Date Quoted'] = d.dateQuoted ? { date: { start: d.dateQuoted } } : { date: null };
+  if (d.dateDecided !== undefined) props['Date Decided'] = d.dateDecided ? { date: { start: d.dateDecided } } : { date: null };
   if (d.referredBy !== undefined) props['Referred By'] = { rich_text: [{ text: { content: d.referredBy || '' } }] };
   if (d.status !== undefined) props['Status'] = { select: { name: d.status } };
   if (d.internalNotes !== undefined) props['Internal Notes'] = { rich_text: [{ text: { content: d.internalNotes || '' } }] };

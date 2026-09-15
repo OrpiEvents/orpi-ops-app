@@ -11,7 +11,9 @@
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB_DRINKS = process.env.NOTION_DB_DRINKS || '3426ca9d054980b193cadeca4f2bb1b4';
 const DB_INVENTORY = process.env.NOTION_DB_INVENTORY || '2e16ca9d054980cf978edf55d1d40efb';
-const DB_RECIPE = process.env.NOTION_DB_RECIPE_INGREDIENTS || '3d66ca9d0549809fbb0d000bd5680e6c';
+// Note this is the DATABASE id, not the data source id — Notion has both and
+// they differ. Only the database id works with /databases/{id}/query.
+const DB_RECIPE = process.env.NOTION_DB_RECIPE_INGREDIENTS || '3d66ca9d054980e9a77dc47797741176';
 
 const CACHE_MS = 5 * 60 * 1000;
 let cache = { at: 0, data: null };
@@ -22,7 +24,7 @@ const headers = () => ({
   'Content-Type': 'application/json',
 });
 
-async function queryAll(dbId) {
+async function queryAll(dbId, label) {
   const rows = [];
   let cursor;
   do {
@@ -32,7 +34,14 @@ async function queryAll(dbId) {
       body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
       cache: 'no-store',
     });
-    if (!res.ok) throw new Error(`Notion ${res.status} on ${dbId.slice(0, 8)}`);
+    if (!res.ok) {
+      // 404 almost always means the database isn't shared with the integration,
+      // or the id is a data source id rather than a database id.
+      const hint = res.status === 404
+        ? ' — check the id, and that the database is shared with the integration'
+        : '';
+      throw new Error(`Notion ${res.status} reading ${label}${hint}`);
+    }
     const json = await res.json();
     rows.push(...json.results);
     cursor = json.has_more ? json.next_cursor : undefined;
@@ -77,9 +86,9 @@ function sectionFor(name, cat) {
 
 async function build() {
   const [drinkPages, invPages, recipePages] = await Promise.all([
-    queryAll(DB_DRINKS),
-    queryAll(DB_INVENTORY),
-    queryAll(DB_RECIPE),
+    queryAll(DB_DRINKS, 'Drinks Library'),
+    queryAll(DB_INVENTORY, 'Inventory Items'),
+    queryAll(DB_RECIPE, 'Recipe Ingredients'),
   ]);
 
   // Inventory first — recipes cost against it.

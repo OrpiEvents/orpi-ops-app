@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabaseBrowser";
 import DRINKS_DATA from "./drinks-data.json";
 
-// Run sheet — Setup, Brief, Loading out, Coming back.
+// Run sheet — Setup, Brief, Out, In.
 //
 // Changed from the prototype in three places, all marked below:
 //   • the drinks library is imported rather than pasted in, so Notion stays
@@ -71,6 +71,10 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  // across every recipe on this run sheet so the van carries one vodka, not two.
  // Nothing here touches the drinks library.
  swap:{},
+ // Things the van needs that the store didn't have. buy is keyed by item name
+ // with the quantity to get; buyExtra is anything off-list — blue roll, ice,
+ // a bag of limes.
+ buy:{},buyExtra:[],
  // Products used on this event that aren't in Inventory yet. They cost and
  // load out like anything else; pushing them to Notion is a separate button.
  newInv:[]});
@@ -95,6 +99,8 @@ export default function Runsheet(){
  const [pushing,setPushing]=useState("");
  const [open,setOpen]=useState({det:true,staff:false,drinks:true,swap:false,glass:false,bar:false});
  const [glassCopied,setGlassCopied]=useState(false);
+ const [shopCopied,setShopCopied]=useState(false);
+ const [subFor,setSubFor]=useState(null);   // drink whose substitute sheet is open
  const [bookings,setBookings]=useState([]);
  const [LIB,setLIB]=useState(FALLBACK_LIB);
  const [INV,setINV]=useState(FALLBACK_INV);
@@ -190,6 +196,23 @@ export default function Runsheet(){
  const picked=LIB.filter(d=>sel[d.name]);
  // Declared here, ahead of baseProducts and pOf, both of which read it.
  const swap=E.swap||{};
+
+ const buy=E.buy||{}, buyExtra=E.buyExtra||[];
+ function toggleBuy(name){
+  up("buy",p=>{const n={...(p||{})};
+   if(n[name]!==undefined)delete n[name];else n[name]="";
+   return n;});
+ }
+ const shopRows=[
+  ...Object.keys(buy).sort().map(n=>({n,q:buy[n],fixed:true})),
+  ...buyExtra.map((x,i)=>({n:x.n,q:x.q,i})),
+ ];
+ const shopCount=shopRows.filter(r=>r.n&&r.n.trim()).length;
+ const shopList=[
+  `Shopping — ${ev.client||"Event"}${ev.date?`, ${ev.date}`:""}`,
+  "",
+  ...shopRows.filter(r=>r.n&&r.n.trim()).map(r=>r.q?`${r.q} × ${r.n}`:r.n),
+ ].join("\n");
 
  // ── Glassware ───────────────────────────────────────────────────
  // The menu decides WHICH glasses are needed. Quantities are typed — nobody
@@ -321,7 +344,7 @@ export default function Runsheet(){
   </header>
 
   <div className="sticky top-0 z-20 bg-white border-b flex" style={{borderColor:LINE}}>
-   {[["setup","Setup"],["brief","Brief"],["out","Out"],["back","Back"]].map(([k,l])=>(
+   {[["setup","Setup"],["brief","Brief"],["out","Out"],["back","In"]].map(([k,l])=>(
     <button key={k} onClick={()=>setTab(k)} className="flex-1 py-3 text-sm font-medium relative" style={{color:tab===k?INK:"#9A948A"}}>
      {l}{tab===k&&<span className="absolute left-0 right-0 bottom-0 h-[3px]" style={{background:GOLD}}/>}</button>))}</div>
 
@@ -417,6 +440,7 @@ export default function Runsheet(){
           {CATSX.map(c=>(<optgroup key={c} label={c}>{INVX.filter(y=>y.cat===c).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}</optgroup>))}</select></div>);})}
        <div className="flex gap-4 pt-1">
         <button onClick={()=>up("add",p=>({...p,[d.name]:[...(p[d.name]||[]),{q:25,u:"ml",s:""}]}))} className="text-sm underline underline-offset-4" style={{color:GOLD}}>+ Add ingredient</button>
+        <button onClick={()=>setSubFor(d)} className="text-sm underline underline-offset-4" style={{color:GOLD}}>Substitute</button>
         {dirty(d)&&<button onClick={()=>{up("prod",p=>({...p,[d.name]:{}}));up("ovr",p=>({...p,[d.name]:{}}));up("rm",p=>({...p,[d.name]:{}}));up("add",p=>({...p,[d.name]:[]}));}}
          className="text-sm underline underline-offset-4 text-neutral-400">Reset</button>}</div></div>}
      </div>);})}</Sec>
@@ -521,7 +545,10 @@ export default function Runsheet(){
       <div key={r.n} className="px-5 py-3 border-b flex items-center justify-between gap-3" style={{borderColor:"#EFECE6"}}>
        <div className="min-w-0 flex-1"><div className="text-base leading-tight">{r.n}</div>
         <div className="text-xs text-neutral-500 mt-0.5 truncate">{r.uses.join(" · ")}</div>
-        {tab==="back"&&<div className="text-xs mt-1" style={{color:GOLD}}>took {out[r.n]??0} · used {Math.max(0,(out[r.n]??0)-(back[r.n]??0))}</div>}</div>
+        {tab==="back"&&<div className="text-xs mt-1" style={{color:GOLD}}>took {out[r.n]??0} · used {Math.max(0,(out[r.n]??0)-(back[r.n]??0))}</div>}
+        {tab==="out"&&<button onClick={()=>toggleBuy(r.n)} className="text-xs underline underline-offset-4 mt-1"
+          style={{color:buy[r.n]!==undefined?GOLD:"#B5AFA4"}}>
+          {buy[r.n]!==undefined?"on shopping list":"need to buy"}</button>}</div>
        <input inputMode="numeric" placeholder="0" value={tab==="out"?(out[r.n]??""):(back[r.n]??"")}
         onChange={e=>{const v=e.target.value.replace(/[^0-9]/g,""),n=v===""?0:parseInt(v,10);
          if(tab==="out")up("out",p=>({...p,[r.n]:n}));else up("back",p=>({...p,[r.n]:Math.min(n,out[r.n]??0)}));}}
@@ -532,7 +559,10 @@ export default function Runsheet(){
      {gRows.map(r=>(
       <div key={r.n} className="px-5 py-3 border-b flex items-center justify-between gap-3" style={{borderColor:"#EFECE6"}}>
        <div className="min-w-0 flex-1"><div className="text-base leading-tight">{r.n}</div>
-        <div className="text-xs text-neutral-500 mt-0.5 truncate">{r.uses.join(" · ")}</div></div>
+        <div className="text-xs text-neutral-500 mt-0.5 truncate">{r.uses.join(" · ")}</div>
+        {tab==="out"&&<button onClick={()=>toggleBuy(r.n)} className="text-xs underline underline-offset-4 mt-1"
+          style={{color:buy[r.n]!==undefined?GOLD:"#B5AFA4"}}>
+          {buy[r.n]!==undefined?"on shopping list":"need to buy"}</button>}</div>
        <div className="flex items-center gap-1 shrink-0"><span className="text-lg text-neutral-400">£</span>
         <input inputMode="decimal" placeholder="0.00" value={gCost[r.n]??""} onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");up("gCost",p=>({...p,[r.n]:v}));}}
          className="w-20 h-14 text-center text-xl tabular-nums rounded-xl border bg-white outline-none" style={{borderColor:LINE,color:(gCost[r.n]&&parseFloat(gCost[r.n]))?GOLD:INK}}/></div></div>))}</section>}
@@ -541,6 +571,42 @@ export default function Runsheet(){
 
   {tab==="brief"&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t" style={{borderColor:LINE}}>
    <button onClick={()=>navigator.clipboard?.writeText(brief)} className="w-full py-4 rounded-full text-white text-base font-medium" style={{background:INK}}>Copy message for the team</button></div>}
+  {tab==="out"&&(shopCount>0||buyExtra.length>0)&&(
+   <div className="mx-5 mt-4 mb-3 rounded-xl px-4 py-3" style={{background:"#FFFDF7",border:"1px solid "+GOLD}}>
+    <div className="text-xs font-medium mb-2" style={{color:"#7a6300",letterSpacing:".08em"}}>
+     SHOPPING LIST · {shopCount} ITEM{shopCount===1?"":"S"}
+    </div>
+    {Object.keys(buy).sort().map(n=>(
+     <div key={n} className="flex items-center gap-2 py-1">
+      <input inputMode="numeric" placeholder="qty" value={buy[n]}
+        onChange={e=>{const v=e.target.value.replace(/[^0-9]/g,"");up("buy",p=>({...(p||{}),[n]:v}));}}
+        className="w-14 h-9 text-center rounded-lg border tabular-nums shrink-0" style={{borderColor:"#E6E2DA"}}/>
+      <span className="text-sm min-w-0 flex-1">{n}</span>
+      <button onClick={()=>toggleBuy(n)} className="w-7 h-7 shrink-0 text-neutral-300 text-lg leading-none">×</button>
+     </div>))}
+    {buyExtra.map((x,i)=>(
+     <div key={"bx"+i} className="flex items-center gap-2 py-1">
+      <input inputMode="numeric" placeholder="qty" value={x.q||""}
+        onChange={e=>{const v=e.target.value.replace(/[^0-9]/g,"");up("buyExtra",p=>p.map((y,j)=>j===i?{...y,q:v}:y));}}
+        className="w-14 h-9 text-center rounded-lg border tabular-nums shrink-0" style={{borderColor:GOLD,color:GOLD}}/>
+      <input placeholder="Blue roll, ice, limes…" value={x.n||""}
+        onChange={e=>{const v=e.target.value;up("buyExtra",p=>p.map((y,j)=>j===i?{...y,n:v}:y));}}
+        className="min-w-0 flex-1 h-9 px-2 rounded-lg border text-sm" style={{borderColor:GOLD,color:GOLD}}/>
+      <button onClick={()=>up("buyExtra",p=>p.filter((_,j)=>j!==i))} className="w-7 h-7 shrink-0 text-neutral-300 text-lg leading-none">×</button>
+     </div>))}
+    <div className="flex items-center justify-between mt-2">
+     <button onClick={()=>up("buyExtra",p=>[...(p||[]),{n:"",q:""}])} className="text-sm underline underline-offset-4" style={{color:GOLD}}>+ Add item</button>
+     <button onClick={()=>{navigator.clipboard?.writeText(shopList);setShopCopied(true);setTimeout(()=>setShopCopied(false),2200);}}
+       className="text-sm underline underline-offset-4" style={{color:GOLD}}>{shopCopied?"✓ Copied":"Copy list"}</button>
+    </div>
+   </div>)}
+
+  {tab==="out"&&!shopCount&&!buyExtra.length&&(
+   <div className="mx-5 mt-4 mb-1 text-right">
+    <button onClick={()=>up("buyExtra",p=>[...(p||[]),{n:"",q:""}])} className="text-xs underline underline-offset-4 text-neutral-400">
+     + Start a shopping list</button>
+   </div>)}
+
   {tab==="out"&&!!(E.requests||"").trim()&&(
    <div className="mx-5 mb-3 rounded-xl px-4 py-3" style={{background:"#FFF6F5",border:"1px solid #E8B4AE"}}>
     <div className="text-xs font-medium mb-1" style={{color:"#A8453A",letterSpacing:".08em"}}>CLIENT REQUESTS</div>
@@ -549,8 +615,67 @@ export default function Runsheet(){
   {tab==="out"&&outAll>0&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t flex items-center justify-between" style={{borderColor:LINE}}>
    <span className="text-sm text-neutral-500">{outDone}/{outAll} lines loaded</span>
    <button onClick={()=>setTab("back")} className="px-5 py-3 rounded-full text-white text-sm font-medium" style={{background:GOLD}}>Van loaded</button></div>}
+  {subFor&&(
+    <SubstituteSheet
+      drink={subFor}
+      rows={subFor.ing.map((ing,i)=>({i,name:ing.n,current:pOf(subFor,i)}))
+             .filter(r=>!rm[subFor.name]?.[r.i])}
+      options={INVX}
+      onPick={(i,name)=>{up("prod",p=>({...p,[subFor.name]:{...(p[subFor.name]||{}),[i]:name}}));setSubFor(null);}}
+      onNew={i=>{const d=subFor;setSubFor(null);
+        setNewProd({apply:nm=>up("prod",p=>({...p,[d.name]:{...(p[d.name]||{}),[i]:nm}}))});}}
+      onCancel={()=>setSubFor(null)}/>)}
   {newProd&&<NewProductSheet onCancel={()=>setNewProd(null)} onSave={saveNewProduct}/>}
  </div>);
+}
+
+// Two steps: which ingredient, then what to pour instead. The per-ingredient
+// dropdown does the same job, but it doesn't look like a substitute control —
+// this is the same action with a name on it.
+function SubstituteSheet({drink,rows,options,onPick,onNew,onCancel}){
+ const [pick,setPick]=useState(null);
+ const [q,setQ]=useState("");
+ const F2="w-full h-12 px-3 rounded-xl border text-base";
+ const B2={borderColor:"#E6E2DA"};
+ const term=q.trim().toLowerCase();
+ const list=options
+  .filter(o=>!term||o.name.toLowerCase().includes(term))
+  .slice(0,40);
+
+ return (
+  <div className="fixed inset-0 z-50 flex items-end" style={{background:"rgba(0,0,0,.35)"}}>
+   <div className="w-full rounded-t-2xl bg-white p-5 pb-8" style={{maxHeight:"85vh",overflowY:"auto"}}>
+    <div className="flex items-baseline justify-between mb-1">
+     <div className="text-lg" style={{fontFamily:"'Cormorant Garamond',serif"}}>
+      {pick===null?"Substitute":"Swap for"}</div>
+     <button onClick={onCancel} className="text-sm text-neutral-400">Cancel</button>
+    </div>
+    <div className="text-xs text-neutral-400 mb-4">{drink.name}</div>
+
+    {pick===null ? (
+     rows.length
+      ? rows.map(r=>(
+         <button key={r.i} onClick={()=>{setPick(r.i);setQ("");}}
+           className="w-full text-left py-3 border-b" style={{borderColor:"#F2F0EB"}}>
+          <div className="text-base">{r.name}</div>
+          <div className="text-xs text-neutral-400 mt-0.5">{r.current||"nothing linked"}</div>
+         </button>))
+      : <p className="text-sm text-neutral-400 py-4 text-center">Nothing left to substitute.</p>
+    ) : (<>
+     <button onClick={()=>setPick(null)} className="text-sm underline underline-offset-4 mb-3" style={{color:GOLD}}>← pick a different ingredient</button>
+     <input autoFocus className={F2} style={B2} placeholder="Search stock…" value={q} onChange={e=>setQ(e.target.value)}/>
+     <button onClick={()=>onNew(pick)} className="w-full text-left py-3 mt-2 text-sm" style={{color:"#7a6300"}}>
+      + Product not in inventory…</button>
+     {list.map(o=>(
+      <button key={o.n} onClick={()=>onPick(pick,o.n)} className="w-full text-left py-3 border-b" style={{borderColor:"#F2F0EB"}}>
+       <div className="text-base">{o.n}</div>
+       {o.cat&&<div className="text-xs text-neutral-400 mt-0.5">{o.cat}</div>}
+      </button>))}
+     {!list.length&&<p className="text-sm text-neutral-400 py-4 text-center">Nothing matches — add it as a new product above.</p>}
+    </>)}
+   </div>
+  </div>
+ );
 }
 
 // Asked for whenever a picker hits something the inventory doesn't have.

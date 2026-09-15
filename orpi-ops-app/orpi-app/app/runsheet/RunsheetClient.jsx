@@ -60,6 +60,9 @@ const GSEC="Garnish & consumables";
 const TYPES=["Welcome Cocktail","Welcome Mocktail","Cocktail","Mocktail","Shooter"];
 const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"5pm to 12am",arrival:"12pm",guests:"",uniform:"Black trousers, black shirts and aprons (provided)"},
  staff:[{id:1,name:"",role:"",transport:"Car"}],sel:{},ovr:{},prod:{},rm:{},add:{},extra:[],out:{},back:{},gCost:{},
+ // Glassware order. gQty is the typed quantity per glass type, gExtra any type
+ // the drinks list doesn't imply (toast flutes, beer glasses).
+ gQty:{},gExtra:[],
  // Products used on this event that aren't in Inventory yet. They cost and
  // load out like anything else; pushing them to Notion is a separate button.
  newInv:[]});
@@ -82,7 +85,8 @@ export default function Runsheet(){
  const [online,setOnline]=useState(true);
  const [newProd,setNewProd]=useState(null);   // {apply} while the sheet is open
  const [pushing,setPushing]=useState("");
- const [open,setOpen]=useState({det:true,staff:false,drinks:true,bar:false});
+ const [open,setOpen]=useState({det:true,staff:false,drinks:true,glass:false,bar:false});
+ const [glassCopied,setGlassCopied]=useState(false);
  const [picker,setPicker]=useState(false),[q,setQ]=useState(""),[ft,setFt]=useState("All");
  const [expand,setExpand]=useState({});
 
@@ -136,6 +140,29 @@ export default function Runsheet(){
  const CATSX=[...new Set(INVX.map(i=>i.cat))].sort();
 
  const picked=LIB.filter(d=>sel[d.name]);
+
+ // ── Glassware ───────────────────────────────────────────────────
+ // The menu decides WHICH glasses are needed. Quantities are typed — nobody
+ // needs a formula guessing at a number they already know.
+ const glassRows=(()=>{
+  const counts={};
+  picked.forEach(d=>{if(d.glass)counts[d.glass]=(counts[d.glass]||0)+1;});
+  (E.gExtra||[]).forEach(x=>{if(x.t&&!counts[x.t])counts[x.t]=0;});
+  return Object.keys(counts).sort().map(t=>({
+   type:t,drinks:counts[t],qty:parseInt((E.gQty||{})[t],10)||0,
+  }));
+ })();
+ const glassTotal=glassRows.reduce((a,r)=>a+r.qty,0);
+
+ const glassOrder=[
+  `Glassware — ${ev.client||"Event"}${ev.date?`, ${ev.date}`:""}`,
+  ev.venue?ev.venue:null,
+  ev.guests?`${ev.guests} guests`:null,
+  "",
+  ...glassRows.filter(r=>r.qty>0).map(r=>`${r.type} × ${r.qty}`),
+  "",
+  `Total: ${glassTotal}`,
+ ].filter(x=>x!==null).join("\n");
  const qOf=(d,i)=>ovr[d.name]?.[i]??d.ing[i].q;
  const pOf=(d,i)=>prod[d.name]?.[i]??(d.ing[i].s||"");
  const edQ=(d,i)=>ovr[d.name]?.[i]!==undefined&&ovr[d.name][i]!==d.ing[i].q;
@@ -304,6 +331,45 @@ export default function Runsheet(){
         {dirty(d)&&<button onClick={()=>{up("prod",p=>({...p,[d.name]:{}}));up("ovr",p=>({...p,[d.name]:{}}));up("rm",p=>({...p,[d.name]:{}}));up("add",p=>({...p,[d.name]:[]}));}}
          className="text-sm underline underline-offset-4 text-neutral-400">Reset</button>}</div></div>}
      </div>);})}</Sec>
+
+    <Sec open={open} setOpen={setOpen} k="glass" title="Glassware order"
+      sub={glassRows.length?(glassTotal?`${glassTotal} glasses · ${glassRows.length} type${glassRows.length===1?"":"s"}`:`${glassRows.length} type${glassRows.length===1?"":"s"} — quantities to add`):"Choose drinks first"}>
+     {!picked.length&&!(E.gExtra||[]).length
+      ? <p className="text-sm text-neutral-400 text-center py-4">Pick your drinks and the glass types follow.</p>
+      : (<>
+       <p className="text-xs text-neutral-400 mb-3">From your drinks menu. Type the quantity you need for each.</p>
+
+       {glassRows.map(r=>(
+        <div key={r.type} className="flex items-center gap-2 py-2 border-b" style={{borderColor:"#F2F0EB"}}>
+         <span className="min-w-0 flex-1">
+          <span className="block text-base">{r.type}</span>
+          <span className="block text-xs text-neutral-400">
+           {r.drinks?`${r.drinks} drink${r.drinks===1?"":"s"} on the menu`:"added by hand"}
+          </span>
+         </span>
+         <input inputMode="numeric" placeholder="—" value={(E.gQty||{})[r.type]||""}
+           onChange={e=>{const v=e.target.value.replace(/[^0-9]/g,"");up("gQty",q=>({...(q||{}),[r.type]:v}));}}
+           className="w-20 h-11 text-center rounded-xl border tabular-nums shrink-0"
+           style={{borderColor:r.qty?GOLD:"#E6E2DA",color:r.qty?GOLD:INK}}/>
+        </div>))}
+
+       {(E.gExtra||[]).map((x,i)=>(
+        <div key={"gx"+i} className="flex items-center gap-2 py-2">
+         <input value={x.t} placeholder="Glass type" onChange={e=>{const v=e.target.value;up("gExtra",p=>p.map((y,j)=>j===i?{t:v}:y));}}
+           className="flex-1 min-w-0 h-11 px-3 rounded-xl border text-base" style={{borderColor:GOLD,color:GOLD}}/>
+         <button onClick={()=>up("gExtra",p=>p.filter((_,j)=>j!==i))} className="w-8 h-8 shrink-0 text-neutral-300 text-xl leading-none">×</button>
+        </div>))}
+
+       <div className="flex items-center justify-between pt-3">
+        <button onClick={()=>up("gExtra",p=>[...(p||[]),{t:""}])} className="text-sm underline underline-offset-4" style={{color:GOLD}}>+ Add glass type</button>
+        <span className="text-sm tabular-nums">Total <strong>{glassTotal}</strong></span>
+       </div>
+
+       <button onClick={()=>{navigator.clipboard?.writeText(glassOrder);setGlassCopied(true);setTimeout(()=>setGlassCopied(false),2200);}}
+         className="w-full py-3 rounded-xl text-white text-sm font-medium mt-4" style={{background:INK}}>
+        {glassCopied?"✓ Copied":"Copy order for supplier"}</button>
+      </>)}
+    </Sec>
 
     <Sec open={open} setOpen={setOpen} k="bar" title="Back bar & standard service" sub={extra.filter(e=>e.n).length?`${extra.filter(e=>e.n).length} lines`:"From the quote"}>
      {extra.map((e,i)=>(<div key={e.id} className="flex gap-2 mb-2">

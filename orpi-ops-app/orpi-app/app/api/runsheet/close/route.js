@@ -11,9 +11,12 @@
 //
 // Without this, every event quietly adds to the pile of guessed costs.
 
+import { latestUnitCosts, unitCostFor } from '@/lib/pricing';
+
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB_INVENTORY = process.env.NOTION_DB_INVENTORY || '2e16ca9d054980cf978edf55d1d40efb';
 const DB_COSTING = process.env.NOTION_DB_COSTING || '2e36ca9d054980b2b232d8164def4997';
+const DB_PURCHASES = process.env.NOTION_DB_PURCHASES || '2e16ca9d054980879bc5ef22eb00f97d';
 
 const headers = () => ({
   Authorization: `Bearer ${TOKEN}`,
@@ -44,8 +47,6 @@ async function queryAll(dbId) {
 
 const title = p => p?.title?.map(t => t.plain_text).join('').trim() || '';
 const num = p => (typeof p?.number === 'number' ? p.number : null);
-// Average Unit Cost is a formula, so it arrives under formula.number.
-const formulaNum = p => (typeof p?.formula?.number === 'number' ? p.formula.number : null);
 
 // Inventory categories don't line up with cost types one-for-one.
 function costTypeFor(cat) {
@@ -78,7 +79,10 @@ export async function POST(request) {
       }, { status: 409 });
     }
 
-    // Name -> page, so run sheet lines can find their inventory row.
+    // Name -> page, so run sheet lines can find their inventory row. The price
+    // locked here is the latest purchase price, matching what the quote was
+    // built on — so cost and quote are measured the same way.
+    const priceIndex = latestUnitCosts(await queryAll(DB_PURCHASES));
     const invIndex = {};
     for (const page of await queryAll(DB_INVENTORY)) {
       const n = title(page.properties['Item Name']);
@@ -87,7 +91,7 @@ export async function POST(request) {
         id: page.id,
         name: n,
         cat: page.properties['Catagory']?.select?.name || 'Other',
-        unitCost: formulaNum(page.properties['Average Unit Cost']) ?? 0,
+        unitCost: unitCostFor(page.id.replace(/-/g, ''), priceIndex, page),
         stock: num(page.properties['Current Stock']) ?? 0,
       };
     }

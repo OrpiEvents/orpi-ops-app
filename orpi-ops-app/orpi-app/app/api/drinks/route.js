@@ -8,12 +8,15 @@
 // the run sheet gets opened repeatedly on event day and the library changes
 // weekly at most.
 
+import { latestUnitCosts, unitCostFor } from '@/lib/pricing';
+
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB_DRINKS = process.env.NOTION_DB_DRINKS || '3426ca9d054980b193cadeca4f2bb1b4';
 const DB_INVENTORY = process.env.NOTION_DB_INVENTORY || '2e16ca9d054980cf978edf55d1d40efb';
 // Note this is the DATABASE id, not the data source id — Notion has both and
 // they differ. Only the database id works with /databases/{id}/query.
 const DB_RECIPE = process.env.NOTION_DB_RECIPE_INGREDIENTS || '3d66ca9d054980e9a77dc47797741176';
+const DB_PURCHASES = process.env.NOTION_DB_PURCHASES || '2e16ca9d054980879bc5ef22eb00f97d';
 
 const CACHE_MS = 5 * 60 * 1000;
 let cache = { at: 0, data: null };
@@ -52,7 +55,15 @@ async function queryAll(dbId, label) {
 const title = p => p?.title?.map(t => t.plain_text).join('').trim() || '';
 const text = p => p?.rich_text?.map(t => t.plain_text).join('').trim() || '';
 const sel = p => p?.select?.name || '';
-const num = p => (typeof p?.number === 'number' ? p.number : null);
+// Average Unit Cost is a formula and Notion returns those under formula.number,
+// not number. Reading it the plain way silently zeroes every drink cost, so
+// this checks all three shapes a numeric property can arrive in.
+const num = p => {
+  if (typeof p?.number === 'number') return p.number;
+  if (typeof p?.formula?.number === 'number') return p.formula.number;
+  if (typeof p?.rollup?.number === 'number') return p.rollup.number;
+  return null;
+};
 const relIds = p => (p?.relation || []).map(r => r.id.replace(/-/g, ''));
 const pid = page => page.id.replace(/-/g, '');
 
@@ -85,18 +96,22 @@ function sectionFor(name, cat) {
 }
 
 async function build() {
-  const [drinkPages, invPages, recipePages] = await Promise.all([
+  const [drinkPages, invPages, recipePages, purchasePages] = await Promise.all([
     queryAll(DB_DRINKS, 'Drinks Library'),
     queryAll(DB_INVENTORY, 'Inventory Items'),
     queryAll(DB_RECIPE, 'Recipe Ingredients'),
+    queryAll(DB_PURCHASES, 'Inventory Purchases'),
   ]);
+
+  // What each bottle costs to replace today — see lib/pricing for the rule.
+  const priceIndex = latestUnitCosts(purchasePages);
 
   // Inventory first — recipes cost against it.
   const invById = {};
   const inventory = invPages.map(page => {
     const p = page.properties;
     const v = num(p['Container Volume ml']) || 0;
-    const uc = num(p['Average Unit Cost']) ?? num(p['Unit Cost']) ?? 0;
+    const uc = unitCostFor(pid(page), priceIndex, page);
     const item = {
       n: title(p['Item Name']),
       cat: sel(p['Catagory']) || 'Other',   // yes, spelled that way in Notion
@@ -105,6 +120,8 @@ async function build() {
       uc,
       size: text(p['Size']),
       stock: num(p['Current Stock']) ?? 0,
+      // Surfaced so the run sheet can show where a price came from.
+      pricedOn: priceIndex[pid(page)]?.boughtOn || null,
     };
     if (item.n) invById[pid(page)] = item;
     return item;

@@ -100,6 +100,7 @@ export default function Runsheet(){
  const [open,setOpen]=useState({det:true,staff:false,drinks:true,swap:false,glass:false,bar:false});
  const [glassCopied,setGlassCopied]=useState(false);
  const [shopCopied,setShopCopied]=useState(false);
+ const [briefCopied,setBriefCopied]=useState(false);
  const [subFor,setSubFor]=useState(null);   // drink whose substitute sheet is open
  const [bookings,setBookings]=useState([]);
  const [LIB,setLIB]=useState(FALLBACK_LIB);
@@ -570,7 +571,14 @@ export default function Runsheet(){
   </main>
 
   {tab==="brief"&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t" style={{borderColor:LINE}}>
-   <button onClick={()=>navigator.clipboard?.writeText(brief)} className="w-full py-4 rounded-full text-white text-base font-medium" style={{background:INK}}>Copy message for the team</button></div>}
+   <div className="flex gap-2">
+    <a href={`https://wa.me/?text=${encodeURIComponent(brief)}`} target="_blank" rel="noreferrer"
+      className="flex-1 py-4 rounded-full text-white text-base font-medium text-center" style={{background:INK,textDecoration:"none"}}>
+     Send on WhatsApp</a>
+    <button onClick={()=>{navigator.clipboard?.writeText(brief);setBriefCopied(true);setTimeout(()=>setBriefCopied(false),2200);}}
+      className="px-5 py-4 rounded-full border text-base shrink-0" style={{borderColor:INK,color:INK}}>
+     {briefCopied?"✓":"Copy"}</button>
+   </div></div>}
   {tab==="out"&&(shopCount>0||buyExtra.length>0)&&(
    <div className="mx-5 mt-4 mb-3 rounded-xl px-4 py-3" style={{background:"#FFFDF7",border:"1px solid "+GOLD}}>
     <div className="text-xs font-medium mb-2" style={{color:"#7a6300",letterSpacing:".08em"}}>
@@ -594,10 +602,16 @@ export default function Runsheet(){
         className="min-w-0 flex-1 h-9 px-2 rounded-lg border text-sm" style={{borderColor:GOLD,color:GOLD}}/>
       <button onClick={()=>up("buyExtra",p=>p.filter((_,j)=>j!==i))} className="w-7 h-7 shrink-0 text-neutral-300 text-lg leading-none">×</button>
      </div>))}
-    <div className="flex items-center justify-between mt-2">
-     <button onClick={()=>up("buyExtra",p=>[...(p||[]),{n:"",q:""}])} className="text-sm underline underline-offset-4" style={{color:GOLD}}>+ Add item</button>
+    <button onClick={()=>up("buyExtra",p=>[...(p||[]),{n:"",q:""}])} className="text-sm underline underline-offset-4 mt-2" style={{color:GOLD}}>+ Add item</button>
+    {/* wa.me opens WhatsApp with the list ready and lets you choose who gets
+        it — a person or a group — without us storing any numbers. */}
+    <div className="flex gap-2 mt-3">
+     <a href={`https://wa.me/?text=${encodeURIComponent(shopList)}`} target="_blank" rel="noreferrer"
+       className="flex-1 py-3 rounded-xl text-white text-sm font-medium text-center" style={{background:INK,textDecoration:"none"}}>
+      Send on WhatsApp</a>
      <button onClick={()=>{navigator.clipboard?.writeText(shopList);setShopCopied(true);setTimeout(()=>setShopCopied(false),2200);}}
-       className="text-sm underline underline-offset-4" style={{color:GOLD}}>{shopCopied?"✓ Copied":"Copy list"}</button>
+       className="px-4 py-3 rounded-xl border text-sm shrink-0" style={{borderColor:GOLD,color:GOLD}}>
+      {shopCopied?"✓":"Copy"}</button>
     </div>
    </div>)}
 

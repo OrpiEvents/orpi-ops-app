@@ -1,9 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '../AppShell';
-
-const CATEGORIES = ['Spirit', 'Liqueur', 'Wine', 'Prosecco', 'Champagne', 'Beer',
-  'Non-Alcoholic', 'Mixer', 'Soft Drink', 'Garnish', 'Ice', 'Other'];
+import { CATEGORIES } from '@/lib/taxonomy';
 
 export default function StocktakeClient({ userEmail }) {
   const [items, setItems] = useState([]);
@@ -13,7 +11,7 @@ export default function StocktakeClient({ userEmail }) {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ name: '', cat: 'Spirit', size: '', unit: 'Bottle', count: '' });
+  const [draft, setDraft] = useState({ name: '', cat: CATEGORIES[0], size: '', unit: 'Bottle', count: '' });
   const [q, setQ] = useState('');
 
   async function load() {

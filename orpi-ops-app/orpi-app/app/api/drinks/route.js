@@ -9,6 +9,7 @@
 // weekly at most.
 
 import { latestUnitCosts, unitCostFor } from '@/lib/pricing';
+import { sectionFor, GARNISH_SECTION } from '@/lib/taxonomy';
 
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB_DRINKS = process.env.NOTION_DB_DRINKS || '3426ca9d054980b193cadeca4f2bb1b4';
@@ -86,16 +87,7 @@ const shortGlass = g => GLASS_MAP[g] || (g || '').replace(/ Glass$/, '');
 // Flagged so the run sheet can keep them out of a hire order.
 export const DISPOSABLE_GLASS = ['Plastic Shot'];
 
-const GSEC = 'Garnish & consumables';
-// Mirrors secOf in the run sheet so both sides group ingredients identically.
-function sectionFor(name, cat) {
-  if (/espresso|cream|milk/i.test(name)) return 'Chilled \u2014 critical';
-  if (cat === 'Garnish') return GSEC;
-  // Alcohol-free bottles load like mixers, not like spirits.
-  if (cat === 'Non-Alcoholic') return 'Mixers & juices';
-  if (['Spirit', 'Liqueur', 'Wine', 'Prosecco', 'Champagne', 'Beer'].includes(cat)) return 'Cocktail spirits';
-  return 'Mixers & juices';
-}
+const GSEC = GARNISH_SECTION;
 
 async function build() {
   const [drinkPages, invPages, recipePages, purchasePages] = await Promise.all([

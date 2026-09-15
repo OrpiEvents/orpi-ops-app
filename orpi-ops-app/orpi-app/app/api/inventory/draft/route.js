@@ -17,7 +17,10 @@ const HEADERS = () => ({
   'Content-Type': 'application/json',
 });
 
-const VALID_CATS = ['Spirit', 'Beer', 'Wine', 'Prosecco', 'Mixer', 'Ice', 'Garnish', 'Other', 'Champagne', 'Liqueur', 'Soft Drink'];
+import { CATEGORIES } from '@/lib/taxonomy';
+
+// Legacy 'Spirit' stays accepted so anything created before the split still saves.
+const VALID_CATS = [...CATEGORIES, 'Spirit'];
 
 // Same normalisation the quote builder uses, so "Absolut" and "Absolut Vodka
 // 1L" are recognised as one product on both sides.
@@ -73,23 +76,33 @@ export async function POST(request) {
       taken.add(key);
 
       const cat = VALID_CATS.includes(item?.cat) ? item.cat : 'Other';
+      const props = {
+        'Item Name': { title: [{ text: { content: name } }] },
+        Catagory: { select: { name: cat } },
+        'Needs setup': { checkbox: true },
+      };
+      // Optional, and only sent when given — a quote knows a brand name and
+      // nothing else, but a stock take knows the bottle in its hand.
+      if (item?.size) props.Size = { rich_text: [{ text: { content: String(item.size) } }] };
+      if (item?.unit) props.Unit = { select: { name: String(item.unit) } };
+      if (Number.isFinite(Number(item?.stock))) props['Current Stock'] = { number: Number(item.stock) };
+
       const res = await fetch('https://api.notion.com/v1/pages', {
-        method: 'POST',
-        headers: HEADERS(),
-        body: JSON.stringify({
-          parent: { database_id: DB_ID },
-          properties: {
-            'Item Name': { title: [{ text: { content: name } }] },
-            Catagory: { select: { name: cat } },
-            'Needs setup': { checkbox: true },
-          },
-        }),
+        method: 'POST', headers: HEADERS(),
+        body: JSON.stringify({ parent: { database_id: DB_ID }, properties: props }),
       });
-      if (res.ok) created.push(name);
-      else skipped.push(name);
+      if (res.ok) {
+        const page = await res.json();
+        created.push({ id: page.id, name });
+      } else skipped.push(name);
     }
 
-    return Response.json({ created: created.length, skipped: skipped.length, names: created });
+    return Response.json({
+      created: created.length,
+      skipped: skipped.length,
+      items: created,                        // [{ id, name }] for callers that need the page
+      names: created.map(c => c.name),       // kept for the quote builder and run sheet
+    });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }

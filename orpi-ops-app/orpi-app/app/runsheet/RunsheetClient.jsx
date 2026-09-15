@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabaseBrowser";
 import DRINKS_DATA from "./drinks-data.json";
+import { costTypeFor, CATEGORIES, sectionFor, GARNISH_SECTION } from "@/lib/taxonomy";
 
 // Run sheet — Setup, Brief, Out, In.
 //
@@ -56,14 +57,9 @@ const GOLD="#B48A3C",INK="#101010",LINE="#E6E2DA";
 // cost exactly like a stocked one.
 const cpmOf=(cost,ml)=>(Number(ml)>0?Number(cost)/Number(ml):0);
 const SEC=["Cocktail spirits","Back bar","Chilled — critical","Mixers & juices"];
-const GSEC="Garnish & consumables";
+const GSEC=GARNISH_SECTION;
 const DISPOSABLE=["Plastic Shot"];
-// Same mapping the close route uses, so a bought-on-the-day item lands under
-// the cost type it would have had if it came off the van.
-const COST_TYPE_BY_CAT={Spirit:"Alcohol",Liqueur:"Alcohol",Wine:"Alcohol",Prosecco:"Alcohol",
- Champagne:"Alcohol",Beer:"Alcohol",Mixer:"Mixers","Soft Drink":"Mixers",Ice:"Ice",
- // 0% beers, alcohol-free wines and aperitifs — a drink cost, not alcohol spend.
- "Non-Alcoholic":"Mixers"};
+
 // Costs that never come out of the van, so nothing else would ever prompt for
 // them. Left unentered, they're what turns into a lump-sum guess later.
 const FINAL_COSTS=[
@@ -320,11 +316,7 @@ export default function Runsheet(){
  const edQ=(d,i)=>ovr[d.name]?.[i]!==undefined&&ovr[d.name][i]!==d.ing[i].q;
  const edP=(d,i)=>pOf(d,i)!==(d.ing[i].s||"");
  const lineCost=(d,i)=>{const it=BYX[pOf(d,i)];return it?qOf(d,i)*it.cpm:(d.ing[i].q?d.ing[i].c/d.ing[i].q*qOf(d,i):d.ing[i].c);};
- const secOf=n=>{const it=BYX[n],c=it?it.cat:"Other";
-  if(/espresso|cream|milk/i.test(n))return "Chilled — critical";
-  if(c==="Garnish")return GSEC;
-  if(["Spirit","Liqueur","Wine","Prosecco","Champagne","Beer"].includes(c))return "Cocktail spirits";
-  return "Mixers & juices";};
+ const secOf=n=>sectionFor(n,BYX[n]?.cat||"Other");
  const rws=d=>{const r=d.ing.map((ing,i)=>rm[d.name]?.[i]?null:({k:"b",i,u:ing.u,sec:ing.sec})).filter(Boolean);
   (add[d.name]||[]).forEach((a,j)=>r.push({k:"a",i:j,u:a.u,sec:a.s?secOf(a.s):"Mixers & juices"}));return r;};
  const aQ=(d,j)=>add[d.name][j].q,aP=(d,j)=>add[d.name][j].s;
@@ -363,7 +355,7 @@ export default function Runsheet(){
  // Emergency shopping is costed at what was paid, not at stock price — it never
  // touched the unit, so there's nothing to take out or bring back. Cost type
  // follows the inventory category where we recognise the item.
- const costTypeOf=n=>COST_TYPE_BY_CAT[BYX[n]?.cat]||"Other/Misc";
+ const costTypeOf=n=>costTypeFor(BYX[n]?.cat);
  const buySpend=E.buySpend||{};
  const shopCosts=[
   ...Object.keys(buy).map(n=>({name:n,amount:parseFloat(buySpend[n])||0,qty:buy[n]})),
@@ -899,8 +891,7 @@ function NewProductSheet({onSave,onCancel}){
 
     <label className="block text-xs text-neutral-500 mb-1 mt-3">Category</label>
     <select className={F2} style={B2} value={f.cat} onChange={e=>set("cat",e.target.value)}>
-     {["Spirit","Liqueur","Wine","Prosecco","Champagne","Beer","Mixer","Soft Drink","Garnish","Ice","Other"]
-      .map(c=>(<option key={c}>{c}</option>))}
+     {CATEGORIES.map(c=>(<option key={c}>{c}</option>))}
     </select>
 
     <div className="grid grid-cols-2 gap-2 mt-3">

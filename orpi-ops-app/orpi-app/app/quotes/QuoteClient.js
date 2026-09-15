@@ -1,4 +1,5 @@
 'use client';
+import { stockCategoryFor } from '@/lib/taxonomy';
 import { useEffect, useState } from 'react';
 import AppShell from '../AppShell';
 
@@ -57,20 +58,9 @@ const DURATIONS = (() => {
   return out;
 })();
 
-// Inventory Items uses broad categories (Spirit, Mixer, Liqueur, Wine, Beer,
-// Prosecco, Champagne, Garnish, Other). Our quote rows are finer-grained, so
-// map ours onto theirs to rank the right stock to the top.
-const STOCK_CAT = [
-  [/vodka|whisk|rum|gin|tequila|bourbon|brandy|cognac|spirit/i, 'Spirit'],
-  [/liqueur|aperol|passoa|kahlua/i, 'Liqueur'],
-  [/prosecco/i, 'Prosecco'],
-  [/champagne/i, 'Champagne'],
-  [/\bwine\b/i, 'Wine'],
-  [/beer|lager|cider/i, 'Beer'],
-  [/non.?alcohol|alcohol.?free|\b0%/i, 'Non-Alcoholic'],
-  [/soft|mixer|juice|tonic|soda/i, 'Mixer'],
-];
-const stockCatFor = c => (STOCK_CAT.find(([re]) => re.test(c || '')) || [])[1] || null;
+// Spirits are split by type in inventory now, so a Vodka row matches Vodka
+// stock directly. See lib/taxonomy for the mapping.
+const stockCatFor = stockCategoryFor;
 
 // Strip everything that differs between how a quote names a drink and how
 // stock does: sizes, punctuation, and the category words that appear in half

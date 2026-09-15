@@ -12,6 +12,7 @@
 // Without this, every event quietly adds to the pile of guessed costs.
 
 import { latestUnitCosts, unitCostFor } from '@/lib/pricing';
+import { costTypeFor } from '@/lib/taxonomy';
 
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB_INVENTORY = process.env.NOTION_DB_INVENTORY || '2e16ca9d054980cf978edf55d1d40efb';
@@ -47,18 +48,6 @@ async function queryAll(dbId) {
 
 const title = p => p?.title?.map(t => t.plain_text).join('').trim() || '';
 const num = p => (typeof p?.number === 'number' ? p.number : null);
-
-// Inventory categories don't line up with cost types one-for-one.
-function costTypeFor(cat) {
-  // Non-Alcoholic covers 0% beers, alcohol-free wines and aperitifs. It must be
-  // checked first — a 0% beer is a mixer cost, not alcohol spend.
-  if (cat === 'Non-Alcoholic') return 'Mixers';
-  if (['Spirit', 'Liqueur', 'Wine', 'Prosecco', 'Champagne', 'Beer'].includes(cat)) return 'Alcohol';
-  if (['Mixer', 'Soft Drink'].includes(cat)) return 'Mixers';
-  if (cat === 'Ice') return 'Ice';
-  // Garnish has no Cost Type of its own yet, so it lands in the catch-all.
-  return 'Other/Misc';
-}
 
 async function getBooking(id) {
   const res = await fetch(`https://api.notion.com/v1/pages/${id}`, { headers: headers(), cache: 'no-store' });

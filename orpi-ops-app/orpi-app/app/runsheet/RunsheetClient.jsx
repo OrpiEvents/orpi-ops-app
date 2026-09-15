@@ -52,11 +52,17 @@ async function saveEvents(events) {
 const GOLD="#B48A3C",INK="#101010",LINE="#E6E2DA";
 const BY={}; INV.forEach(i=>BY[i.n]=i);
 const CATS=[...new Set(INV.map(i=>i.cat))].sort();
+// Cost per ml from a bottle price and size — what makes a hand-added product
+// cost exactly like a stocked one.
+const cpmOf=(cost,ml)=>(Number(ml)>0?Number(cost)/Number(ml):0);
 const SEC=["Cocktail spirits","Back bar","Chilled — critical","Mixers & juices"];
 const GSEC="Garnish & consumables";
 const TYPES=["Welcome Cocktail","Welcome Mocktail","Cocktail","Mocktail","Shooter"];
 const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"5pm to 12am",arrival:"12pm",guests:"",uniform:"Black trousers, black shirts and aprons (provided)"},
- staff:[{id:1,name:"",role:"",transport:"Car"}],sel:{},ovr:{},prod:{},rm:{},add:{},extra:[],out:{},back:{},gCost:{}});
+ staff:[{id:1,name:"",role:"",transport:"Car"}],sel:{},ovr:{},prod:{},rm:{},add:{},extra:[],out:{},back:{},gCost:{},
+ // Products used on this event that aren't in Inventory yet. They cost and
+ // load out like anything else; pushing them to Notion is a separate button.
+ newInv:[]});
 
 
 // Collapsible section. Must live OUTSIDE Runsheet: defined inside, it becomes a
@@ -74,6 +80,8 @@ export default function Runsheet(){
  const [events,setEvents]=useState(null),[cur,setCur]=useState(null),[ready,setReady]=useState(false);
  const [tab,setTab]=useState("setup"),[saved,setSaved]=useState("");
  const [online,setOnline]=useState(true);
+ const [newProd,setNewProd]=useState(null);   // {apply} while the sheet is open
+ const [pushing,setPushing]=useState("");
  const [open,setOpen]=useState({det:true,staff:false,drinks:true,bar:false});
  const [picker,setPicker]=useState(false),[q,setQ]=useState(""),[ft,setFt]=useState("All");
  const [expand,setExpand]=useState({});
@@ -88,18 +96,52 @@ export default function Runsheet(){
    setSaved(new Date().toLocaleTimeString().slice(0,5));},600);
   return()=>clearTimeout(t);},[events,ready]);
 
+ // Adds the product to this event and hands the name back to whichever picker
+ // asked for it. Cost is optional — a bottle with no price still loads out,
+ // it just contributes nothing to the drink cost until someone prices it.
+ function saveNewProduct(f){
+  const n=(f.n||"").trim(); if(!n)return;
+  const ml=parseFloat(f.v)||0, uc=parseFloat(f.uc)||0;
+  up("newInv",list=>[...(list||[]).filter(x=>x.n!==n),
+   {n,cat:f.cat||"Other",v:ml,uc,cpm:cpmOf(uc,ml),size:f.size||(ml?`${ml}ml`:""),stock:0,isNew:true}]);
+  if(newProd?.apply)newProd.apply(n);
+  setNewProd(null);
+ }
+
+ // Sends them to Inventory Items as drafts with "Needs setup" ticked — the
+ // same route the quote builder uses, so there's one way new stock arrives.
+ async function pushNewToNotion(){
+  const items=(E.newInv||[]).filter(x=>!x.pushed);
+  if(!items.length)return;
+  setPushing("Adding…");
+  try{
+   const r=await fetch("/api/inventory/draft",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({items:items.map(x=>({name:x.n,cat:x.cat}))})}).then(x=>x.json());
+   if(r.error){setPushing("Couldn't add — try again later");}
+   else{up("newInv",list=>(list||[]).map(x=>({...x,pushed:true})));
+        setPushing(`${r.created} added to Inventory`);}
+  }catch(e){setPushing("Couldn't add — no connection");}
+  setTimeout(()=>setPushing(""),4000);
+ }
+
  if(!ready)return(<div className="min-h-screen flex items-center justify-center text-neutral-400">Loading…</div>);
  const E=events.find(x=>x.id===cur)||events[0];
  const up=(k,v)=>setEvents(es=>es.map(x=>x.id===E.id?{...x,[k]:typeof v==="function"?v(x[k]):v}:x));
  const {ev,staff,sel,ovr,prod,rm,add,extra,out,back,gCost}=E;
+ // Stock plus anything added by hand on this event. Everything below reads
+ // these rather than the bundled list, so a new product behaves identically.
+ const newInv=E.newInv||[];
+ const INVX=[...INV,...newInv];
+ const BYX={}; INVX.forEach(i=>BYX[i.n]=i);
+ const CATSX=[...new Set(INVX.map(i=>i.cat))].sort();
 
  const picked=LIB.filter(d=>sel[d.name]);
  const qOf=(d,i)=>ovr[d.name]?.[i]??d.ing[i].q;
  const pOf=(d,i)=>prod[d.name]?.[i]??(d.ing[i].s||"");
  const edQ=(d,i)=>ovr[d.name]?.[i]!==undefined&&ovr[d.name][i]!==d.ing[i].q;
  const edP=(d,i)=>prod[d.name]?.[i]!==undefined&&prod[d.name][i]!==(d.ing[i].s||"");
- const lineCost=(d,i)=>{const it=BY[pOf(d,i)];return it?qOf(d,i)*it.cpm:(d.ing[i].q?d.ing[i].c/d.ing[i].q*qOf(d,i):d.ing[i].c);};
- const secOf=n=>{const it=BY[n],c=it?it.cat:"Other";
+ const lineCost=(d,i)=>{const it=BYX[pOf(d,i)];return it?qOf(d,i)*it.cpm:(d.ing[i].q?d.ing[i].c/d.ing[i].q*qOf(d,i):d.ing[i].c);};
+ const secOf=n=>{const it=BYX[n],c=it?it.cat:"Other";
   if(/espresso|cream|milk/i.test(n))return "Chilled — critical";
   if(c==="Garnish")return GSEC;
   if(["Spirit","Liqueur","Wine","Prosecco","Champagne","Beer"].includes(c))return "Cocktail spirits";
@@ -107,7 +149,7 @@ export default function Runsheet(){
  const rws=d=>{const r=d.ing.map((ing,i)=>rm[d.name]?.[i]?null:({k:"b",i,u:ing.u,sec:ing.sec})).filter(Boolean);
   (add[d.name]||[]).forEach((a,j)=>r.push({k:"a",i:j,u:a.u,sec:a.s?secOf(a.s):"Mixers & juices"}));return r;};
  const aQ=(d,j)=>add[d.name][j].q,aP=(d,j)=>add[d.name][j].s;
- const aCost=(d,j)=>{const it=BY[aP(d,j)];return it?aQ(d,j)*it.cpm:0;};
+ const aCost=(d,j)=>{const it=BYX[aP(d,j)];return it?aQ(d,j)*it.cpm:0;};
  const cost=d=>rws(d).reduce((t,r)=>r.sec===GSEC?t:t+(r.k==="b"?lineCost(d,r.i):aCost(d,r.i)),0);
  const dirty=d=>Object.keys(prod[d.name]||{}).length>0||Object.keys(ovr[d.name]||{}).length>0||(add[d.name]||[]).length>0||Object.values(rm[d.name]||{}).some(Boolean);
 
@@ -186,6 +228,17 @@ export default function Runsheet(){
 
   <main className="pb-28">
    {tab==="setup"&&<div>
+    {!!newInv.length&&(
+     <div className="mx-5 mt-4 mb-1 rounded-xl px-4 py-3" style={{background:"#FFFDF7",border:"1px solid "+GOLD}}>
+      <div className="text-sm" style={{color:GOLD}}>
+       {newInv.length} product{newInv.length===1?"":"s"} not in inventory: {newInv.map(x=>x.n).join(", ")}
+      </div>
+      {newInv.every(x=>x.pushed)
+       ? <div className="text-xs text-neutral-500 mt-1">Added to Inventory — give them a size and a purchase when you buy.</div>
+       : <button onClick={pushNewToNotion} className="text-sm underline underline-offset-4 mt-1" style={{color:GOLD}}>
+          {pushing||"Add to Inventory"}</button>}
+     </div>)}
+
     <Sec open={open} setOpen={setOpen} k="det" title="Event details" sub={[ev.date,ev.venue].filter(Boolean).join(" · ")||"Not set"}>
      <div className="space-y-3">
       {[["client","Client"],["date","Date"],["venue","Venue & address"],["service","Service hours"],["arrival","Staff arrival"],["guests","Guests"],["uniform","Uniform"]].map(([k,l])=>(
@@ -223,11 +276,14 @@ export default function Runsheet(){
           <span className="text-sm text-neutral-400 shrink-0">{ing.u}</span>
           <span className="text-xs tabular-nums text-neutral-400 ml-auto shrink-0">£{lineCost(d,i).toFixed(2)}</span>
           <button onClick={()=>up("rm",p=>({...p,[d.name]:{...(p[d.name]||{}),[i]:true}}))} className="w-8 h-8 shrink-0 text-neutral-300 text-xl leading-none">×</button></div>
-         <select value={pOf(d,i)} onChange={e=>{const v=e.target.value;up("prod",p=>({...p,[d.name]:{...(p[d.name]||{}),[i]:v}}));}}
+         <select value={pOf(d,i)} onChange={e=>{const v=e.target.value;
+           if(v==="__new__"){setNewProd({apply:n=>up("prod",p=>({...p,[d.name]:{...(p[d.name]||{}),[i]:n}}))});return;}
+           up("prod",p=>({...p,[d.name]:{...(p[d.name]||{}),[i]:v}}));}}
           className="w-full h-11 px-2 rounded-xl border text-sm"
           style={{borderColor:edP(d,i)?GOLD:"#EFECE6",background:edP(d,i)?"#FFFDF7":"#fff",color:edP(d,i)?GOLD:"#3f3f3f"}}>
           <option value={d.ing[i].s||""}>{d.ing[i].n}{d.ing[i].s?` — ${d.ing[i].s}`:""}</option>
-          {CATS.map(c=>(<optgroup key={c} label={c}>{INV.filter(y=>y.cat===c&&y.n!==(d.ing[i].s||"")).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}</optgroup>))}</select></div>))}
+          <option value="__new__">+ Product not in inventory…</option>
+          {CATSX.map(c=>(<optgroup key={c} label={c}>{INVX.filter(y=>y.cat===c&&y.n!==(d.ing[i].s||"")).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}</optgroup>))}</select></div>))}
        {(add[d.name]||[]).map((a,j)=>{const st=(k,v)=>up("add",p=>({...p,[d.name]:p[d.name].map((y,z)=>z===j?{...y,[k]:v}:y)}));return(
         <div key={"a"+j} className="pb-2 border-b" style={{borderColor:"#F2F0EB"}}>
          <div className="flex items-center gap-2 mb-1.5">
@@ -237,9 +293,12 @@ export default function Runsheet(){
            {["ml","dash","drop","piece","slice","wedge","sprig","cube","spoon"].map(u=>(<option key={u}>{u}</option>))}</select>
           <span className="text-xs tabular-nums text-neutral-400 ml-auto shrink-0">£{aCost(d,j).toFixed(2)}</span>
           <button onClick={()=>up("add",p=>({...p,[d.name]:p[d.name].filter((_,z)=>z!==j)}))} className="w-8 h-8 shrink-0 text-neutral-300 text-xl leading-none">×</button></div>
-         <select value={a.s} onChange={e=>st("s",e.target.value)} className="w-full h-11 px-2 rounded-xl border text-sm" style={{borderColor:GOLD,background:"#FFFDF7",color:GOLD}}>
+         <select value={a.s} onChange={e=>{const v=e.target.value;
+           if(v==="__new__"){setNewProd({apply:n=>st("s",n)});return;}
+           st("s",v);}} className="w-full h-11 px-2 rounded-xl border text-sm" style={{borderColor:GOLD,background:"#FFFDF7",color:GOLD}}>
           <option value="">Choose an item…</option>
-          {CATS.map(c=>(<optgroup key={c} label={c}>{INV.filter(y=>y.cat===c).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}</optgroup>))}</select></div>);})}
+          <option value="__new__">+ Product not in inventory…</option>
+          {CATSX.map(c=>(<optgroup key={c} label={c}>{INVX.filter(y=>y.cat===c).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}</optgroup>))}</select></div>);})}
        <div className="flex gap-4 pt-1">
         <button onClick={()=>up("add",p=>({...p,[d.name]:[...(p[d.name]||[]),{q:25,u:"ml",s:""}]}))} className="text-sm underline underline-offset-4" style={{color:GOLD}}>+ Add ingredient</button>
         {dirty(d)&&<button onClick={()=>{up("prod",p=>({...p,[d.name]:{}}));up("ovr",p=>({...p,[d.name]:{}}));up("rm",p=>({...p,[d.name]:{}}));up("add",p=>({...p,[d.name]:[]}));}}
@@ -248,9 +307,12 @@ export default function Runsheet(){
 
     <Sec open={open} setOpen={setOpen} k="bar" title="Back bar & standard service" sub={extra.filter(e=>e.n).length?`${extra.filter(e=>e.n).length} lines`:"From the quote"}>
      {extra.map((e,i)=>(<div key={e.id} className="flex gap-2 mb-2">
-       <select className={F} style={B} value={e.n} onChange={x=>{const v=x.target.value;up("extra",p=>p.map((y,j)=>j===i?{...y,n:v}:y));}}>
+       <select className={F} style={B} value={e.n} onChange={x=>{const v=x.target.value;
+         if(v==="__new__"){setNewProd({apply:nm=>up("extra",p=>p.map((y,j)=>j===i?{...y,n:nm}:y))});return;}
+         up("extra",p=>p.map((y,j)=>j===i?{...y,n:v}:y));}}>
         <option value="">Choose an item…</option>
-        {CATS.map(c=>(<optgroup key={c} label={c}>{INV.filter(y=>y.cat===c).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}</optgroup>))}</select>
+        <option value="__new__">+ Product not in inventory…</option>
+        {CATSX.map(c=>(<optgroup key={c} label={c}>{INVX.filter(y=>y.cat===c).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}</optgroup>))}</select>
        <button onClick={()=>up("extra",p=>p.filter((_,j)=>j!==i))} className="w-10 shrink-0 text-neutral-300 text-xl">×</button></div>))}
      <button onClick={()=>up("extra",x=>[...x,{id:Date.now(),n:""}])} className="w-full py-3 rounded-xl border text-sm" style={{borderColor:"#DDD8CE",color:GOLD}}>+ Add line</button></Sec>
 
@@ -292,5 +354,56 @@ export default function Runsheet(){
   {tab==="out"&&outAll>0&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t flex items-center justify-between" style={{borderColor:LINE}}>
    <span className="text-sm text-neutral-500">{outDone}/{outAll} lines loaded</span>
    <button onClick={()=>setTab("back")} className="px-5 py-3 rounded-full text-white text-sm font-medium" style={{background:GOLD}}>Van loaded</button></div>}
+  {newProd&&<NewProductSheet onCancel={()=>setNewProd(null)} onSave={saveNewProduct}/>}
  </div>);
+}
+
+// Asked for whenever a picker hits something the inventory doesn't have.
+// Deliberately short: name and category are required, price and size are not,
+// because in a van you often know the bottle before you know what it cost.
+function NewProductSheet({onSave,onCancel}){
+ const [f,setF]=useState({n:"",cat:"Spirit",v:"700",uc:"",size:""});
+ const set=(k,v)=>setF(p=>({...p,[k]:v}));
+ const F2="w-full h-12 px-3 rounded-xl border text-base";
+ const B2={borderColor:"#E6E2DA"};
+ return (
+  <div className="fixed inset-0 z-50 flex items-end" style={{background:"rgba(0,0,0,.35)"}}>
+   <div className="w-full rounded-t-2xl bg-white p-5 pb-8" style={{maxHeight:"90vh",overflowY:"auto"}}>
+    <div className="text-lg mb-4" style={{fontFamily:"'Cormorant Garamond',serif"}}>New product</div>
+
+    <label className="block text-xs text-neutral-500 mb-1">Name</label>
+    <input autoFocus className={F2} style={B2} placeholder="Courvoisier VS 70cl"
+      value={f.n} onChange={e=>set("n",e.target.value)}/>
+
+    <label className="block text-xs text-neutral-500 mb-1 mt-3">Category</label>
+    <select className={F2} style={B2} value={f.cat} onChange={e=>set("cat",e.target.value)}>
+     {["Spirit","Liqueur","Wine","Prosecco","Champagne","Beer","Mixer","Soft Drink","Garnish","Ice","Other"]
+      .map(c=>(<option key={c}>{c}</option>))}
+    </select>
+
+    <div className="grid grid-cols-2 gap-2 mt-3">
+     <div>
+      <label className="block text-xs text-neutral-500 mb-1">Bottle size (ml)</label>
+      <input inputMode="decimal" className={F2} style={B2} placeholder="700"
+        value={f.v} onChange={e=>set("v",e.target.value.replace(/[^0-9.]/g,""))}/>
+     </div>
+     <div>
+      <label className="block text-xs text-neutral-500 mb-1">Bottle cost (£)</label>
+      <input inputMode="decimal" className={F2} style={B2} placeholder="optional"
+        value={f.uc} onChange={e=>set("uc",e.target.value.replace(/[^0-9.]/g,""))}/>
+     </div>
+    </div>
+    <p className="text-xs text-neutral-400 mt-2 leading-relaxed">
+     Leave the cost blank if you don't know it. The product still loads out and
+     appears on the brief — it just won't add to the drink cost until it's priced.
+    </p>
+
+    <div className="flex gap-2 mt-5">
+     <button onClick={onCancel} className="flex-1 h-12 rounded-xl border text-base" style={{borderColor:"#DDD8CE",color:"#6B6459"}}>Cancel</button>
+     <button onClick={()=>onSave(f)} disabled={!f.n.trim()}
+       className="flex-1 h-12 rounded-xl text-white text-base" style={{background:f.n.trim()?INK:"#C9C4BA"}}>Add</button>
+    </div>
+   </div>
+  </div>
+ );
 }

@@ -12,8 +12,10 @@ import DRINKS_DATA from "./drinks-data.json";
 //     keeps working in a venue car park with no signal
 //   • it renders inside AppShell like every other page
 
-const LIB = DRINKS_DATA.drinks;
-const INV = DRINKS_DATA.inventory;
+// The bundled file is the floor, not the source. It paints instantly and keeps
+// the run sheet usable with no signal; Notion overwrites it a moment later.
+const FALLBACK_LIB = DRINKS_DATA.drinks;
+const FALLBACK_INV = DRINKS_DATA.inventory;
 
 // ── Storage ──────────────────────────────────────────────────
 // Offline first. The device copy is written every time and never fails; the
@@ -50,13 +52,12 @@ async function saveEvents(events) {
 }
 
 const GOLD="#B48A3C",INK="#101010",LINE="#E6E2DA";
-const BY={}; INV.forEach(i=>BY[i.n]=i);
-const CATS=[...new Set(INV.map(i=>i.cat))].sort();
 // Cost per ml from a bottle price and size — what makes a hand-added product
 // cost exactly like a stocked one.
 const cpmOf=(cost,ml)=>(Number(ml)>0?Number(cost)/Number(ml):0);
 const SEC=["Cocktail spirits","Back bar","Chilled — critical","Mixers & juices"];
 const GSEC="Garnish & consumables";
+const DISPOSABLE=["Plastic Shot"];
 const TYPES=["Welcome Cocktail","Welcome Mocktail","Cocktail","Mocktail","Shooter"];
 const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"5pm to 12am",arrival:"12pm",guests:"",uniform:"Black trousers, black shirts and aprons (provided)"},
  staff:[{id:1,name:"",role:"",transport:"Car"}],sel:{},ovr:{},prod:{},rm:{},add:{},extra:[],out:{},back:{},gCost:{},
@@ -66,6 +67,10 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  // Pulled from the confirmed booking in Notion. `requests` is the internal
  // notes field — the place anything a client specifically asked for ends up.
  bookingId:"",requests:"",
+ // Event-only brand swaps: {"Absolut Vodka 1L":"Smirnoff Red 1L"}. Applies
+ // across every recipe on this run sheet so the van carries one vodka, not two.
+ // Nothing here touches the drinks library.
+ swap:{},
  // Products used on this event that aren't in Inventory yet. They cost and
  // load out like anything else; pushing them to Notion is a separate button.
  newInv:[]});
@@ -88,9 +93,24 @@ export default function Runsheet(){
  const [online,setOnline]=useState(true);
  const [newProd,setNewProd]=useState(null);   // {apply} while the sheet is open
  const [pushing,setPushing]=useState("");
- const [open,setOpen]=useState({det:true,staff:false,drinks:true,glass:false,bar:false});
+ const [open,setOpen]=useState({det:true,staff:false,drinks:true,swap:false,glass:false,bar:false});
  const [glassCopied,setGlassCopied]=useState(false);
  const [bookings,setBookings]=useState([]);
+ const [LIB,setLIB]=useState(FALLBACK_LIB);
+ const [INV,setINV]=useState(FALLBACK_INV);
+ const [libSource,setLibSource]=useState("bundled");
+
+ // Live library from Notion. Failure is fine and silent — we already have a
+ // working copy on screen.
+ useEffect(()=>{
+  fetch("/api/drinks").then(r=>r.json())
+   .then(res=>{
+    if(res.error||!res.drinks?.length)return;
+    setLIB(res.drinks);setINV(res.inventory||FALLBACK_INV);
+    setLibSource(res.stale?"cached":"notion");
+   })
+   .catch(()=>{});
+ },[]);
 
  // Confirmed bookings, so a run sheet can be filled from one rather than
  // retyped. Silent on failure — the run sheet works offline and typing the
@@ -172,9 +192,23 @@ export default function Runsheet(){
  // ── Glassware ───────────────────────────────────────────────────
  // The menu decides WHICH glasses are needed. Quantities are typed — nobody
  // needs a formula guessing at a number they already know.
+ // Every product the chosen menu calls for, before any swapping. This is the
+ // list worth offering swaps on — no point showing brands not on this event.
+ const baseProducts=(()=>{
+  const set=new Set();
+  picked.forEach(d=>d.ing.forEach((ing,i)=>{
+   if(rm[d.name]?.[i])return;
+   if(ing.s)set.add(ing.s);
+  }));
+  return [...set].sort();
+ })();
+ const swapCount=baseProducts.filter(b=>swap[b]&&swap[b]!==b).length;
+
  const glassRows=(()=>{
   const counts={};
-  picked.forEach(d=>{if(d.glass)counts[d.glass]=(counts[d.glass]||0)+1;});
+  // Plastic shot glasses are ours, not the hire company's — they'd only
+  // confuse an order, so they stay off this list.
+  picked.forEach(d=>{if(d.glass&&!DISPOSABLE.includes(d.glass))counts[d.glass]=(counts[d.glass]||0)+1;});
   (E.gExtra||[]).forEach(x=>{if(x.t&&!counts[x.t])counts[x.t]=0;});
   return Object.keys(counts).sort().map(t=>({
    type:t,drinks:counts[t],qty:parseInt((E.gQty||{})[t],10)||0,
@@ -192,9 +226,17 @@ export default function Runsheet(){
   `Total: ${glassTotal}`,
  ].filter(x=>x!==null).join("\n");
  const qOf=(d,i)=>ovr[d.name]?.[i]??d.ing[i].q;
- const pOf=(d,i)=>prod[d.name]?.[i]??(d.ing[i].s||"");
+ // A per-drink change beats the event swap — if you deliberately set the
+ // Espresso Martini to Grey Goose, a blanket vodka swap shouldn't undo it.
+ const swap=E.swap||{};
+ const pOf=(d,i)=>{
+  const perDrink=prod[d.name]?.[i];
+  if(perDrink!==undefined)return perDrink;
+  const base=d.ing[i].s||"";
+  return swap[base]||base;
+ };
  const edQ=(d,i)=>ovr[d.name]?.[i]!==undefined&&ovr[d.name][i]!==d.ing[i].q;
- const edP=(d,i)=>prod[d.name]?.[i]!==undefined&&prod[d.name][i]!==(d.ing[i].s||"");
+ const edP=(d,i)=>pOf(d,i)!==(d.ing[i].s||"");
  const lineCost=(d,i)=>{const it=BYX[pOf(d,i)];return it?qOf(d,i)*it.cpm:(d.ing[i].q?d.ing[i].c/d.ing[i].q*qOf(d,i):d.ing[i].c);};
  const secOf=n=>{const it=BYX[n],c=it?it.cat:"Other";
   if(/espresso|cream|milk/i.test(n))return "Chilled — critical";
@@ -377,6 +419,41 @@ export default function Runsheet(){
         {dirty(d)&&<button onClick={()=>{up("prod",p=>({...p,[d.name]:{}}));up("ovr",p=>({...p,[d.name]:{}}));up("rm",p=>({...p,[d.name]:{}}));up("add",p=>({...p,[d.name]:[]}));}}
          className="text-sm underline underline-offset-4 text-neutral-400">Reset</button>}</div></div>}
      </div>);})}</Sec>
+
+    <Sec open={open} setOpen={setOpen} k="swap" title="Brand swaps"
+      sub={swapCount?`${swapCount} swapped for this event`:(baseProducts.length?"Using recipe brands":"Choose drinks first")}>
+     {!baseProducts.length
+      ? <p className="text-sm text-neutral-400 text-center py-4">Pick your drinks first.</p>
+      : (<>
+       <p className="text-xs text-neutral-400 mb-3">
+        For this event only — the drinks library doesn't change. Swap here and the
+        loading list, costs and brief all follow, so you carry one bottle not two.
+       </p>
+       {baseProducts.map(b=>{
+        const to=swap[b]||b, changed=to!==b;
+        return (
+         <div key={b} className="py-2 border-b" style={{borderColor:"#F2F0EB"}}>
+          <div className="text-sm mb-1.5" style={{color:changed?"#9A9388":INK,textDecoration:changed?"line-through":"none"}}>{b}</div>
+          <select value={to} onChange={e=>{const v=e.target.value;
+            if(v==="__new__"){setNewProd({apply:nm=>up("swap",p=>({...(p||{}),[b]:nm}))});return;}
+            up("swap",p=>{const n={...(p||{})};
+             if(v===b)delete n[b];else n[b]=v;
+             return n;});}}
+           className="w-full h-11 px-2 rounded-xl border text-sm"
+           style={{borderColor:changed?GOLD:"#EFECE6",background:changed?"#FFFDF7":"#fff",color:changed?GOLD:"#3f3f3f"}}>
+           <option value={b}>{b}{changed?"":" — as per recipe"}</option>
+           <option value="__new__">+ Product not in inventory…</option>
+           {CATSX.map(c=>(<optgroup key={c} label={c}>
+            {INVX.filter(y=>y.cat===c&&y.n!==b).map(y=>(<option key={y.n} value={y.n}>{y.n}</option>))}
+           </optgroup>))}
+          </select>
+         </div>);
+       })}
+       {swapCount>0&&(
+        <button onClick={()=>up("swap",()=>({}))} className="text-sm underline underline-offset-4 text-neutral-400 mt-3">
+         Reset all to recipe brands</button>)}
+      </>)}
+    </Sec>
 
     <Sec open={open} setOpen={setOpen} k="glass" title="Glassware order"
       sub={glassRows.length?(glassTotal?`${glassTotal} glasses · ${glassRows.length} type${glassRows.length===1?"":"s"}`:`${glassRows.length} type${glassRows.length===1?"":"s"} — quantities to add`):"Choose drinks first"}>

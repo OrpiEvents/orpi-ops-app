@@ -219,7 +219,9 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     cocktailGates.length > 0 ||
     mocktailGates.length > 0 ||
     (providesAlcohol && quotedSelections && !form.spiritsSelection && !reviewBannerDismissed);
-  const costsAttention = !form.targetMargin || costs.length === 0;
+  // Costs arrive from Close event now, so an empty list means the event hasn't
+  // been closed — that's the thing worth flagging, not a missing margin.
+  const costsAttention = costs.length === 0;
   const overviewAttention = completionGates.length > 0 && booking.status !== 'Completed';
   const notesAttention = false; // notes are always optional, never blocks
 
@@ -237,14 +239,12 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     nextHint = null;
   } else if (providesAlcohol && quotedSelections && !form.spiritsSelection && !reviewBannerDismissed && tab !== 'planning') {
     nextHint = { label: 'Review quoted brands from the enquiry', tab: 'planning' };
-  } else if (!form.targetMargin && tab !== 'costs') {
-    nextHint = { label: 'Set a target margin for this event', tab: 'costs' };
   } else if (planningAttention && tab !== 'planning') {
     nextHint = { label: 'A few planning items still need attention', tab: 'planning' };
   } else if (providesAlcohol && !booking.outboundLoggedAt) {
-    nextHint = { label: 'Before the event, log outbound stock on the Checklist', tab: null, href: `/bookings/${booking.id}/checklist` };
+    nextHint = { label: 'Load the van on the run sheet', tab: null, href: '/runsheet' };
   } else if (providesAlcohol && booking.outboundLoggedAt && !booking.returnLoggedAt) {
-    nextHint = { label: 'After the event, log returned stock on the Checklist', tab: null, href: `/bookings/${booking.id}/checklist` };
+    nextHint = { label: 'Close the event on the run sheet to record what was used', tab: null, href: '/runsheet' };
   } else if (completionGates.length > 0 && tab !== 'overview') {
     nextHint = { label: 'Ready to close? See outstanding items on Overview', tab: 'overview' };
   }
@@ -258,16 +258,16 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
             <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{fmtDate(booking.eventDate)} · {booking.venue}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <a href={`/bookings/${booking.id}/checklist`} target="_blank" rel="noopener noreferrer"
+            <a href="/runsheet" target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 12, background: 'var(--gold)', color: '#fff', padding: '7px 12px', borderRadius: 8, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              🖨 Checklist
+              Run sheet
             </a>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 20, lineHeight: 1 }}>✕</button>
           </div>
         </div>
 
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          {[['overview', 'Overview'], ['planning', 'Planning'], ['costs', 'Event costs'], ['notes', 'Notes']].map(([k, label]) => (
+          {[['overview', 'Overview'], ['planning', 'Planning'], ['costs', 'Actual costs'], ['notes', 'Notes']].map(([k, label]) => (
             <div key={k} onClick={() => setTab(k)} style={{
               padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
               color: tab === k ? 'var(--text)' : 'var(--muted)',
@@ -394,7 +394,7 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                   </div>
                 )}
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
-                  What we're actually bringing on the day. Overrides the standard package — the checklist and pack list will use these.
+                  What we're actually bringing on the day. Overrides the standard package — the run sheet picks these up.
                 </p>
                 <Field label="Spirits"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.spiritsSelection} onChange={e => set({ spiritsSelection: e.target.value })} placeholder="Absolut, Bombay Sapphire, Jameson…" /></Field>
                 <Field label="Beer"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.beerSelection} onChange={e => set({ beerSelection: e.target.value })} placeholder="Budweiser only (dropped Peroni)" /></Field>
@@ -448,82 +448,11 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
 
           {tab === 'costs' && (
             <>
-              {/* ── Internal costing summary — margin & price ────────
-                  Sits at the top so at a glance you see: what this event
-                  actually costs us, what margin you're aiming for, and
-                  what price should be quoted to hit it. */}
-              {(() => {
-                const quoteValue = parseFloat(booking.finalQuoteAmount ?? booking.quoteAmount) || 0;
-                const marginPct = parseFloat(form.targetMargin);
-                const validMargin = !isNaN(marginPct) && marginPct >= 0;
-                // Suggested price = cost / (1 - margin) so the MARGIN is a
-                // percentage of the FINAL PRICE (industry convention),
-                // not a markup on cost. Falls back to cost + 55% if no
-                // margin has been set.
-                const suggested = validMargin && marginPct < 100
-                  ? totalCost / (1 - marginPct / 100)
-                  : totalCost * 1.55;
-                const actualMargin = quoteValue > 0 ? ((quoteValue - totalCost) / quoteValue) * 100 : null;
-                const actualBelowTarget = validMargin && actualMargin !== null && actualMargin < marginPct;
-
-                return (
-                  <div style={{ background: '#faf9f6', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 18 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--muted)', marginBottom: 12 }}>Internal costing → quote price</div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Internal cost (total)</div>
-                        <div style={{ fontSize: 22, fontFamily: 'var(--serif)', fontWeight: 500, color: '#0a0a0a', marginTop: 2 }}>{gbp(totalCost)}</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{costs.length} cost line{costs.length === 1 ? '' : 's'} across {new Set(costs.map(c => c.costType)).size} categor{new Set(costs.map(c => c.costType)).size === 1 ? 'y' : 'ies'}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Target margin</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-                          <input
-                            type="number" min="0" max="99" step="1" placeholder="—"
-                            value={form.targetMargin}
-                            onChange={e => set({ targetMargin: e.target.value })}
-                            style={{ width: 72, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 20, fontFamily: 'var(--serif)', fontWeight: 500, textAlign: 'right', background: '#fff' }} />
-                          <span style={{ fontSize: 18, color: 'var(--muted)' }}>%</span>
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Type your target for this event</div>
-                      </div>
-                    </div>
-
-                    <div style={{ background: '#fff', borderRadius: 8, padding: '12px 14px', marginBottom: quoteValue > 0 ? 10 : 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <div>
-                          <div style={{ fontSize: 10, color: 'var(--gold)', letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 600 }}>Suggested quote price</div>
-                          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{validMargin ? `To hit ${marginPct}% margin` : 'Set a margin above to calibrate'}</div>
-                        </div>
-                        <div style={{ fontSize: 26, fontFamily: 'var(--serif)', fontWeight: 500, color: '#0a0a0a' }}>{gbp(suggested)}</div>
-                      </div>
-                    </div>
-
-                    {quoteValue > 0 && (
-                      <div style={{ background: actualBelowTarget ? '#fef6e4' : '#fff', border: actualBelowTarget ? '1px solid #f0c674' : 'none', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Actual quote & margin</div>
-                          <div style={{ fontSize: 13, color: '#0a0a0a', marginTop: 3 }}>
-                            {gbp(quoteValue)} quoted · <strong style={{ color: actualBelowTarget ? '#b8720a' : '#0a0a0a' }}>
-                              {actualMargin === null ? '—' : `${actualMargin.toFixed(1)}% margin`}
-                            </strong>
-                          </div>
-                        </div>
-                        {actualBelowTarget && (
-                          <div style={{ fontSize: 11, color: '#b8720a', fontStyle: 'italic', textAlign: 'right' }}>
-                            Below target by<br /><strong>{(marginPct - actualMargin).toFixed(1)}pp</strong>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
-                      Remember to save changes (bottom of panel) to persist the target margin to Notion.
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Pricing lives in the quote builder — margin and suggested price
+                  are decisions you make before selling, not after. What's left here
+                  is the record of what the event actually cost. Most of it is
+                  written by Close event on the run sheet; add anything that turns
+                  up later, like a glassware invoice. */}
 
               {/* ── Cost lines grouped by category ── */}
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 10 }}>

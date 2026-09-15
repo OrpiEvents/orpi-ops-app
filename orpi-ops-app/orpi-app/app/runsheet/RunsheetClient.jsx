@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabaseBrowser";
 import DRINKS_DATA from "./drinks-data.json";
 import { costTypeFor, CATEGORIES, sectionFor, GARNISH_SECTION } from "@/lib/taxonomy";
+import { matchScore } from "@/lib/matching";
 
 // Run sheet — Setup, Brief, Out, In.
 //
@@ -121,6 +122,7 @@ export default function Runsheet(){
  const [closing,setClosing]=useState(false);
  const [closeMsg,setCloseMsg]=useState("");
  const [subFor,setSubFor]=useState(null);   // drink whose substitute sheet is open
+ const [pullMsg,setPullMsg]=useState("");
  const [bookings,setBookings]=useState([]);
  const [LIB,setLIB]=useState(FALLBACK_LIB);
  const [INV,setINV]=useState(FALLBACK_INV);
@@ -221,8 +223,27 @@ export default function Runsheet(){
   setClosing(false);
  }
 
- // Fills the event from a booking. Doesn't touch drinks or staff — those are
- // decisions, not facts, and overwriting them would lose real work.
+ // The booking stores selections as comma-separated text typed by a person, so
+ // expect stray semicolons, newlines and the odd missing comma.
+ const splitList=t=>String(t||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
+
+ // Best match, not first-over-the-line. Scoring every candidate and taking the
+ // highest is the difference between "Gordons Pink" finding Gordons Pink Gin
+ // and it grabbing Gordons Dry because that sorts earlier.
+ function bestMatch(name,candidates,label,floor){
+  const exact=candidates.find(c=>label(c).toLowerCase()===name.toLowerCase());
+  if(exact)return exact;
+  let top=null,topScore=0;
+  for(const c of candidates){
+   const sc=matchScore(name,label(c));
+   if(sc>topScore){topScore=sc;top=c;}
+  }
+  return topScore>=floor?top:null;
+ }
+
+ // Fills the event from a booking: details, notes, the drinks menu and the back
+ // bar. Never overwrites — a section you've already built is left alone, so
+ // re-picking the booking can't undo an evening's work.
  function pullBooking(id){
   const b=bookings.find(x=>x.id===id);
   if(!b){up("ev",p=>p);return;}
@@ -234,6 +255,49 @@ export default function Runsheet(){
    venue:b.venue||p.venue,
    guests:b.guestCount!=null?String(b.guestCount):p.guests,
   }));
+
+  const notes=[];
+  const missed=[];
+
+  // Cocktails and mocktails → the drinks selection.
+  const wanted=[...splitList(b.cocktailMenu),...splitList(b.mocktailMenu)];
+  if(wanted.length){
+   if(Object.keys(sel).some(k=>sel[k])){
+    notes.push("drinks already chosen, left as they were");
+   } else {
+    const picks={};
+    wanted.forEach(name=>{
+     const hit=bestMatch(name,LIB,d=>d.name,0.92);
+     if(hit)picks[hit.name]=true; else missed.push(name);
+    });
+    const n=Object.keys(picks).length;
+    if(n){up("sel",()=>picks);notes.push(`${n} drink${n===1?"":"s"}`);}
+   }
+  }
+
+  // Spirits, beer and softs → the back bar.
+  const bar=[...splitList(b.spiritsSelection),...splitList(b.beerSelection),...splitList(b.softDrinksSelection)];
+  if(bar.length){
+   if(extra.some(e=>e.n)){
+    notes.push("back bar already set up, left as it was");
+   } else {
+    const rows=[];
+    bar.forEach((name,i)=>{
+     const hit=bestMatch(name,INVX,x=>x.n,0.88);
+     // Unmatched lines still go on the bar — the client was promised it, and a
+     // name we don't stock is exactly what you need to see before loading.
+     rows.push({id:Date.now()+i,n:hit?hit.n:name});
+     if(!hit)missed.push(name);
+    });
+    if(rows.length){up("extra",()=>rows);notes.push(`${rows.length} back bar line${rows.length===1?"":"s"}`);}
+   }
+  }
+
+  setPullMsg(
+   notes.length
+    ? `Pulled ${notes.join(", ")}.`+(missed.length?` ${missed.length} not recognised: ${missed.slice(0,4).join(", ")}${missed.length>4?"…":""} — check these before loading.`:"")
+    : "Nothing else on the booking to pull — drinks weren't recorded against it."
+  );
  }
 
  if(!ready)return(<div className="min-h-screen flex items-center justify-center text-neutral-400">Loading…</div>);
@@ -459,12 +523,15 @@ export default function Runsheet(){
      {!!bookings.length&&(
       <div className="mb-4">
        <label className="block text-xs text-neutral-500 mb-1">Fill from a confirmed booking</label>
-       <select className={F} style={B} value={E.bookingId||""} onChange={e=>pullBooking(e.target.value)}>
+       <select className={F} style={B} value={E.bookingId||""} onChange={e=>{setPullMsg("");pullBooking(e.target.value);}}>
         <option value="">Type the details by hand…</option>
         {bookings.map(b=>(<option key={b.id} value={b.id}>
          {(b.clientName||b.name)}{b.eventDate?` — ${new Date(b.eventDate+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}`:""}
         </option>))}
        </select>
+       {!!pullMsg&&(
+        <div className="mt-2 rounded-xl px-3 py-2 text-xs leading-relaxed"
+          style={{background:"#FFFDF7",border:"1px solid "+GOLD,color:"#7a6300"}}>{pullMsg}</div>)}
       </div>)}
 
      <div className="space-y-3">

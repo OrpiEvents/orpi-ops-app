@@ -58,6 +58,20 @@ const cpmOf=(cost,ml)=>(Number(ml)>0?Number(cost)/Number(ml):0);
 const SEC=["Cocktail spirits","Back bar","Chilled — critical","Mixers & juices"];
 const GSEC="Garnish & consumables";
 const DISPOSABLE=["Plastic Shot"];
+// Same mapping the close route uses, so a bought-on-the-day item lands under
+// the cost type it would have had if it came off the van.
+const COST_TYPE_BY_CAT={Spirit:"Alcohol",Liqueur:"Alcohol",Wine:"Alcohol",Prosecco:"Alcohol",
+ Champagne:"Alcohol",Beer:"Alcohol",Mixer:"Mixers","Soft Drink":"Mixers",Ice:"Ice"};
+// Costs that never come out of the van, so nothing else would ever prompt for
+// them. Left unentered, they're what turns into a lump-sum guess later.
+const FINAL_COSTS=[
+ {k:"Glassware",label:"Glassware hire"},
+ {k:"Staff",label:"Staff"},
+ {k:"Logistics/Travel",label:"Travel, van & parking"},
+ {k:"Printing/Branding",label:"Printed menus & signage"},
+ {k:"Ice",label:"Ice (if bought in)"},
+ {k:"Other/Misc",label:"Anything else"},
+];
 const TYPES=["Welcome Cocktail","Welcome Mocktail","Cocktail","Mocktail","Shooter"];
 const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"5pm to 12am",arrival:"12pm",guests:"",uniform:"Black trousers, black shirts and aprons (provided)"},
  staff:[{id:1,name:"",role:"",transport:"Car"}],sel:{},ovr:{},prod:{},rm:{},add:{},extra:[],out:{},back:{},gCost:{},
@@ -66,7 +80,9 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  gQty:{},gExtra:[],
  // Pulled from the confirmed booking in Notion. `requests` is the internal
  // notes field — the place anything a client specifically asked for ends up.
- bookingId:"",requests:"",
+ bookingId:"",requests:"",closedAt:"",
+ // {Glassware:{amount:"240",note:"Hire invoice"}} or {Staff:{na:true}}
+ finalCosts:{},
  // Event-only brand swaps: {"Absolut Vodka 1L":"Smirnoff Red 1L"}. Applies
  // across every recipe on this run sheet so the van carries one vodka, not two.
  // Nothing here touches the drinks library.
@@ -75,6 +91,9 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  // with the quantity to get; buyExtra is anything off-list — blue roll, ice,
  // a bag of limes.
  buy:{},buyExtra:[],
+ // What the emergency run actually cost, keyed the same as buy. Kept separate
+ // from the quantity so older run sheets still load.
+ buySpend:{},
  // Products used on this event that aren't in Inventory yet. They cost and
  // load out like anything else; pushing them to Notion is a separate button.
  newInv:[]});
@@ -101,6 +120,8 @@ export default function Runsheet(){
  const [glassCopied,setGlassCopied]=useState(false);
  const [shopCopied,setShopCopied]=useState(false);
  const [briefCopied,setBriefCopied]=useState(false);
+ const [closing,setClosing]=useState(false);
+ const [closeMsg,setCloseMsg]=useState("");
  const [subFor,setSubFor]=useState(null);   // drink whose substitute sheet is open
  const [bookings,setBookings]=useState([]);
  const [LIB,setLIB]=useState(FALLBACK_LIB);
@@ -166,6 +187,38 @@ export default function Runsheet(){
         setPushing(`${r.created} added to Inventory`);}
   }catch(e){setPushing("Couldn't add — no connection");}
   setTimeout(()=>setPushing(""),4000);
+ }
+
+ async function closeEvent(force){
+  if(!E.bookingId){setCloseMsg("Link a booking on the Setup tab first — costs need somewhere to go.");return;}
+  if(!usedLines.length){setCloseMsg("Nothing used yet. Fill in the Out and In numbers first.");return;}
+  if(!force&&fcUnresolved.length&&!confirm(
+   `${fcUnresolved.length} cost${fcUnresolved.length===1?"":"s"} not entered: ${fcUnresolved.map(c=>c.label).join(", ")}.\n\n`+
+   "Close anyway? Anything missed here is what turns into a guessed figure later."))return;
+  setClosing(true);setCloseMsg("");
+  try{
+   const summary=[
+    `${ev.client||"Event"}${ev.date?` — ${ev.date}`:""}`,
+    ...usedLines.map(l=>`${l.out-l.in} × ${l.name}`),
+   ].join("\n");
+   const r=await fetch("/api/runsheet/close",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({bookingId:E.bookingId,lines:usedLines,summary,force:!!force,
+     extraCosts:[
+      ...fcEntered.map(c=>({type:c.k,amount:parseFloat(fc[c.k].amount),note:fc[c.k].note||""})),
+      ...shopCosts.map(x=>({type:costTypeOf(x.name),amount:x.amount,note:`Bought on the day — ${x.qty?`${x.qty} × `:""}${x.name}`})),
+     ]})}).then(x=>x.json());
+   if(r.alreadyClosed){
+    if(confirm("This event was already closed. Closing again will add the costs a second time. Continue?"))return closeEvent(true);
+    setCloseMsg("Left as it was.");
+   }
+   else if(r.error)setCloseMsg(r.error);
+   else{
+    up("closedAt",()=>new Date().toISOString());
+    setCloseMsg(`Closed — ${r.costLines} cost line${r.costLines===1?"":"s"} written, £${r.costTotal.toFixed(2)} of stock used.`
+      +(r.skipped?.length?` ${r.skipped.length} item${r.skipped.length===1?"":"s"} not in inventory were skipped.`:""));
+   }
+  }catch(e){setCloseMsg("Couldn't reach Notion — try again when you have signal.");}
+  setClosing(false);
  }
 
  // Fills the event from a booking. Doesn't touch drinks or staff — those are
@@ -283,6 +336,38 @@ export default function Runsheet(){
  extra.forEach(e=>e.n&&e.n.trim()&&all.push({n:e.n,sec:"Back bar",uses:["Standard bar service"]}));
  const grp=SEC.map(s=>({s,rows:all.filter(l=>l.sec===s)})).filter(g=>g.rows.length);
  const gRows=all.filter(l=>l.sec===GSEC);
+
+ // Everything that left the van and didn't come back. This is what gets
+ // written to Notion — one costing line each, and stock down by the same.
+ const usedLines=(()=>{
+  const rows=[...grp.flatMap(g=>g.rows),...gRows];
+  return rows.map(r=>({name:r.n,out:out[r.n]??0,in:back[r.n]??0}))
+             .filter(l=>l.out-l.in>0);
+ })();
+ const usedValue=usedLines.reduce((t,l)=>{
+  const it=BYX[l.name];
+  return t+(it?(l.out-l.in)*it.uc:0);
+ },0);
+
+ const fc=E.finalCosts||{};
+ const fcEntered=FINAL_COSTS.filter(c=>parseFloat(fc[c.k]?.amount)>0);
+ const fcUnresolved=FINAL_COSTS.filter(c=>!(parseFloat(fc[c.k]?.amount)>0)&&!fc[c.k]?.na);
+ const fcValue=fcEntered.reduce((t,c)=>t+parseFloat(fc[c.k].amount),0);
+
+ // Emergency shopping is costed at what was paid, not at stock price — it never
+ // touched the unit, so there's nothing to take out or bring back. Cost type
+ // follows the inventory category where we recognise the item.
+ const costTypeOf=n=>COST_TYPE_BY_CAT[BYX[n]?.cat]||"Other/Misc";
+ const buySpend=E.buySpend||{};
+ const shopCosts=[
+  ...Object.keys(buy).map(n=>({name:n,amount:parseFloat(buySpend[n])||0,qty:buy[n]})),
+  ...buyExtra.map((x,i)=>({name:(x.n||"").trim(),amount:parseFloat(x.spend)||0,qty:x.q})),
+ ].filter(x=>x.name&&x.amount>0);
+ const shopValue=shopCosts.reduce((t,x)=>t+x.amount,0);
+ const shopUnpriced=[
+  ...Object.keys(buy),
+  ...buyExtra.map(x=>(x.n||"").trim()),
+ ].filter(n=>n).length-shopCosts.length;
  const gTotal=gRows.reduce((t,r)=>t+(parseFloat(gCost[r.n])||0),0);
  const total=picked.reduce((t,d)=>t+cost(d),0);
  const outDone=grp.reduce((t,g)=>t+g.rows.filter(r=>(out[r.n]??0)>0).length,0);
@@ -590,6 +675,11 @@ export default function Runsheet(){
         onChange={e=>{const v=e.target.value.replace(/[^0-9]/g,"");up("buy",p=>({...(p||{}),[n]:v}));}}
         className="w-14 h-9 text-center rounded-lg border tabular-nums shrink-0" style={{borderColor:"#E6E2DA"}}/>
       <span className="text-sm min-w-0 flex-1">{n}</span>
+      <span className="text-xs text-neutral-400">£</span>
+      <input inputMode="decimal" placeholder="paid" value={buySpend[n]||""}
+        onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");up("buySpend",p=>({...(p||{}),[n]:v}));}}
+        className="w-16 h-9 text-center rounded-lg border tabular-nums shrink-0"
+        style={{borderColor:parseFloat(buySpend[n])>0?GOLD:"#E6E2DA",color:parseFloat(buySpend[n])>0?GOLD:INK}}/>
       <button onClick={()=>toggleBuy(n)} className="w-7 h-7 shrink-0 text-neutral-300 text-lg leading-none">×</button>
      </div>))}
     {buyExtra.map((x,i)=>(
@@ -600,6 +690,11 @@ export default function Runsheet(){
       <input placeholder="Blue roll, ice, limes…" value={x.n||""}
         onChange={e=>{const v=e.target.value;up("buyExtra",p=>p.map((y,j)=>j===i?{...y,n:v}:y));}}
         className="min-w-0 flex-1 h-9 px-2 rounded-lg border text-sm" style={{borderColor:GOLD,color:GOLD}}/>
+      <span className="text-xs text-neutral-400">£</span>
+      <input inputMode="decimal" placeholder="paid" value={x.spend||""}
+        onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");up("buyExtra",p=>p.map((y,j)=>j===i?{...y,spend:v}:y));}}
+        className="w-16 h-9 text-center rounded-lg border tabular-nums shrink-0"
+        style={{borderColor:parseFloat(x.spend)>0?GOLD:"#E6E2DA",color:parseFloat(x.spend)>0?GOLD:INK}}/>
       <button onClick={()=>up("buyExtra",p=>p.filter((_,j)=>j!==i))} className="w-7 h-7 shrink-0 text-neutral-300 text-lg leading-none">×</button>
      </div>))}
     <button onClick={()=>up("buyExtra",p=>[...(p||[]),{n:"",q:""}])} className="text-sm underline underline-offset-4 mt-2" style={{color:GOLD}}>+ Add item</button>
@@ -626,6 +721,71 @@ export default function Runsheet(){
     <div className="text-xs font-medium mb-1" style={{color:"#A8453A",letterSpacing:".08em"}}>CLIENT REQUESTS</div>
     <div className="text-sm whitespace-pre-wrap" style={{color:"#6B3833"}}>{E.requests}</div>
    </div>)}
+  {tab==="back"&&<div className="mx-5 mt-4 mb-40 rounded-xl px-4 py-3" style={{background:"#faf9f6",border:"1px solid "+LINE}}>
+   <div className="flex items-baseline justify-between mb-1">
+    <div className="text-xs font-medium" style={{color:"#6B6459",letterSpacing:".08em"}}>FINAL COSTS</div>
+    <div className="text-xs" style={{color:fcUnresolved.length?"#B8720A":"#2e7d32"}}>
+     {fcUnresolved.length?`${fcUnresolved.length} to go`:"all clear"}</div>
+   </div>
+   <p className="text-xs text-neutral-400 mb-3 leading-relaxed">
+    Stock comes off the van on its own. These don't — enter them now or they end up as a guess.
+   </p>
+   {FINAL_COSTS.map(c=>{
+    const row=fc[c.k]||{}, na=!!row.na, has=parseFloat(row.amount)>0;
+    return (
+     <div key={c.k} className="py-2 border-b" style={{borderColor:"#F2F0EB"}}>
+      <div className="flex items-center gap-2">
+       <span className="text-sm min-w-0 flex-1" style={{color:na?"#9A9388":INK,textDecoration:na?"line-through":"none"}}>{c.label}</span>
+       {!na&&<>
+        <span className="text-sm text-neutral-400">£</span>
+        <input inputMode="decimal" placeholder="0.00" value={row.amount||""}
+          onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");
+           up("finalCosts",p=>({...(p||{}),[c.k]:{...(p?.[c.k]||{}),amount:v}}));}}
+          className="w-20 h-10 text-center rounded-lg border tabular-nums shrink-0"
+          style={{borderColor:has?GOLD:"#E6E2DA",color:has?GOLD:INK}}/>
+       </>}
+       <button onClick={()=>up("finalCosts",p=>({...(p||{}),[c.k]:{...(p?.[c.k]||{}),na:!na,amount:na?(p?.[c.k]?.amount||""):""}}))}
+         className="text-xs underline underline-offset-4 shrink-0" style={{color:"#B5AFA4"}}>{na?"undo":"n/a"}</button>
+      </div>
+      {has&&<input placeholder="Note — supplier, invoice ref…" value={row.note||""}
+        onChange={e=>{const v=e.target.value;up("finalCosts",p=>({...(p||{}),[c.k]:{...(p?.[c.k]||{}),note:v}}));}}
+        className="w-full h-9 px-2 mt-2 rounded-lg border text-sm" style={{borderColor:"#EFECE6"}}/>}
+     </div>);
+   })}
+   {(shopValue>0||shopUnpriced>0)&&(
+    <div className="mt-3 pt-3 border-t" style={{borderColor:"#EFECE6"}}>
+     <div className="flex justify-between text-sm">
+      <span className="text-neutral-500">Bought on the day</span>
+      <span className="tabular-nums">£{shopValue.toFixed(2)}</span>
+     </div>
+     {shopUnpriced>0&&(
+      <div className="text-xs mt-1" style={{color:"#B8720A"}}>
+       {shopUnpriced} shopping item{shopUnpriced===1?"":"s"} with no price — add what you paid on the Out tab.
+      </div>)}
+    </div>)}
+   <div className="flex justify-between text-sm mt-3 pt-3 border-t" style={{borderColor:"#EFECE6"}}>
+    <span className="text-neutral-500">Entered</span>
+    <span className="tabular-nums">£{(fcValue+shopValue).toFixed(2)}</span>
+   </div>
+  </div>}
+
+  {tab==="back"&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t" style={{borderColor:LINE}}>
+   {closeMsg&&<div className="text-xs mb-2 leading-relaxed" style={{color:closeMsg.startsWith("Closed")?"#2e7d32":"#A8453A"}}>{closeMsg}</div>}
+   <div className="flex items-center justify-between mb-2">
+    <span className="text-sm text-neutral-500">
+     {usedLines.length?`${usedLines.length} stock line${usedLines.length===1?"":"s"} · £${(usedValue+fcValue+shopValue).toFixed(2)} total`:"Nothing used yet"}
+    </span>
+    {E.closedAt&&<span className="text-xs" style={{color:"#2e7d32"}}>✓ closed</span>}
+   </div>
+   <button onClick={()=>closeEvent(false)} disabled={closing||!usedLines.length}
+     className="w-full py-4 rounded-full text-white text-base font-medium"
+     style={{background:usedLines.length&&!closing?INK:"#C9C4BA"}}>
+    {closing?"Writing to Notion…":E.closedAt?"Close event again":"Close event"}</button>
+   <p className="text-xs text-neutral-400 mt-2 leading-relaxed">
+    Writes a cost line per item used, takes it off stock, and marks the booking done.
+   </p>
+  </div>}
+
   {tab==="out"&&outAll>0&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t flex items-center justify-between" style={{borderColor:LINE}}>
    <span className="text-sm text-neutral-500">{outDone}/{outAll} lines loaded</span>
    <button onClick={()=>setTab("back")} className="px-5 py-3 rounded-full text-white text-sm font-medium" style={{background:GOLD}}>Van loaded</button></div>}

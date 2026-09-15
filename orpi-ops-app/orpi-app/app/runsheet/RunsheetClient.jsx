@@ -188,6 +188,8 @@ export default function Runsheet(){
  const CATSX=[...new Set(INVX.map(i=>i.cat))].sort();
 
  const picked=LIB.filter(d=>sel[d.name]);
+ // Declared here, ahead of baseProducts and pOf, both of which read it.
+ const swap=E.swap||{};
 
  // ── Glassware ───────────────────────────────────────────────────
  // The menu decides WHICH glasses are needed. Quantities are typed — nobody
@@ -228,7 +230,6 @@ export default function Runsheet(){
  const qOf=(d,i)=>ovr[d.name]?.[i]??d.ing[i].q;
  // A per-drink change beats the event swap — if you deliberately set the
  // Espresso Martini to Grey Goose, a blanket vodka swap shouldn't undo it.
- const swap=E.swap||{};
  const pOf=(d,i)=>{
   const perDrink=prod[d.name]?.[i];
   if(perDrink!==undefined)return perDrink;

@@ -63,6 +63,9 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  // Glassware order. gQty is the typed quantity per glass type, gExtra any type
  // the drinks list doesn't imply (toast flutes, beer glasses).
  gQty:{},gExtra:[],
+ // Pulled from the confirmed booking in Notion. `requests` is the internal
+ // notes field — the place anything a client specifically asked for ends up.
+ bookingId:"",requests:"",
  // Products used on this event that aren't in Inventory yet. They cost and
  // load out like anything else; pushing them to Notion is a separate button.
  newInv:[]});
@@ -87,6 +90,16 @@ export default function Runsheet(){
  const [pushing,setPushing]=useState("");
  const [open,setOpen]=useState({det:true,staff:false,drinks:true,glass:false,bar:false});
  const [glassCopied,setGlassCopied]=useState(false);
+ const [bookings,setBookings]=useState([]);
+
+ // Confirmed bookings, so a run sheet can be filled from one rather than
+ // retyped. Silent on failure — the run sheet works offline and typing the
+ // details by hand has to stay possible.
+ useEffect(()=>{
+  fetch("/api/bookings").then(r=>r.json())
+   .then(res=>{if(!res.error)setBookings(res.bookings||[]);})
+   .catch(()=>{});
+ },[]);
  const [picker,setPicker]=useState(false),[q,setQ]=useState(""),[ft,setFt]=useState("All");
  const [expand,setExpand]=useState({});
 
@@ -126,6 +139,21 @@ export default function Runsheet(){
         setPushing(`${r.created} added to Inventory`);}
   }catch(e){setPushing("Couldn't add — no connection");}
   setTimeout(()=>setPushing(""),4000);
+ }
+
+ // Fills the event from a booking. Doesn't touch drinks or staff — those are
+ // decisions, not facts, and overwriting them would lose real work.
+ function pullBooking(id){
+  const b=bookings.find(x=>x.id===id);
+  if(!b){up("ev",p=>p);return;}
+  up("bookingId",()=>id);
+  up("requests",()=>b.internalNotes||"");
+  up("ev",p=>({...p,
+   client:b.clientName||b.name||p.client,
+   date:b.eventDate?new Date(b.eventDate+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}):p.date,
+   venue:b.venue||p.venue,
+   guests:b.guestCount!=null?String(b.guestCount):p.guests,
+  }));
  }
 
  if(!ready)return(<div className="min-h-screen flex items-center justify-center text-neutral-400">Loading…</div>);
@@ -198,6 +226,7 @@ export default function Runsheet(){
  L.push(`Service: ${ev.service}${ev.guests?` · ${ev.guests} guests`:""}`);L.push("");
  L.push("Normal bar service and cocktails and mocktails");L.push("");
  L.push(`Staff: ${ev.arrival} arrival`);
+ if((E.requests||"").trim()){L.push("");L.push("CLIENT REQUESTS:");L.push(E.requests.trim());}
  staff.forEach(s=>s.name.trim()&&L.push(`${s.name}${s.role?` ${s.role}`:""} - ${s.transport}`));
  TYPES.forEach(t=>{const ks=picked.filter(d=>d.type===t);if(!ks.length)return;
   L.push("");L.push(`${t}s:`);
@@ -255,6 +284,12 @@ export default function Runsheet(){
 
   <main className="pb-28">
    {tab==="setup"&&<div>
+    {!!(E.requests||"").trim()&&(
+     <div className="mx-5 mt-4 rounded-xl px-4 py-3" style={{background:"#FFF6F5",border:"1px solid #E8B4AE"}}>
+      <div className="text-xs font-medium mb-1" style={{color:"#A8453A",letterSpacing:".08em"}}>CLIENT REQUESTS</div>
+      <div className="text-sm whitespace-pre-wrap" style={{color:"#6B3833"}}>{E.requests}</div>
+     </div>)}
+
     {!!newInv.length&&(
      <div className="mx-5 mt-4 mb-1 rounded-xl px-4 py-3" style={{background:"#FFFDF7",border:"1px solid "+GOLD}}>
       <div className="text-sm" style={{color:GOLD}}>
@@ -267,6 +302,17 @@ export default function Runsheet(){
      </div>)}
 
     <Sec open={open} setOpen={setOpen} k="det" title="Event details" sub={[ev.date,ev.venue].filter(Boolean).join(" · ")||"Not set"}>
+     {!!bookings.length&&(
+      <div className="mb-4">
+       <label className="block text-xs text-neutral-500 mb-1">Fill from a confirmed booking</label>
+       <select className={F} style={B} value={E.bookingId||""} onChange={e=>pullBooking(e.target.value)}>
+        <option value="">Type the details by hand…</option>
+        {bookings.map(b=>(<option key={b.id} value={b.id}>
+         {(b.clientName||b.name)}{b.eventDate?` — ${new Date(b.eventDate+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}`:""}
+        </option>))}
+       </select>
+      </div>)}
+
      <div className="space-y-3">
       {[["client","Client"],["date","Date"],["venue","Venue & address"],["service","Service hours"],["arrival","Staff arrival"],["guests","Guests"],["uniform","Uniform"]].map(([k,l])=>(
        <div key={k}><label className="block text-xs text-neutral-500 mb-1">{l}</label>
@@ -417,6 +463,11 @@ export default function Runsheet(){
 
   {tab==="brief"&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t" style={{borderColor:LINE}}>
    <button onClick={()=>navigator.clipboard?.writeText(brief)} className="w-full py-4 rounded-full text-white text-base font-medium" style={{background:INK}}>Copy message for the team</button></div>}
+  {tab==="out"&&!!(E.requests||"").trim()&&(
+   <div className="mx-5 mb-3 rounded-xl px-4 py-3" style={{background:"#FFF6F5",border:"1px solid #E8B4AE"}}>
+    <div className="text-xs font-medium mb-1" style={{color:"#A8453A",letterSpacing:".08em"}}>CLIENT REQUESTS</div>
+    <div className="text-sm whitespace-pre-wrap" style={{color:"#6B3833"}}>{E.requests}</div>
+   </div>)}
   {tab==="out"&&outAll>0&&<div className="fixed bottom-0 left-0 right-0 px-5 py-3 bg-white border-t flex items-center justify-between" style={{borderColor:LINE}}>
    <span className="text-sm text-neutral-500">{outDone}/{outAll} lines loaded</span>
    <button onClick={()=>setTab("back")} className="px-5 py-3 rounded-full text-white text-sm font-medium" style={{background:GOLD}}>Van loaded</button></div>}

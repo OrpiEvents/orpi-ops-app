@@ -15,6 +15,7 @@ const NOTION_TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB_SALES = process.env.NOTION_DB_SALES || '3216ca9d054980dbb650eac5a7ec55cd';
 const RESEND_KEY = process.env.RESEND_API_KEY;
 const FROM = process.env.ENQUIRY_FROM || 'ORPI Events <hello@orpi.events>';
+const ALERT_TO = process.env.ENQUIRY_ALERT_TO || 'hello@orpi.events';
 const CRON_SECRET = process.env.CRON_SECRET;
 
 const notionHeaders = () => ({
@@ -73,6 +74,33 @@ function buildEmail({ name, eventType, eventDate, venue, guests }) {
   return lines.join('\n');
 }
 
+// The internal heads-up. Deliberately front-loads the contact details and
+// whether the client got an acknowledgement, because an enquiry with no email
+// is the one that needs a human within the hour.
+function buildAlert({ name, eventType, eventDate, venue, guests, email, phone, acknowledged, url }) {
+  return [
+    `${name || 'Unnamed enquiry'}`,
+    '',
+    eventType ? `Event: ${eventType}` : null,
+    eventDate ? `Date: ${prettyDate(eventDate)}` : 'Date: not given',
+    venue ? `Venue: ${venue}` : 'Venue: not given',
+    guests ? `Guests: ${guests}` : 'Guests: not given',
+    '',
+    `Email: ${email || '\u2014 none given'}`,
+    `Phone: ${phone || '\u2014 none given'}`,
+    '',
+    acknowledged
+      ? 'Acknowledgement sent automatically.'
+      : email
+        ? 'Acknowledgement FAILED \u2014 reply manually.'
+        : 'No email address, so nothing was sent. Reply on Instagram.',
+    '',
+    'Follow-up set for two days from now.',
+    '',
+    url,
+  ].filter(x => x !== null).join('\n');
+}
+
 async function queryNew() {
   const rows = [];
   let cursor;
@@ -128,6 +156,9 @@ export async function GET(request) {
       const name = title(p['Name']);
       const email = text(p['Email']);
       const patch = {};
+      // No follow-up date means we've never touched this row, so it's the one
+      // moment to alert on. Keeps it to exactly one message per enquiry.
+      const firstSeen = !dateOf(p['Follow Up Date']);
 
       // These two get filled whether or not there's an email to send to — a DM
       // enquiry with no address still needs chasing.
@@ -156,6 +187,25 @@ export async function GET(request) {
         }
       } else if (Object.keys(patch).length) {
         tidied.push(name + (email ? '' : ' (no email on file)'));
+      }
+
+      if (firstSeen && RESEND_KEY) {
+        const when = dateOf(p['Event Date']);
+        await sendEmail(
+          ALERT_TO,
+          `New enquiry \u2014 ${name || 'unnamed'}${when ? ` \u00b7 ${prettyDate(when)}` : ''}`,
+          buildAlert({
+            name,
+            eventType: p['Event Type']?.select?.name || '',
+            eventDate: when,
+            venue: text(p['Venue']),
+            guests: p['Guest Count']?.number,
+            email,
+            phone: p['Phone Number']?.number,
+            acknowledged: !!patch['Acknowledged At'],
+            url: page.url,
+          })
+        ).catch(err => failed.push(`alert for ${name}: ${err.message}`));
       }
 
       if (Object.keys(patch).length) {

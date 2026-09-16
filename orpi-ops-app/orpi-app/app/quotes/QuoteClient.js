@@ -325,7 +325,7 @@ function buildInclusions(s) {
   const c = computeCosts(s);
   const out = [];
 
-  if (s.nct > 0 || s.nmt > 0) {
+  if (pkgShows(s.pkg).cocktails && (s.nct > 0 || s.nmt > 0)) {
     out.push(`${s.nct} bespoke cocktail${s.nct !== 1 ? 's' : ''} & ${s.nmt} mocktail${s.nmt !== 1 ? 's' : ''} from our menu`);
   }
   out.push(c.headcount
@@ -343,9 +343,14 @@ function buildInclusions(s) {
   out.push('Bespoke printed menus');
   out.push('Set-up, service & pack-down');
   out.push('Stock planning & bar management');
-  const alc = c.isClientAlcohol ? null : alcoholLine(s);
+  const shows = pkgShows(s.pkg);
+  const alc = shows.alcohol ? alcoholLine(s) : null;
   if (alc) out.push(alc.charAt(0).toUpperCase() + alc.slice(1));
-  out.push('Full soft drinks & mixer range');
+  // Say it plainly rather than leave a gap the client has to notice.
+  if (!shows.alcohol && s.pkg === 'Bar Only (client supplies alcohol)') {
+    out.push('Full bar service — you supply the alcohol');
+  }
+  if (pkgShows(s.pkg).softs) out.push('Full soft drinks & mixer range');
   if (c.tasting === 'included') out.push('Pre-event drinks tasting');
   if (s.wdOn) out.push(`${s.wdDur} of welcome drinks on arrival`);
 
@@ -369,6 +374,21 @@ const ETYPE_SAID = {
   'House Party': 'Party',
   'Other': 'Event',
 };
+
+// What a client is buying, per package. The PDF reads from this rather than
+// showing every section regardless — a Bar Only quote listing our spirits is
+// promising something the client is supplying themselves, and a Welcome Drinks
+// quote with a full back bar on it invites an awkward conversation on the day.
+const PKG_SHOWS = {
+  'Premium':                            { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
+  'Ultimate':                           { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
+  'Full Bar':                           { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
+  'Cocktail Experience':                { alcohol: false, softs: true,  cocktails: true,  welcome: true },
+  'Welcome Drinks Only':                { alcohol: false, softs: true,  cocktails: false, welcome: true },
+  'Bar Only (client supplies alcohol)': { alcohol: false, softs: true,  cocktails: true,  welcome: true },
+  'Custom':                             { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
+};
+const pkgShows = pkg => PKG_SHOWS[pkg] || PKG_SHOWS['Custom'];
 
 const PKG_SAID = {
   'Premium': 'Premium Bar Service',
@@ -1721,6 +1741,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
   const docLabels = { quote: 'Quotation', deposit: 'Deposit Invoice', balance: 'Balance Invoice' };
   const wdActive = s.wdItems.filter(i => i.on && i.text.trim());
   const inclusions = buildInclusions(s);
+  const shows = pkgShows(s.pkg);
   const softActive = s.softItems.filter(i => i.on && i.text.trim());
   const compActive = s.compItems.filter(i => i.on && i.text.trim());
   const activeSpirits = s.spiritRows.filter(r => r.on).map(r => ({ cat: r.cat, items: r.items.filter(i => i.on && i.text.trim()) })).filter(r => r.items.length);
@@ -1847,7 +1868,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
         )}
 
         {/* Welcome drinks */}
-        {s.wdOn && wdActive.length > 0 && (
+        {shows.welcome && s.wdOn && wdActive.length > 0 && (
           <>
             <div style={sectionHead}>{s.wdDur} welcome drinks</div>
             <div style={{ fontSize: 12, color: '#333' }}>{wdActive.map(i => i.text).join(' · ')}</div>
@@ -1855,7 +1876,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
         )}
 
         {/* Spirits & alcohol */}
-        {activeSpirits.length > 0 && (
+        {shows.alcohol && activeSpirits.length > 0 && (
           <>
             <div style={sectionHead}>Spirits &amp; alcohol</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
@@ -1870,7 +1891,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
         )}
 
         {/* Soft drinks */}
-        {softActive.length > 0 && (
+        {shows.softs && softActive.length > 0 && (
           <>
             <div style={sectionHead}>Soft drinks &amp; mixers</div>
             <div style={{ fontSize: 12, color: '#333' }}>{softActive.map(i => i.text).join(' · ')}</div>
@@ -1878,7 +1899,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
         )}
 
         {/* Cocktails & mocktails */}
-        {(s.nct > 0 || s.nmt > 0) && (
+        {shows.cocktails && (s.nct > 0 || s.nmt > 0) && (
           <>
             <div style={sectionHead}>Cocktails &amp; mocktails</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>

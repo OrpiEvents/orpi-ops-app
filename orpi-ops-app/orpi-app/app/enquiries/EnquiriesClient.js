@@ -6,7 +6,13 @@ const EMPTY = {
   name: '', email: '', phone: '', eventDate: '', venue: '', guestCount: '',
   eventType: 'Wedding Reception', serviceType: 'Full Bar (ORPI supplies alcohol)',
   source: 'Instagram', referredBy: '', status: 'New', followUpDate: '', internalNotes: '',
+  lostReason: '',
 };
+
+const LOST_REASONS = ['Price', 'Date unavailable', 'Went with another supplier',
+  'No response', 'Event cancelled', 'Not a fit'];
+
+const gbp = n => '\u00a3' + Math.round(Number(n) || 0).toLocaleString('en-GB');
 
 export default function EnquiriesClient({ userEmail }) {
   const [enquiries, setEnquiries] = useState([]);
@@ -42,6 +48,10 @@ export default function EnquiriesClient({ userEmail }) {
 
   async function save() {
     if (!form.name.trim()) { alert('Client name is required.'); return; }
+    if (form.status === 'Lost' && !form.lostReason) {
+      alert('Pick a lost reason — it is the only way to tell a pricing problem from a follow-up problem.');
+      return;
+    }
     setSaving(true);
     try {
       const url = editingId ? `/api/enquiries/${editingId}` : '/api/enquiries';
@@ -80,8 +90,38 @@ export default function EnquiriesClient({ userEmail }) {
     }
   }
 
+  // A quote is only ever marked lost if doing so takes seconds. Asking for the
+  // reason here — rather than hoping someone opens the modal later — is the
+  // difference between having this data and not.
+  async function markLost(e) {
+    const list = LOST_REASONS.map((r, i) => `${i + 1}. ${r}`).join('\n');
+    const answer = prompt(`Why did ${e.name} not convert?\n\n${list}\n\nEnter a number:`);
+    if (answer === null) return;
+    const reason = LOST_REASONS[parseInt(answer, 10) - 1];
+    if (!reason) { alert('Pick a number from the list.'); return; }
+    try {
+      const res = await fetch(`/api/enquiries/${e.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Lost', lostReason: reason }),
+      }).then(r => r.json());
+      if (res.error) throw new Error(res.error);
+      await load();
+    } catch (err) {
+      alert('Failed: ' + err.message);
+    }
+  }
+
   const today = new Date().toISOString().split('T')[0];
-  const overdue = enquiries.filter(e => e.followUpDate && e.followUpDate < today && !['Won', 'Lost'].includes(e.status));
+  // Sorted by value, because "11 overdue" is a shrug and "£44,195 overdue"
+  // is a morning's work. Biggest first — those are the ones stalling.
+  const overdue = enquiries
+    .filter(e => e.followUpDate && e.followUpDate < today && !['Won', 'Lost'].includes(e.status))
+    .sort((a, b) => (Number(b.quoteSent) || 0) - (Number(a.quoteSent) || 0));
+  const overdueValue = overdue.reduce((t, e) => t + (Number(e.quoteSent) || 0), 0);
+  const oldestDays = overdue.reduce((max, e) => {
+    const d = Math.round((new Date(today) - new Date(e.followUpDate)) / 86400000);
+    return d > max ? d : max;
+  }, 0);
 
   return (
     <AppShell active="/enquiries" userEmail={userEmail}>
@@ -94,7 +134,16 @@ export default function EnquiriesClient({ userEmail }) {
       </div>
 
       {error && <div style={{ background: 'var(--danger-bg)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>Couldn't load enquiries: {error}</div>}
-      {overdue.length > 0 && <div style={{ background: '#fef6e4', color: '#b8720a', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>⚠ {overdue.length} overdue follow-up{overdue.length > 1 ? 's' : ''}: {overdue.map(e => e.name).join(', ')}</div>}
+      {overdue.length > 0 && (
+        <div style={{ background: '#fef6e4', color: '#b8720a', padding: '12px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13, lineHeight: 1.6 }}>
+          <strong>{gbp(overdueValue)} in {overdue.length} overdue follow-up{overdue.length > 1 ? 's' : ''}</strong>
+          {oldestDays > 0 && <> · oldest {oldestDays} days past due</>}
+          <div style={{ marginTop: 4, fontSize: 12 }}>
+            {overdue.slice(0, 5).map(e => `${e.name}${e.quoteSent ? ` (${gbp(e.quoteSent)})` : ''}`).join(' · ')}
+            {overdue.length > 5 && ` · +${overdue.length - 5} more`}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ color: 'var(--muted)', padding: 32, textAlign: 'center' }}>Loading…</div>
@@ -121,9 +170,17 @@ export default function EnquiriesClient({ userEmail }) {
                   <Td muted>{e.source}</Td>
                   <Td><StatusBadge status={e.status} /></Td>
                   <Td muted={!(e.followUpDate < today)}>{fmtDate(e.followUpDate)}</Td>
-                  <Td>{e.status !== 'Won' && e.status !== 'Lost' && (
-                    <button onClick={() => markWon(e)} style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11 }}>Won ✓</button>
-                  )}</Td>
+                  <Td>
+                    {e.status !== 'Won' && e.status !== 'Lost' && (
+                      <span style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => markWon(e)} style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Won ✓</button>
+                        <button onClick={() => markLost(e)} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Lost</button>
+                      </span>
+                    )}
+                    {e.status === 'Lost' && e.lostReason && (
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>{e.lostReason}</span>
+                    )}
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -167,7 +224,24 @@ export default function EnquiriesClient({ userEmail }) {
             </Field>
             <Field label="Follow-up date"><input type="date" style={inputStyle} value={form.followUpDate} onChange={v => setForm({ ...form, followUpDate: v })} /></Field>
           </Row>
+          {form.status === 'Lost' && (
+            <Field label="Lost reason *">
+              <select style={inputStyle} value={form.lostReason} onChange={v => setForm({ ...form, lostReason: v })}>
+                <option value="">Choose one…</option>
+                {LOST_REASONS.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </Field>
+          )}
           <Field label="Internal notes"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={3} value={form.internalNotes} onChange={v => setForm({ ...form, internalNotes: v })} /></Field>
+          {/* Set by the app when the status moves, not by hand — shown so you
+              can see the response time this enquiry actually got. */}
+          {(form.dateQuoted || form.dateDecided) && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: -4, marginBottom: 12, lineHeight: 1.6 }}>
+              {form.dateQuoted && <>Quoted {fmtDate(form.dateQuoted)}</>}
+              {form.dateQuoted && form.dateDecided && ' · '}
+              {form.dateDecided && <>Decided {fmtDate(form.dateDecided)}</>}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
             <button onClick={save} disabled={saving} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13 }}>{saving ? 'Saving…' : 'Save to Notion'}</button>
             <button onClick={() => setModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 18px', fontSize: 13 }}>Cancel</button>

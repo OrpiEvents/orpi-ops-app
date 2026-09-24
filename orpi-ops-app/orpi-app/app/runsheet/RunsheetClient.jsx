@@ -217,7 +217,8 @@ export default function Runsheet(){
    else{
     up("closedAt",()=>new Date().toISOString());
     setCloseMsg(`Closed — ${r.costLines} cost line${r.costLines===1?"":"s"} written, £${r.costTotal.toFixed(2)} of stock used.`
-      +(r.skipped?.length?` ${r.skipped.length} item${r.skipped.length===1?"":"s"} not in inventory were skipped.`:""));
+      +(r.skipped?.length?` ${r.skipped.length} item${r.skipped.length===1?"":"s"} not in inventory were skipped.`:"")
+      +(r.duplicates?.length?` ${r.duplicates.join(", ")} already had a cost line on this event — left alone rather than charged twice.`:""));
    }
   }catch(e){setCloseMsg("Couldn't reach Notion — try again when you have signal.");}
   setClosing(false);
@@ -421,15 +422,33 @@ export default function Runsheet(){
  // follows the inventory category where we recognise the item.
  const costTypeOf=n=>costTypeFor(BYX[n]?.cat);
  const buySpend=E.buySpend||{};
- const shopCosts=[
+ const shopAll=[
   ...Object.keys(buy).map(n=>({name:n,amount:parseFloat(buySpend[n])||0,qty:buy[n]})),
-  ...buyExtra.map((x,i)=>({name:(x.n||"").trim(),amount:parseFloat(x.spend)||0,qty:x.q})),
- ].filter(x=>x.name&&x.amount>0);
+  ...buyExtra.map(x=>({name:(x.n||"").trim(),amount:parseFloat(x.spend)||0,qty:x.q})),
+ ].filter(x=>x.name);
+ // A shopping row that IS a stock item can't be charged here. Buying six litres
+ // of juice and billing the event for all six is wrong when four are still in
+ // the van — that's what the Purchases screen is for: it logs the price, charges
+ // only what was used, and puts the rest back on the shelf. Anything genuinely
+ // consumable — blue roll, limes, a bag of ice — has no stock row and stays a
+ // flat cost here, exactly as before.
+ const shopStock=shopAll.filter(x=>BYX[x.name]);
+ const shopLoose=shopAll.filter(x=>!BYX[x.name]);
+ const shopCosts=shopLoose.filter(x=>x.amount>0);
  const shopValue=shopCosts.reduce((t,x)=>t+x.amount,0);
- const shopUnpriced=[
-  ...Object.keys(buy),
-  ...buyExtra.map(x=>(x.n||"").trim()),
- ].filter(n=>n).length-shopCosts.length;
+ const shopUnpriced=shopLoose.length-shopCosts.length;
+
+ // Hands the list to the Purchases screen rather than making anyone retype it
+ // in a cash and carry car park.
+ function toPurchases(){
+  try{
+   sessionStorage.setItem("orpi:purchase-draft",JSON.stringify({
+    bookingId:E.bookingId||"",adHoc:true,priceMode:"total",
+    items:shopAll.map(x=>({name:x.name,qty:x.qty||"",price:x.amount||""})),
+   }));
+  }catch(e){}
+  window.location.href="/purchases";
+ }
  const gTotal=gRows.reduce((t,r)=>t+(parseFloat(gCost[r.n])||0),0);
  const garnishCosts=gRows
   .map(r=>({name:r.n,amount:parseFloat(gCost[r.n])||0}))
@@ -784,6 +803,18 @@ export default function Runsheet(){
        className="px-4 py-3 rounded-xl border text-sm shrink-0" style={{borderColor:GOLD,color:GOLD}}>
       {shopCopied?"✓":"Copy"}</button>
     </div>
+    {!!shopStock.length&&(
+     <div className="mt-3 pt-3 border-t" style={{borderColor:"#EFE4C4"}}>
+      <div className="text-xs leading-relaxed" style={{color:"#7a6300"}}>
+       {shopStock.length} of these {shopStock.length===1?"is":"are"} stock we carry
+       ({shopStock.map(x=>x.name).join(", ")}). Log {shopStock.length===1?"it":"them"} on
+       Purchases once bought — that sets the price, charges this event only what gets
+       used, and puts the rest back on the shelf.
+      </div>
+      <button onClick={toPurchases}
+        className="w-full mt-2 py-3 rounded-xl text-white text-sm font-medium" style={{background:GOLD}}>
+       Log as purchases →</button>
+     </div>)}
    </div>)}
 
   {tab==="out"&&!shopCount&&!buyExtra.length&&(
@@ -839,7 +870,7 @@ export default function Runsheet(){
        {garnishUnpriced} garnish{garnishUnpriced===1?"":"es"} with no cost — add what they came to on the Out tab.
       </div>)}
     </div>)}
-   {(shopValue>0||shopUnpriced>0)&&(
+   {(shopValue>0||shopUnpriced>0||shopStock.length>0)&&(
     <div className="mt-3 pt-3 border-t" style={{borderColor:"#EFECE6"}}>
      <div className="flex justify-between text-sm">
       <span className="text-neutral-500">Bought on the day</span>
@@ -848,6 +879,13 @@ export default function Runsheet(){
      {shopUnpriced>0&&(
       <div className="text-xs mt-1" style={{color:"#B8720A"}}>
        {shopUnpriced} shopping item{shopUnpriced===1?"":"s"} with no price — add what you paid on the Out tab.
+      </div>)}
+     {/* Deliberately not counted above. Saying so beats a total that silently
+         omits them. */}
+     {!!shopStock.length&&(
+      <div className="text-xs mt-1" style={{color:"#B8720A"}}>
+       {shopStock.length} bought item{shopStock.length===1?" is":"s are"} stock — not counted here.
+       Log {shopStock.length===1?"it":"them"} on Purchases so only what was used gets charged.
       </div>)}
     </div>)}
    <div className="flex justify-between text-sm mt-3 pt-3 border-t" style={{borderColor:"#EFECE6"}}>

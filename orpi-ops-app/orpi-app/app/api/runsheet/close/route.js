@@ -49,6 +49,36 @@ async function queryAll(dbId) {
 const title = p => p?.title?.map(t => t.plain_text).join('').trim() || '';
 const num = p => (typeof p?.number === 'number' ? p.number : null);
 
+// Which inventory items already have a cost line against this booking. The
+// Purchases screen can cost a bottle the moment it's bought — if that bottle is
+// also on the run sheet's Out/In, closing would charge the event twice. Notion
+// won't stop it and the total would just quietly be wrong, so check first.
+async function alreadyCostedItems(bookingId) {
+  const costed = new Set();
+  let cursor;
+  try {
+    do {
+      const res = await fetch(`https://api.notion.com/v1/databases/${DB_COSTING}/query`, {
+        method: 'POST', headers: headers(),
+        body: JSON.stringify({
+          page_size: 100, start_cursor: cursor,
+          filter: { property: '\u{1F4D5} Booking and Events Tracker', relation: { contains: bookingId } },
+        }),
+        cache: 'no-store',
+      });
+      if (!res.ok) return costed; // Can't check — fall through and write anyway.
+      const json = await res.json();
+      for (const page of json.results) {
+        for (const rel of page.properties?.['\u{1F37A} Inventory Items']?.relation || []) {
+          costed.add(rel.id);
+        }
+      }
+      cursor = json.has_more ? json.next_cursor : undefined;
+    } while (cursor);
+  } catch { /* best effort */ }
+  return costed;
+}
+
 async function getBooking(id) {
   const res = await fetch(`https://api.notion.com/v1/pages/${id}`, { headers: headers(), cache: 'no-store' });
   if (!res.ok) throw new Error(`Notion ${res.status} reading booking`);
@@ -88,8 +118,11 @@ export async function POST(request) {
       };
     }
 
+    const preCosted = await alreadyCostedItems(bookingId);
+
     const written = [];
     const skipped = [];
+    const duplicates = [];
     let costed = 0;
 
     for (const line of lines) {
@@ -98,6 +131,9 @@ export async function POST(request) {
 
       const item = invIndex[String(line.name || '').trim().toLowerCase()];
       if (!item) { skipped.push(line.name); continue; }
+      // Already charged to this event — almost always a bottle bought on the day
+      // and logged on the Purchases screen. Leave it alone.
+      if (preCosted.has(item.id)) { duplicates.push(item.name); continue; }
 
       // The costing row. Cost is left empty on purpose — Final Cost is a
       // formula that multiplies quantity by the locked unit cost.
@@ -191,6 +227,7 @@ export async function POST(request) {
       costLines: written.length,
       costTotal: Math.round(costed * 100) / 100,
       skipped,
+      duplicates,
     });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });

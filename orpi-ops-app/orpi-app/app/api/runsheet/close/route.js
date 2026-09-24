@@ -119,6 +119,11 @@ export async function POST(request) {
     }
 
     const preCosted = await alreadyCostedItems(bookingId);
+    // Repeats inside this one request. preCosted is read before any writes, so
+    // it can't see a line this loop just wrote — and a bottle listed twice on
+    // the run sheet carries identical Out/In numbers, which would cost it twice
+    // and take it off stock twice.
+    const seen = new Set();
 
     const written = [];
     const skipped = [];
@@ -134,6 +139,8 @@ export async function POST(request) {
       // Already charged to this event — almost always a bottle bought on the day
       // and logged on the Purchases screen. Leave it alone.
       if (preCosted.has(item.id)) { duplicates.push(item.name); continue; }
+      if (seen.has(item.id)) { duplicates.push(item.name); continue; }
+      seen.add(item.id);
 
       // The costing row. Cost is left empty on purpose — Final Cost is a
       // formula that multiplies quantity by the locked unit cost.

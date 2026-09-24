@@ -393,8 +393,20 @@ export default function Runsheet(){
  picked.forEach(d=>rws(d).forEach(r=>{const b=r.k==="b",k=b?(pOf(d,r.i)||d.ing[r.i].n):aP(d,r.i);if(!k)return;
   if(!map[k])map[k]={n:k,sec:r.sec,uses:[]};
   map[k].uses.push(`${d.name} @ ${b?qOf(d,r.i):aQ(d,r.i)}${r.u}`);}));
+ // Back bar items join the same map rather than getting rows of their own. A
+ // bottle that's in a cocktail AND on the back bar — Fever-Tree Ginger Ale, say
+ // — is still one bottle. Two rows meant two Out/In boxes writing to the same
+ // key, and two cost lines on close taking it off stock twice. It keeps the
+ // section the recipe put it in and just gains the back bar as another use.
+ const keyOf=s=>(s||"").toLowerCase().replace(/\s+/g," ").trim();
+ const byKey={}; Object.keys(map).forEach(k=>{byKey[keyOf(k)]=k;});
+ extra.forEach(e=>{
+  const raw=(e.n||"").trim(); if(!raw)return;
+  const k=byKey[keyOf(raw)]||raw;
+  if(!map[k]){map[k]={n:k,sec:"Back bar",uses:[]};byKey[keyOf(k)]=k;}
+  if(!map[k].uses.includes("Standard bar service"))map[k].uses.push("Standard bar service");
+ });
  const all=Object.values(map);
- extra.forEach(e=>e.n&&e.n.trim()&&all.push({n:e.n,sec:"Back bar",uses:["Standard bar service"]}));
  const grp=SEC.map(s=>({s,rows:all.filter(l=>l.sec===s)})).filter(g=>g.rows.length);
  const gRows=all.filter(l=>l.sec===GSEC);
 
@@ -404,8 +416,17 @@ export default function Runsheet(){
   // Stock only. Garnishes are perishable and bought per event, so they carry a
   // cost rather than a quantity — see garnishCosts below.
   const rows=grp.flatMap(g=>g.rows);
+  // One line per bottle, whatever the rest of the sheet does. Out/In are keyed
+  // by name, so a repeated row carries the same numbers and would be charged
+  // again — this is the last gate before money gets written.
+  const seen=new Set();
   return rows.map(r=>({name:r.n,out:out[r.n]??0,in:back[r.n]??0}))
-             .filter(l=>l.out-l.in>0);
+             .filter(l=>{
+              if(l.out-l.in<=0)return false;
+              const k=(l.name||"").toLowerCase().trim();
+              if(seen.has(k))return false;
+              seen.add(k);return true;
+             });
  })();
  const usedValue=usedLines.reduce((t,l)=>{
   const it=BYX[l.name];

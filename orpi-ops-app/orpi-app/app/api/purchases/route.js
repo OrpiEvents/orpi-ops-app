@@ -149,9 +149,12 @@ export async function POST(request) {
     // the stock take or another close changed in the meantime.
     const stockById = {};
     const catById = {};
+    const idByName = {};
     for (const page of inventoryPages) {
       stockById[page.id] = num(page.properties['Current Stock']) ?? 0;
       catById[page.id] = page.properties[invCat]?.select?.name || 'Other';
+      const nm = title(page.properties[invTitle]);
+      if (nm) idByName[nm.toLowerCase().replace(/\s+/g, ' ').trim()] = page.id;
     }
 
     const saved = [];
@@ -171,7 +174,9 @@ export async function POST(request) {
       if (!name) { failed.push({ name: '(unnamed)', why: 'no name' }); continue; }
       if (!qty) { failed.push({ name, why: 'no quantity' }); continue; }
 
-      let itemId = line.itemId || '';
+      // Last line of defence against a duplicate row: a caller that didn't send
+      // an id might still be naming something that already exists.
+      let itemId = line.itemId || idByName[name.toLowerCase().replace(/\s+/g, ' ').trim()] || '';
 
       // A product nobody has bought before. Created at zero stock — the purchase
       // below is what puts the first bottles on the shelf.

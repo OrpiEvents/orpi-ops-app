@@ -107,6 +107,9 @@ async function build() {
     const v = num(p['Container Volume ml']) || 0;
     const uc = unitCostFor(pid(page), priceIndex, page);
     const item = {
+      // Carried so the run sheet can price an item against the row it already
+      // has in Notion, instead of quietly creating a second one.
+      id: page.id,
       n: title(p['Item Name']),
       cat: sel(p['Catagory']) || 'Other',   // yes, spelled that way in Notion
       v,

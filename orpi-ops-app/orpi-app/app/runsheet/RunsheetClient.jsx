@@ -95,7 +95,10 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  buySpend:{},
  // Products used on this event that aren't in Inventory yet. They cost and
  // load out like anything else; pushing them to Notion is a separate button.
- newInv:[]});
+ newInv:[],
+ // Prices filled in at close for things used here that nothing can cost.
+ // {"Smirnoff 1L":{price:"16.50",cat:"Vodka"}}
+ priceFix:{}});
 
 
 // Collapsible section. Must live OUTSIDE Runsheet: defined inside, it becomes a
@@ -193,17 +196,50 @@ export default function Runsheet(){
  async function closeEvent(force){
   if(!E.bookingId){setCloseMsg("Link a booking on the Setup tab first — costs need somewhere to go.");return;}
   if(!usedLines.length){setCloseMsg("Nothing used yet. Fill in the Out and In numbers first.");return;}
+  if(!force&&unpricedLeft.length&&!confirm(
+   `${unpricedLeft.length} item${unpricedLeft.length===1?"":"s"} used here can't be costed: ${unpricedLeft.map(l=>l.name).join(", ")}.\n\n`+
+   "Closing now leaves them off the event entirely — it will look cheaper than it was. "+
+   "Put a price against them above first. Close anyway?"))return;
   if(!force&&fcUnresolved.length&&!confirm(
    `${fcUnresolved.length} cost${fcUnresolved.length===1?"":"s"} not entered: ${fcUnresolved.map(c=>c.label).join(", ")}.\n\n`+
    "Close anyway? Anything missed here is what turns into a guessed figure later."))return;
   setClosing(true);setCloseMsg("");
   try{
+   // Anything priced above goes through Purchases first. That creates the
+   // inventory row if it's missing, records what it cost so the price is known
+   // from now on, and writes this event's cost line. The close below sees it's
+   // already costed and leaves it alone. Quantity bought is what went out, so
+   // whatever came back lands in stock rather than being charged here.
+   const toBuy=unpriced.filter(l=>pfPrice(l.name)>0);
+   const boughtNames=new Set();
+   let pricedMsg="";
+   if(toBuy.length){
+    setCloseMsg(`Pricing ${toBuy.length} item${toBuy.length===1?"":"s"}…`);
+    const pr=await fetch("/api/purchases",{method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({
+      dateBought:ev.date||new Date().toISOString().split("T")[0],
+      bookingId:E.bookingId,eventLabel:ev.client||"",adHoc:true,
+      lines:toBuy.map(l=>({
+       itemId:BYX[l.name]?.id||"",
+       name:l.name,
+       category:pf[l.name]?.cat||BYX[l.name]?.cat||"Other",
+       size:BYX[l.name]?.size||"",
+       qty:l.out,unitCost:pfPrice(l.name),used:l.out-l.in,
+      })),
+     })}).then(x=>x.json());
+    if(pr.error){setCloseMsg("Couldn't price those items — nothing was closed. "+pr.error);setClosing(false);return;}
+    (pr.saved||[]).forEach(s=>boughtNames.add(s.name));
+    pricedMsg=` ${boughtNames.size} item${boughtNames.size===1?"":"s"} priced and added to inventory.`;
+   }
+
+   // Already costed just now — don't hand them to the close as well.
+   const closeLines=usedLines.filter(l=>!boughtNames.has(l.name));
    const summary=[
     `${ev.client||"Event"}${ev.date?` — ${ev.date}`:""}`,
     ...usedLines.map(l=>`${l.out-l.in} × ${l.name}`),
    ].join("\n");
    const r=await fetch("/api/runsheet/close",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({bookingId:E.bookingId,lines:usedLines,summary,force:!!force,
+    body:JSON.stringify({bookingId:E.bookingId,lines:closeLines,summary,force:!!force,
      extraCosts:[
       ...fcEntered.map(c=>({type:c.k,amount:parseFloat(fc[c.k].amount),note:fc[c.k].note||""})),
       ...shopCosts.map(x=>({type:costTypeOf(x.name),amount:x.amount,note:`Bought on the day — ${x.qty?`${x.qty} × `:""}${x.name}`})),
@@ -217,7 +253,8 @@ export default function Runsheet(){
    else{
     up("closedAt",()=>new Date().toISOString());
     setCloseMsg(`Closed — ${r.costLines} cost line${r.costLines===1?"":"s"} written, £${r.costTotal.toFixed(2)} of stock used.`
-      +(r.skipped?.length?` ${r.skipped.length} item${r.skipped.length===1?"":"s"} not in inventory were skipped.`:"")
+      +pricedMsg
+      +(r.skipped?.length?` ${r.skipped.join(", ")} ${r.skipped.length===1?"is":"are"} not in inventory and cost nothing — that money is missing from this event.`:"")
       +(r.duplicates?.length?` ${r.duplicates.join(", ")} already had a cost line on this event — left alone rather than charged twice.`:""));
    }
   }catch(e){setCloseMsg("Couldn't reach Notion — try again when you have signal.");}
@@ -428,10 +465,21 @@ export default function Runsheet(){
               seen.add(k);return true;
              });
  })();
+ // Used at this event with nothing to cost it against — either added on the fly
+ // and never given a price, or sitting in Notion with no purchase behind it.
+ // Left alone, the close writes a £0 line or skips the item outright, and the
+ // event quietly looks cheaper than it was. Smirnoff taken 6, used 6, costed
+ // nothing. This is where that gets caught, because nothing downstream will.
+ const pf=E.priceFix||{};
+ const pfPrice=n=>parseFloat(pf[n]?.price)||0;
+ const unpriced=usedLines.filter(l=>{const it=BYX[l.name];return !it||!(it.uc>0);});
+ const unpricedLeft=unpriced.filter(l=>!(pfPrice(l.name)>0));
+ const fixValue=unpriced.reduce((t,l)=>t+pfPrice(l.name)*(l.out-l.in),0);
+
  const usedValue=usedLines.reduce((t,l)=>{
   const it=BYX[l.name];
-  return t+(it?(l.out-l.in)*it.uc:0);
- },0);
+  return t+(it&&it.uc>0?(l.out-l.in)*it.uc:0);
+ },0)+fixValue;
 
  const fc=E.finalCosts||{};
  const fcEntered=FINAL_COSTS.filter(c=>parseFloat(fc[c.k]?.amount)>0);
@@ -849,6 +897,48 @@ export default function Runsheet(){
     <div className="text-xs font-medium mb-1" style={{color:"#A8453A",letterSpacing:".08em"}}>CLIENT REQUESTS</div>
     <div className="text-sm whitespace-pre-wrap" style={{color:"#6B3833"}}>{E.requests}</div>
    </div>)}
+  {/* Nothing downstream can rescue these, so they get the loudest panel on the
+      tab and sit above everything else. */}
+  {tab==="back"&&!!unpriced.length&&(
+   <div className="mx-5 mt-4 rounded-xl px-4 py-3" style={{background:"#FBF3F1",border:"1px solid #E7C9C2"}}>
+    <div className="text-xs font-medium mb-1" style={{color:"#8A2E1A",letterSpacing:".08em"}}>
+     NO PRICE · {unpriced.length} ITEM{unpriced.length===1?"":"S"}
+    </div>
+    <p className="text-xs mb-3 leading-relaxed" style={{color:"#8A2E1A"}}>
+     Used at this event but nothing knows what {unpriced.length===1?"it costs":"they cost"}. Put the price of
+     one bottle in and it gets added to inventory, recorded as a purchase, and charged here — so
+     the next event already knows.
+    </p>
+    {unpriced.map(l=>{
+     const known=BYX[l.name];
+     return (
+      <div key={"pf"+l.name} className="py-1">
+       <div className="flex items-center gap-2">
+        <span className="text-sm min-w-0 flex-1">{l.name}
+         <span className="text-xs text-neutral-400"> · used {l.out-l.in}</span></span>
+        <span className="text-xs text-neutral-400">£</span>
+        <input inputMode="decimal" placeholder="each" value={pf[l.name]?.price||""}
+          onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");
+           up("priceFix",p=>({...(p||{}),[l.name]:{...(p?.[l.name]||{}),price:v}}));}}
+          className="w-16 h-9 text-center rounded-lg border tabular-nums shrink-0"
+          style={{borderColor:pfPrice(l.name)>0?"#2e7d32":"#E7C9C2",color:pfPrice(l.name)>0?"#2e7d32":INK}}/>
+       </div>
+       {!known&&(
+        <select value={pf[l.name]?.cat||"Other"}
+          onChange={e=>{const v=e.target.value;
+           up("priceFix",p=>({...(p||{}),[l.name]:{...(p?.[l.name]||{}),cat:v}}));}}
+          className="mt-1 h-8 px-2 rounded-lg border text-xs w-full" style={{borderColor:"#E7C9C2"}}>
+         {CATEGORIES.map(c=><option key={c}>{c}</option>)}
+        </select>)}
+       {pfPrice(l.name)>0&&(
+        <div className="text-xs mt-1" style={{color:"#2e7d32"}}>
+         £{(pfPrice(l.name)*(l.out-l.in)).toFixed(2)} to this event
+         {l.out-(l.out-l.in)>0?` · ${l.out-(l.out-l.in)} back to stock`:""}
+        </div>)}
+      </div>);
+    })}
+   </div>)}
+
   {tab==="back"&&<div className="mx-5 mt-4 mb-40 rounded-xl px-4 py-3" style={{background:"#faf9f6",border:"1px solid "+LINE}}>
    <div className="flex items-baseline justify-between mb-1">
     <div className="text-xs font-medium" style={{color:"#6B6459",letterSpacing:".08em"}}>FINAL COSTS</div>
@@ -923,6 +1013,11 @@ export default function Runsheet(){
     </span>
     {E.closedAt&&<span className="text-xs" style={{color:"#2e7d32"}}>✓ closed</span>}
    </div>
+   {!!unpricedLeft.length&&(
+    <div className="text-xs mb-2 leading-relaxed" style={{color:"#A8453A"}}>
+     {unpricedLeft.length} item{unpricedLeft.length===1?"":"s"} above still {unpricedLeft.length===1?"has":"have"} no
+     price — {unpricedLeft.length===1?"it":"they"} won't reach this event at all.
+    </div>)}
    <button onClick={()=>closeEvent(false)} disabled={closing||!usedLines.length}
      className="w-full py-4 rounded-full text-white text-base font-medium"
      style={{background:usedLines.length&&!closing?INK:"#C9C4BA"}}>

@@ -200,7 +200,10 @@ export async function getBookingById(id) {
 export async function listDrinks() {
   const dbId = process.env.NOTION_DB_DRINKS;
   const data = await notionFetch(`/databases/${dbId}/query`, { method: 'POST', body: JSON.stringify({}) });
-  return data.results.map(pageToDrink);
+  // Alphabetical by category, then by name. Sorted in code because Notion
+  // orders a select property by its schema option order, not alphabetically.
+  return data.results.map(pageToDrink).sort((a, b) =>
+    (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
 }
 
 function pageToDrink(page) {
@@ -453,7 +456,11 @@ export async function listInventoryItems() {
     method: 'POST',
     body: JSON.stringify({ sorts: [{ property: 'Item Name', direction: 'ascending' }] }),
   });
-  return data.results.map(pageToInventoryItem);
+  // Group alphabetically by category, then alphabetically by name within each.
+  // Sorted in code because Notion orders a select property by its schema
+  // option order, not alphabetically.
+  return data.results.map(pageToInventoryItem).sort((a, b) =>
+    (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
 }
 
 function pageToInventoryItem(page) {

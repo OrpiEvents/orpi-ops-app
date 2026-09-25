@@ -112,6 +112,28 @@ const ALCOHOL_MIX = [
   { key: 'wine',     label: 'Wine',     perHead: 0.10 },
 ];
 
+// ── Welcome drinks ──────────────────────────────────────────────────
+// The standard tray: prosecco, beers, one welcome cocktail, one welcome
+// mocktail. Costed per serve from ORPI's own prices — prosecco is Freixenet at
+// £7.23/75cl over six 125ml pours, beer is Birra Moretti 330ml, and the two
+// mixed drinks are the medians of the eight welcome cocktails and eight welcome
+// mocktails in the library.
+//
+// Same rule as ALCOHOL_MIX: a component only costs anything when it's actually
+// on the tray, read from the welcome drinks list on the client quote. Take the
+// prosecco off and the cost drops.
+const WELCOME_MIX = [
+  { key: 'prosecco', label: 'Prosecco',         perServe: 1.21 },
+  { key: 'beer',     label: 'Beer',             perServe: 0.85 },
+  { key: 'cocktail', label: 'Welcome cocktail', perServe: 2.11 },
+  { key: 'mocktail', label: 'Welcome mocktail', perServe: 1.09 },
+];
+
+// How many drinks a guest gets through per hour of arrival drinks. A guess
+// until enough events close through the run sheet to measure it — editable on
+// the quote so it can be corrected without a deploy.
+const WELCOME_PER_HOUR = 1.0;
+
 // Spirit grade multiplier, applied to the spirits component only — upgrading
 // the vodka doesn't make the beer cost more.
 // Derived from real purchase prices: premium brands (Grey Goose, Ciroc,
@@ -139,6 +161,7 @@ const DRINKWARE = {
 // one-off cost line or an explicit "n/a" before the margin figure commits.
 const COST_CHECKS = [
   { key: 'alcohol',     label: 'Alcohol',                   auto: true },
+  { key: 'welcome',     label: 'Welcome drinks',            auto: 'conditional' },
   { key: 'mixers',      label: 'Mixers & soft drinks',      auto: true },
   { key: 'ice',         label: 'Ice',                       auto: true },
   { key: 'garnish',     label: 'Garnishes & sundries',      auto: true },
@@ -238,6 +261,41 @@ function alcoholPerHead(s) {
   }, 0);
 }
 
+// Which of the four welcome components are actually on the tray, read from the
+// welcome drinks list the client sees. Classified most specific first, so
+// "Pimms Cocktails" lands as a cocktail rather than being caught by something
+// broader, and "Ombre Juices" as the mocktail it is.
+const WELCOME_MATCH = [
+  ['mocktail', /mocktail|virgin|non.?alcohol|alcohol.?free|juice|ombre|lemonade|press[eé]|soft/i],
+  ['cocktail', /cocktail|spritz|pimms|aperol|hugo|bellini|martini|punch|sangria|mojito/i],
+  ['prosecco', /prosecco|champagne|cava|sparkl|fizz|bubbl|moet|freixenet|lanson/i],
+  ['beer',     /beer|lager|cider|peroni|moretti|budweiser|\bbud\b|kingfisher|estrella|corona|heineken|stella|birra/i],
+];
+
+function welcomeParts(s) {
+  const out = { prosecco: false, beer: false, cocktail: false, mocktail: false };
+  if (!s.wdOn) return out;
+  (s.wdItems || []).forEach(i => {
+    if (!i.on || !i.text.trim()) return;
+    const hit = WELCOME_MATCH.find(([, re]) => re.test(i.text));
+    if (hit) out[hit[0]] = true;
+  });
+  return out;
+}
+
+// Welcome drinks cost per head. Drinks per head comes from the duration already
+// on the quote; the cost of each one is the average of whatever's on the tray,
+// since a guest takes one drink from the selection rather than one of each.
+function welcomePerHead(s) {
+  if (!s.wdOn) return 0;
+  const parts = welcomeParts(s);
+  const live = WELCOME_MIX.filter(m => parts[m.key]);
+  if (!live.length) return 0;
+  const perDrink = live.reduce((t, m) => t + m.perServe, 0) / live.length;
+  const perHour = num(s.wdPerHour, WELCOME_PER_HOUR);
+  return hoursFrom(s.wdDur) * perHour * perDrink;
+}
+
 // Is a tasting part of this quote? 'auto' follows the guest threshold; the
 // other three are manual overrides for the odd case.
 function tastingState(s) {
@@ -280,6 +338,16 @@ function computeCosts(s) {
   const iceCost = COST.icePerHead * g;
   const garnishCost = COST.garnishPerHead * g;
 
+  // Arrival drinks, costed separately from the bar. Zero the moment welcome
+  // drinks are switched off, or when nothing on the tray is recognisable.
+  const wdParts = welcomeParts(s);
+  const wdPerHead = welcomePerHead(s);
+  const wdCost = wdPerHead * g;
+  const wdHours = s.wdOn ? hoursFrom(s.wdDur) : 0;
+  const wdPerHour = num(s.wdPerHour, WELCOME_PER_HOUR);
+  const wdDrinks = wdHours * wdPerHour;
+  const wdLive = WELCOME_MIX.filter(m => wdParts[m.key]);
+
   const glassPerHead = num(s.glassPerHead, DRINKWARE.mixed.glass);
   const plasticPerHead = num(s.plasticPerHead, DRINKWARE.mixed.plastic);
   const glassCost = glassPerHead * COST.glassRate * g;
@@ -294,13 +362,14 @@ function computeCosts(s) {
 
   const oneOffs = s.costLines.reduce((sum, l) => sum + num(l.qty) * num(l.unitCost), 0);
 
-  const internalCost = alcCost + mixersCost + iceCost + garnishCost
+  const internalCost = alcCost + wdCost + mixersCost + iceCost + garnishCost
     + drinkwareCost + staffCost + prepCost + tastingCost + oneOffs;
 
   return {
     g, serviceHrs, setupHrs, packdownHrs, paidHrs, crew, headcount, crewCostPerHour,
     staffCost, prepHrs, prepCost, prepShadow, isClientAlcohol, alcPerHead, alcCost,
     alcParts, alcManual,
+    wdParts, wdPerHead, wdCost, wdHours, wdPerHour, wdDrinks, wdLive,
     mixersCost, iceCost, garnishCost, glassPerHead, plasticPerHead, glassCost,
     plasticCost, drinkwareCost, tasting, tGuests, tastingCost, tastingCharge,
     oneOffs, internalCost,
@@ -558,7 +627,7 @@ function freshState() {
     // Spirit grade drives the alcohol cost per head. Override beats it outright.
     spiritTier: 'standard', alcoholOverride: '',
     costChecks: {},
-    wdOn: true, wdDur: '2 hours', wdItems: withIds(DEF_WD),
+    wdOn: true, wdDur: '2 hours', wdItems: withIds(DEF_WD), wdPerHour: WELCOME_PER_HOUR,
     inclItems: withIds(DEF_EXTRA_INCL),
     spiritRows: spiritsWithIds(DEF_SPIRITS),
     softItems: withIds(DEF_SOFT),
@@ -590,7 +659,7 @@ export default function QuoteClient({ userEmail }) {
     'salesPerson', 'pkg', 'duration', 'setup', 'startMin', 'endMin',
     'setupHrs', 'packdownHrs', 'drinkware', 'glassPerHead', 'plasticPerHead',
     'tastingMode', 'tastingGuests', 'spiritTier',
-    'wdOn', 'wdDur', 'wdItems',
+    'wdOn', 'wdDur', 'wdItems', 'wdPerHour',
     'inclItems', 'spiritRows', 'softItems',
     'nct', 'nmt', 'addons', 'compItems',
   ];
@@ -1299,6 +1368,39 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
         </>
       )}
 
+      {/* ── Welcome drinks ───────────────────────────────────────────── */}
+      {/* Only appears when welcome drinks are on. Switch them off upstairs and
+          the whole section and its cost disappear with it. */}
+      {s.wdOn && (
+        <>
+          <div style={head}>Welcome drinks</div>
+          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', marginBottom: 6 }}>
+            {WELCOME_MIX.map(m => {
+              const on = c.wdParts[m.key];
+              return (
+                <div key={m.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, padding: '2px 0', color: on ? '#444' : 'var(--muted)' }}>
+                  <span style={{ textDecoration: on ? 'none' : 'line-through' }}>{m.label}</span>
+                  <span>{on ? '£' + m.perServe.toFixed(2) + ' a serve' : 'not on the tray'}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>Drinks per head, per hour</span>
+            <input type="number" min="0" step="0.25" value={s.wdPerHour}
+              onChange={e => set({ wdPerHour: e.target.value })}
+              placeholder={String(WELCOME_PER_HOUR)}
+              title="How hard the crowd goes on arrival. A guess until enough events have closed to measure it."
+              style={{ ...mini, width: 56 }} />
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', fontStyle: 'italic', marginBottom: 4, lineHeight: 1.45 }}>
+            {c.wdLive.length === 0
+              ? 'Nothing on the welcome list is recognisable as a drink, so this costs nothing. Check the items upstairs.'
+              : `${c.wdDrinks} drink${c.wdDrinks === 1 ? '' : 's'} a head over ${s.wdDur}, averaged across ${c.wdLive.length} option${c.wdLive.length === 1 ? '' : 's'} — £${c.wdPerHead.toFixed(2)}/head.`}
+          </div>
+        </>
+      )}
+
       {/* ── Drinkware ────────────────────────────────────────────────── */}
       <div style={head}>Drinkware</div>
       <div style={{ display: 'flex', gap: 4, marginBottom: 7 }}>
@@ -1350,6 +1452,7 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
       <div style={head}>Costs</div>
       <div style={{ marginBottom: 6 }}>
         {!c.isClientAlcohol && <div style={line}><span style={muted}>Alcohol · £{c.alcPerHead.toFixed(2)}/head</span><span>{gbp(c.alcCost)}</span></div>}
+        {c.wdCost > 0 && <div style={line}><span style={muted}>Welcome drinks · £{c.wdPerHead.toFixed(2)}/head</span><span>{gbp(c.wdCost)}</span></div>}
         <div style={line}><span style={muted}>Mixers · £{COST.mixersPerHead.toFixed(2)}/head</span><span>{gbp(c.mixersCost)}</span></div>
         <div style={line}><span style={muted}>Ice · £{COST.icePerHead.toFixed(2)}/head</span><span>{gbp(c.iceCost)}</span></div>
         <div style={line}><span style={muted}>Garnishes · £{COST.garnishPerHead.toFixed(2)}/head</span><span>{gbp(c.garnishCost)}</span></div>
@@ -1393,7 +1496,9 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
               <span style={{ color: done ? '#2e7d32' : '#c9a227', fontSize: 11, width: 11 }}>{done ? '✓' : '○'}</span>
               <span style={{ flex: 1, color: na ? 'var(--muted)' : '#333', textDecoration: na ? 'line-through' : 'none' }}>{chk.label}</span>
               {isAuto ? (
-                <span style={{ fontSize: 9.5, color: 'var(--muted)', fontStyle: 'italic' }}>in model</span>
+                <span style={{ fontSize: 9.5, color: 'var(--muted)', fontStyle: 'italic' }}>
+                  {chk.key === 'welcome' && !s.wdOn ? 'not on this quote' : 'in model'}
+                </span>
               ) : added ? (
                 <span style={{ fontSize: 9.5, color: '#2e7d32' }}>priced</span>
               ) : (

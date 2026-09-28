@@ -610,7 +610,7 @@ async function saveDraft(enquiryId, state) {
 function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
-    enquiryId: null, client: '', etype: 'Wedding Reception', venue: '', edate: '', etime: '', guests: '',
+    enquiryId: null, client: '', email: '', phone: '', etype: 'Wedding Reception', venue: '', edate: '', etime: '', guests: '',
     pkg: 'Full Bar', duration: '', setup: '',
     // Bar open/close as half-hour slots. Picking both fills etime and duration.
     startMin: '', endMin: '',
@@ -739,7 +739,7 @@ export default function QuoteClient({ userEmail }) {
         + 'Open it? Cancel starts a fresh quote from the enquiry details.'
       );
       if (ok) {
-        setS({ ...freshState(), ...saved, enquiryId: id });
+        setS({ ...freshState(), ...saved, enquiryId: id, email: saved.email || e.email || '', phone: saved.phone || String(e.phone || '') });
         setDraftMsg('Saved quote opened');
         return;
       }
@@ -749,6 +749,7 @@ export default function QuoteClient({ userEmail }) {
       enquiryId: e.id, client: e.name || '', venue: e.venue || '',
       edate: e.eventDate || '', guests: e.guestCount ?? '',
       etype: e.eventType || s.etype,
+      email: e.email || '', phone: String(e.phone || ''),
     });
   }
 
@@ -1154,6 +1155,12 @@ function ClientMessage({ s, total }) {
   const { text, gaps } = buildClientMessage(s, total);
   const subject = `Your quote \u2014 ${ETYPE_SAID[s.etype] || 'event'}${s.edate ? `, ${fmtOrdinal(s.edate)}` : ''}`;
 
+  // One-tap send. WhatsApp opens to pick the chat (safer than auto-targeting a
+  // stored number that may lack a country code); email prefills the recipient
+  // from the enquiry when we have it.
+  const waHref = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  const mailHref = `mailto:${s.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+
   async function copy() {
     try {
       await navigator.clipboard.writeText(asEmail ? `Subject: ${subject}\n\n${text}` : text);
@@ -1206,9 +1213,20 @@ function ClientMessage({ s, total }) {
           fontFamily: 'var(--sans)', background: 'var(--off)', color: '#1c1b18',
         }} />
 
-      <button onClick={copy} style={{ ...btnBlack, marginTop: 10 }}>
-        {copied ? '\u2713 Copied' : 'Copy message'}
-      </button>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        {asEmail ? (
+          <a href={mailHref} style={{ ...btnBlack, textDecoration: 'none', display: 'inline-block' }}>
+            Open email{s.email ? ` to ${s.email}` : ''}
+          </a>
+        ) : (
+          <a href={waHref} target="_blank" rel="noopener noreferrer" style={{ ...btnBlack, textDecoration: 'none', display: 'inline-block' }}>
+            Open in WhatsApp
+          </a>
+        )}
+        <button onClick={copy} style={btnOutline}>
+          {copied ? '\u2713 Copied' : 'Copy message'}
+        </button>
+      </div>
     </div>
   );
 }

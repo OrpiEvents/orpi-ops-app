@@ -26,7 +26,6 @@ const DEF_ADDONS = [
   { label: 'Toast package', desc: 'Chilled Prosecco poured for every guest during speeches for the toast', price: '', on: false },
   { label: 'Personalised bar accessories', desc: 'Bar mats (keepsake), drinks coasters, cocktail napkins & cocktail toppers/stirrers printed with event name, logo or monogram', price: '', on: false },
   { label: 'Flair bartending show', desc: 'Theatrical bar performance (subject to venue)', price: '', on: false },
-  { label: 'Bar hire', desc: '4m round LED bar, non-LED bar, or bespoke unit', price: '', on: false },
   { label: 'Bar van', desc: 'Fully equipped outdoor bar van', price: '', on: false },
   { label: 'Custom bar print', desc: 'Branded bar front print', price: '', on: false },
   { label: 'Ripple machine', desc: 'Prints images onto the surface of drinks', price: '', on: false },

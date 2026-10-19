@@ -250,7 +250,9 @@ function alcoholLine(s) {
 // Alcohol cost per head: sum the live components, tier the spirits, and let a
 // typed override beat the lot.
 function alcoholPerHead(s) {
-  if (s.pkg === 'Bar Only (client supplies alcohol)') return 0;
+  // No ORPI-supplied drinking spirits to cost here: Bar Only uses the client's
+  // own, and Welcome Drinks Only has only the arrival tray (costed separately).
+  if (s.pkg === 'Bar Only (client supplies alcohol)' || s.pkg === 'Welcome Drinks Only') return 0;
   const manual = parseFloat(s.alcoholOverride);
   if (!isNaN(manual) && manual >= 0) return manual;
   const parts = alcoholParts(s);
@@ -451,7 +453,7 @@ const ETYPE_SAID = {
 const PKG_SHOWS = {
   'Premium':                            { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
   'Ultimate':                           { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
-  'Full Bar':                           { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
+  'Full Bar':                           { alcohol: true,  softs: true,  cocktails: false, welcome: true },
   'Cocktail Experience':                { alcohol: false, softs: true,  cocktails: true,  welcome: true },
   'Welcome Drinks Only':                { alcohol: false, softs: true,  cocktails: false, welcome: true },
   'Bar Only (client supplies alcohol)': { alcohol: false, softs: true,  cocktails: true,  welcome: true },
@@ -468,6 +470,28 @@ const PKG_SAID = {
   'Bar Only (client supplies alcohol)': 'Bar Service',
   'Custom': 'Bar Service',
 };
+
+// Per-package starting points, applied when the package is picked. Structural
+// visibility (spirit bar, cocktails) is read live from PKG_SHOWS so switching
+// package reshapes the form without wiping the drinks lists; these just set the
+// usual duration, whether welcome drinks start on, and the usual drink counts.
+//   Premium  — open bar, cocktails served for a 2-hour window
+//   Ultimate — open bar + cocktails running all evening
+//   Full Bar — open bar, no cocktail/mocktail menu
+const PKG_DEFAULTS = {
+  'Premium':                            { duration: '5 hours', wdOn: false, nct: 3, nmt: 2 },
+  'Ultimate':                           { duration: '5 hours', wdOn: false, nct: 3, nmt: 2 },
+  'Full Bar':                           { duration: '5 hours', wdOn: false, nct: 0, nmt: 0 },
+  'Cocktail Experience':                { duration: '3 hours', wdOn: false, nct: 3, nmt: 2 },
+  'Welcome Drinks Only':                { duration: '1 hour',  wdOn: true,  nct: 0, nmt: 0 },
+  'Bar Only (client supplies alcohol)': { duration: '5 hours', wdOn: false, nct: 3, nmt: 2 },
+  'Custom':                             {},
+};
+
+// Bar units ORPI can bring, plus the option to use the venue's own. Add new
+// units here as the kit grows — a saved quote keeps whatever was chosen even
+// if it later leaves this list.
+const BAR_OPTIONS = ['2M Custom Straight Bar', '4M Custom Straight Bar', '6M Custom Straight Bar', '4M Custom Circular Bar', "Venue's own bar"];
 
 function fmtOrdinal(d) {
   if (!d) return null;
@@ -495,6 +519,7 @@ function buildClientMessage(s, total) {
   const need = (v, label) => { if (v == null || v === '' ) { gaps.push(label); return `[${label}]`; } return v; };
 
   const c = computeCosts(s);
+  const shows = pkgShows(s.pkg);
   const L = [];
 
   const etype = ETYPE_SAID[s.etype] || s.etype || 'event';
@@ -512,7 +537,7 @@ function buildClientMessage(s, total) {
 
   // Spirits: grade word plus the brands actually ticked on the quote.
   const parts = alcoholParts(s);
-  if (parts.spirits) {
+  if (shows.alcohol && parts.spirits) {
     const tier = SPIRIT_TIERS[s.spiritTier] || SPIRIT_TIERS.standard;
     const grade = (tier.label === 'Standard' || tier.label === 'House') ? 'House' : tier.label;
     const brands = s.spiritRows
@@ -524,9 +549,9 @@ function buildClientMessage(s, total) {
   }
 
   const bw = joinList([parts.beer && 'beer', parts.wine && 'wine', parts.prosecco && 'prosecco']);
-  if (bw) L.push(`\u{1F37A} Full ${bw} selection`);
+  if (shows.alcohol && bw) L.push(`\u{1F37A} Full ${bw} selection`);
 
-  if (s.nct > 0 || s.nmt > 0) {
+  if (shows.cocktails && (s.nct > 0 || s.nmt > 0)) {
     const named = [...s.cocktailNames.slice(0, s.nct), ...s.mocktailNames.slice(0, s.nmt)].filter(n => n && n.trim());
     const count = [
       s.nct > 0 && `${s.nct} cocktail${s.nct !== 1 ? 's' : ''}`,
@@ -611,7 +636,7 @@ function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
     enquiryId: null, client: '', email: '', phone: '', etype: 'Wedding Reception', venue: '', edate: '', etime: '', guests: '',
-    pkg: 'Full Bar', duration: '', setup: '',
+    pkg: 'Full Bar', barUsed: '', duration: '', setup: '',
     // Bar open/close as half-hour slots. Picking both fills etime and duration.
     startMin: '', endMin: '',
     // Paid staff hours are set-up + service + pack-down, not service alone.
@@ -971,7 +996,17 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <ThreeCol>
             <Field label="Guests"><input type="number" style={inputStyle} value={s.guests} onChange={e => set({ guests: e.target.value })} /></Field>
             <Field label="Package">
-              <select style={selStyle} value={s.pkg} onChange={e => set({ pkg: e.target.value })}>
+              <select style={selStyle} value={s.pkg} onChange={e => {
+                // Picking a package reshapes the form (spirits/cocktails show or
+                // hide, read live from PKG_SHOWS) and sets its usual starting
+                // points — duration, welcome on/off, drink counts.
+                const pkg = e.target.value;
+                const d = PKG_DEFAULTS[pkg] || {};
+                const patch = { pkg, ...d };
+                if (d.nct != null) { const names = [...s.cocktailNames]; while (names.length < d.nct) names.push(''); patch.cocktailNames = names; }
+                if (d.nmt != null) { const names = [...s.mocktailNames]; while (names.length < d.nmt) names.push(''); patch.mocktailNames = names; }
+                set(patch);
+              }}>
                 {['Premium', 'Ultimate', 'Full Bar', 'Cocktail Experience', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Custom'].map(o => <option key={o}>{o}</option>)}
               </select>
             </Field>
@@ -983,6 +1018,13 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
               </select>
             </Field>
           </ThreeCol>
+          <Field label="Bar used">
+            <select style={selStyle} value={s.barUsed} onChange={e => set({ barUsed: e.target.value })}>
+              <option value="">Select bar…</option>
+              {BAR_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              {s.barUsed && !BAR_OPTIONS.includes(s.barUsed) && <option value={s.barUsed}>{s.barUsed}</option>}
+            </select>
+          </Field>
           {/* Picking both ends fills in the printed time range and the duration
               the cost model reads. Duration stays editable for a TBC quote. */}
           <ThreeCol>
@@ -1024,43 +1066,59 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           </div>
           <EditableList items={s.inclItems} onChange={items => set({ inclItems: items })} addLabel="+ Add inclusion" />
 
-          <SectionHead>Spirits &amp; alcohol</SectionHead>
-          <SpiritEditor rows={s.spiritRows} onChange={rows => set({ spiritRows: rows })} stock={stockItems} />
-          <NewStockNote
-            names={[
-              ...s.spiritRows.flatMap(r => r.items.map(i => i.text)),
-              ...s.softItems.map(i => i.text),
-              ...s.wdItems.map(i => i.text),
-            ]}
-            stock={stockItems}
-          />
+          {!['Welcome Drinks Only', 'Bar Only (client supplies alcohol)'].includes(s.pkg) && (
+            <>
+              <SectionHead>Spirits &amp; alcohol</SectionHead>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, lineHeight: 1.5 }}>
+                {pkgShows(s.pkg).alcohol
+                  ? 'Brand level only (e.g. Absolut, Grey Goose) — the client sees the brand; bottle size is set later on the run sheet.'
+                  : 'Internal only — the spirits your cocktails are built from. Not shown on the client quote.'}
+              </div>
+              <SpiritEditor rows={s.spiritRows} onChange={rows => set({ spiritRows: rows })} stock={stockItems} />
+              <NewStockNote
+                names={[
+                  ...s.spiritRows.flatMap(r => r.items.map(i => i.text)),
+                  ...s.softItems.map(i => i.text),
+                  ...s.wdItems.map(i => i.text),
+                ]}
+                stock={stockItems}
+              />
+            </>
+          )}
 
           <SectionHead>Soft drinks &amp; mixers</SectionHead>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, lineHeight: 1.5 }}>
+            Keep these generic (Prosecco, Soda Water, Tonic) — the brand you bring varies, so the client quote stays unbranded.
+          </div>
           <EditableList items={s.softItems} onChange={items => set({ softItems: items })} addLabel="+ Add item" stock={stockItems} prefer="mixer" />
 
-          <SectionHead>Cocktails &amp; mocktails</SectionHead>
-          <TwoCol>
-            <Field label="Cocktails">
-              <select style={selStyle} value={s.nct} onChange={e => {
-                const n = parseInt(e.target.value);
-                const names = [...s.cocktailNames]; while (names.length < n) names.push('');
-                set({ nct: n, cocktailNames: names });
-              }}>
-                <option value={0}>None</option>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </Field>
-            <Field label="Mocktails">
-              <select style={selStyle} value={s.nmt} onChange={e => {
-                const n = parseInt(e.target.value);
-                const names = [...s.mocktailNames]; while (names.length < n) names.push('');
-                set({ nmt: n, mocktailNames: names });
-              }}>
-                <option value={0}>None</option>{[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </Field>
-          </TwoCol>
-          {s.nct > 0 && <NameList label="Cocktail names" names={s.cocktailNames.slice(0, s.nct)} onChange={names => set({ cocktailNames: names })} />}
-          {s.nmt > 0 && <NameList label="Mocktail names" names={s.mocktailNames.slice(0, s.nmt)} onChange={names => set({ mocktailNames: names })} />}
+          {pkgShows(s.pkg).cocktails && (
+            <>
+              <SectionHead>Cocktails &amp; mocktails</SectionHead>
+              <TwoCol>
+                <Field label="Cocktails">
+                  <select style={selStyle} value={s.nct} onChange={e => {
+                    const n = parseInt(e.target.value);
+                    const names = [...s.cocktailNames]; while (names.length < n) names.push('');
+                    set({ nct: n, cocktailNames: names });
+                  }}>
+                    <option value={0}>None</option>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </Field>
+                <Field label="Mocktails">
+                  <select style={selStyle} value={s.nmt} onChange={e => {
+                    const n = parseInt(e.target.value);
+                    const names = [...s.mocktailNames]; while (names.length < n) names.push('');
+                    set({ nmt: n, mocktailNames: names });
+                  }}>
+                    <option value={0}>None</option>{[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </Field>
+              </TwoCol>
+              {s.nct > 0 && <NameList label="Cocktail names" names={s.cocktailNames.slice(0, s.nct)} onChange={names => set({ cocktailNames: names })} />}
+              {s.nmt > 0 && <NameList label="Mocktail names" names={s.mocktailNames.slice(0, s.nmt)} onChange={names => set({ mocktailNames: names })} />}
+            </>
+          )}
 
           <SectionHead>Add-ons &amp; extras</SectionHead>
           <AddonEditor addons={s.addons} onChange={addons => set({ addons })} />
@@ -1937,6 +1995,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
           <div style={rowMuted}>Guests</div><div style={rowValue}>{s.guests || '—'}</div>
           <div style={rowMuted}>Package</div><div style={rowValue}>{s.pkg}</div>
           <div style={rowMuted}>Duration</div><div style={rowValue}>{s.duration || '—'}</div>
+          {s.barUsed && <><div style={rowMuted}>Bar</div><div style={rowValue}>{s.barUsed}</div></>}
           {s.setup && <><div style={rowMuted}>Setup access</div><div style={rowValue}>{s.setup}</div></>}
         </div>
 
@@ -1949,11 +2008,11 @@ function QuotePreview({ s, addonTotal, total, dep }) {
               The <em style={{ color: 'var(--gold)' }}>{s.pkg}</em> Package
             </div>
             <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
-              {(s.nct > 0 || s.nmt > 0) && (
+              {shows.cocktails && (s.nct > 0 || s.nmt > 0) && (
                 <div><strong>{s.nct} cocktail{s.nct!==1?'s':''} &amp; {s.nmt} mocktail{s.nmt!==1?'s':''}</strong> — chosen from our menu at your tasting</div>
               )}
               {s.pkg === 'Premium' && (
-                <div><strong>2 hours cocktail &amp; mocktail service</strong> — bespoke drinks from your chosen menu</div>
+                <div><strong>Open bar with a 2-hour cocktail &amp; mocktail service</strong> — house spirits, beer &amp; wine through the evening, plus bespoke drinks from your chosen menu</div>
               )}
               {s.pkg === 'Ultimate' && (
                 <div><strong>Unlimited cocktail &amp; mocktail service all evening</strong> — no time limit on your bar</div>

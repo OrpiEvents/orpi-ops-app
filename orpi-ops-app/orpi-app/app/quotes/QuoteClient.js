@@ -1019,12 +1019,22 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             </Field>
           </ThreeCol>
           <Field label="Bar used">
-            <select style={selStyle} value={s.barUsed} onChange={e => set({ barUsed: e.target.value })}>
+            <select style={selStyle} value={s.barUsed} onChange={e => {
+              // One of our bars switches the custom bar print on; the venue's
+              // own bar (or clearing the field) switches the print back off.
+              const barUsed = e.target.value;
+              const realBar = !!barUsed && barUsed !== "Venue's own bar";
+              const addons = s.addons.map(a => /custom bar print/i.test(a.label) ? { ...a, on: realBar } : a);
+              set({ barUsed, addons });
+            }}>
               <option value="">Select bar…</option>
               {BAR_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               {s.barUsed && !BAR_OPTIONS.includes(s.barUsed) && <option value={s.barUsed}>{s.barUsed}</option>}
             </select>
           </Field>
+          <div style={{ fontSize: 11, color: 'var(--muted)', margin: '-4px 0 10px', lineHeight: 1.5 }}>
+            One of our bars auto-adds a custom bar print and lists the bar under "Added to your package". A venue bar is just noted in the event details.
+          </div>
           {/* Picking both ends fills in the printed time range and the duration
               the cost model reads. Duration stays editable for a TBC quote. */}
           <ThreeCol>
@@ -1930,6 +1940,10 @@ function QuotePreview({ s, addonTotal, total, dep }) {
   // Every ticked extra, named on the quote (price folded into the total, never
   // itemised) — so the headline figure has visible value behind it.
   const selectedAddons = s.addons.filter(a => a.on);
+  // A chosen ORPI bar rides along in the package extras; the venue's own bar is
+  // only an event-details note, so it never appears here.
+  const barExtra = (s.barUsed && s.barUsed !== "Venue's own bar") ? [{ id: 'bar', label: s.barUsed, desc: '' }] : [];
+  const packageExtras = [...barExtra, ...selectedAddons];
 
   if (!s.client && !s.venue) {
     return <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center', padding: '60px 40px', color: 'var(--muted)', fontSize: 13 }}>Fill in the builder to preview the quote</div>;
@@ -1995,7 +2009,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
           <div style={rowMuted}>Guests</div><div style={rowValue}>{s.guests || '—'}</div>
           <div style={rowMuted}>Package</div><div style={rowValue}>{s.pkg}</div>
           <div style={rowMuted}>Duration</div><div style={rowValue}>{s.duration || '—'}</div>
-          {s.barUsed && <><div style={rowMuted}>Bar</div><div style={rowValue}>{s.barUsed}</div></>}
+          {s.barUsed === "Venue's own bar" && <><div style={rowMuted}>Bar</div><div style={rowValue}>{s.barUsed}</div></>}
           {s.setup && <><div style={rowMuted}>Setup access</div><div style={rowValue}>{s.setup}</div></>}
         </div>
 
@@ -2056,13 +2070,13 @@ function QuotePreview({ s, addonTotal, total, dep }) {
             The paid extras the client has chosen, named so the single total has
             something visible behind it. Price is folded into the total, never
             itemised here. Parallels "Enhancements you might like" below. */}
-        {selectedAddons.length > 0 && (
+        {packageExtras.length > 0 && (
           <div className="print-avoid-break" style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderRadius: 8, padding: '18px 22px', marginTop: 24 }}>
             <div style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, marginBottom: 12 }}>
               Added to your package
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 22px' }}>
-              {selectedAddons.map(a => (
+              {packageExtras.map(a => (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '2px 0' }}>
                   <span style={{ color: 'var(--gold)', fontSize: 11, lineHeight: 1.45, flexShrink: 0 }}>✓</span>
                   <span style={{ fontSize: 11.5, color: '#333', lineHeight: 1.45 }}>

@@ -1869,6 +1869,9 @@ function QuotePreview({ s, addonTotal, total, dep }) {
   const compActive = s.compItems.filter(i => i.on && i.text.trim());
   const activeSpirits = s.spiritRows.filter(r => r.on).map(r => ({ cat: r.cat, items: r.items.filter(i => i.on && i.text.trim()) })).filter(r => r.items.length);
   const activeAddons = s.addons.filter(a => a.on && parseFloat(a.price) > 0);
+  // Every ticked extra, named on the quote (price folded into the total, never
+  // itemised) — so the headline figure has visible value behind it.
+  const selectedAddons = s.addons.filter(a => a.on);
 
   if (!s.client && !s.venue) {
     return <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center', padding: '60px 40px', color: 'var(--muted)', fontSize: 13 }}>Fill in the builder to preview the quote</div>;
@@ -1990,6 +1993,29 @@ function QuotePreview({ s, addonTotal, total, dep }) {
           </div>
         )}
 
+        {/* ── Added to your package ──
+            The paid extras the client has chosen, named so the single total has
+            something visible behind it. Price is folded into the total, never
+            itemised here. Parallels "Enhancements you might like" below. */}
+        {selectedAddons.length > 0 && (
+          <div className="print-avoid-break" style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderRadius: 8, padding: '18px 22px', marginTop: 24 }}>
+            <div style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, marginBottom: 12 }}>
+              Added to your package
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 22px' }}>
+              {selectedAddons.map(a => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '2px 0' }}>
+                  <span style={{ color: 'var(--gold)', fontSize: 11, lineHeight: 1.45, flexShrink: 0 }}>✓</span>
+                  <span style={{ fontSize: 11.5, color: '#333', lineHeight: 1.45 }}>
+                    <span style={{ fontWeight: 500 }}>{a.label}</span>
+                    {a.desc ? <span style={{ color: '#8a8880' }}> — {a.desc}</span> : null}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Welcome drinks */}
         {shows.welcome && s.wdOn && wdActive.length > 0 && (
           <>
@@ -2060,14 +2086,18 @@ function QuotePreview({ s, addonTotal, total, dep }) {
 
       {/* ── Pricing block (light, legible, with bank details) ── */}
       <div className="print-avoid-break" style={{ background: '#faf9f6', color: '#1c1b18', padding: '26px 44px', borderTop: '1px solid #e8e6e0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
-          <span>Package total</span><span>{gbp((parseFloat(s.base) || 0) + addonTotal)}</span>
-        </div>
-        {/* Extras embedded in the package price — shown as one figure to the client */}
+        {/* Subtotal + discount only show when there's a discount — otherwise the
+            client sees one clean Total with nothing to reconcile. Add-ons are
+            folded into the figure either way, never itemised. */}
         {parseFloat(s.disc) > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
-            <span>Discount</span><span>−{gbp(parseFloat(s.disc))}</span>
-          </div>
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
+              <span>Package total</span><span>{gbp((parseFloat(s.base) || 0) + addonTotal)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
+              <span>Discount</span><span>−{gbp(parseFloat(s.disc))}</span>
+            </div>
+          </>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 14, marginTop: 10, borderTop: '1px solid #d9d5c8', alignItems: 'center' }}>
           <span style={{ fontFamily: 'var(--sans)', fontSize: 11, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 500 }}>
@@ -2114,7 +2144,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
           any unselected add-ons — a clean, all-selected quote won't show
           this section at all. */}
       {(() => {
-        const unselectedAddons = s.addons.filter(a => !a.on || !parseFloat(a.price));
+        const unselectedAddons = s.addons.filter(a => !a.on);
         if (unselectedAddons.length === 0) return null;
         return (
           <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff', borderTop: '1px solid #e8e6e0' }}>

@@ -236,6 +236,19 @@ function buildClientMessage(s, total) {
 
   if (c.tasting === 'included') L.push('\u{1F37E} Pre-event drinks tasting included');
 
+  // What the client is providing, mirrored from the quote's per-item labels so
+  // the message and the PDF never disagree on who brings what. Covers every
+  // section, including softs/beer that the summary lines above don't itemise.
+  const clientSupplied = [
+    ...(s.wdOn ? s.wdItems : []),
+    ...s.spiritRows.filter(r => r.on).flatMap(r => r.items),
+    ...s.softItems,
+  ].filter(i => i.on && i.text.trim() && i.by === 'client').map(i => i.text.trim());
+  if (clientSupplied.length) {
+    L.push('');
+    L.push(`\u{1F4DD} You're providing: ${[...new Set(clientSupplied)].join(', ')}`);
+  }
+
   L.push('');
   L.push(`\u{1F4B7} Total: ${total > 0 ? '\u00a3' + Math.round(total).toLocaleString('en-GB') : need(null, 'total')}`);
   L.push('');

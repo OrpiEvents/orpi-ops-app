@@ -339,7 +339,12 @@ function computeCosts(s) {
   const alcCost = alcPerHead * g;
   const alcParts = alcoholParts(s, true);
   const alcManual = !isNaN(parseFloat(s.alcoholOverride)) && parseFloat(s.alcoholOverride) >= 0;
-  const mixersCost = COST.mixersPerHead * g;
+  // Client-supplied soft drinks come off the flat mixer cost proportionally —
+  // if half the softs on the quote are the client's, we carry half the mixers.
+  const softsList = (s.softItems || []).filter(i => i.on && i.text.trim());
+  const orpiSofts = softsList.filter(i => (i.by || 'orpi') !== 'client');
+  const softFrac = softsList.length ? orpiSofts.length / softsList.length : 1;
+  const mixersCost = COST.mixersPerHead * g * softFrac;
   const iceCost = COST.icePerHead * g;
   const garnishCost = COST.garnishPerHead * g;
 

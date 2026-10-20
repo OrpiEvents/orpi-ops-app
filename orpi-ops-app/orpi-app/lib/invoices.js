@@ -57,6 +57,7 @@ export function sanitizeSnapshot(snap) {
     ...s,
     email: '',
     phone: '',
+    enquiryNotes: '',
     costLines: [],
     costChecks: {},
     prepHrs: '',

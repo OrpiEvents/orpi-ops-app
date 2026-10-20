@@ -2,7 +2,7 @@
 import { stockCategoryFor } from '@/lib/taxonomy';
 import { matchScore, inStock, nearMatches } from '@/lib/matching';
 import { createClient } from '@/lib/supabaseBrowser';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AppShell from '../AppShell';
 import QuotePreview from './QuotePreview';
 import {
@@ -276,6 +276,21 @@ async function saveDraft(enquiryId, state) {
   } catch { return false; }
 }
 
+// Map a Sales Pipeline "Service Type" to a quote package. Keyword-based so it
+// survives wording changes in Notion; returns null when nothing matches, so the
+// builder keeps its current (template/default) package.
+function serviceToPkg(serviceType) {
+  const t = (serviceType || '').toLowerCase();
+  if (!t) return null;
+  if (/ultimate|unlimited|all night|all evening/.test(t)) return 'Ultimate';
+  if (/premium/.test(t)) return 'Premium';
+  if (/cocktail/.test(t)) return 'Cocktail Experience';
+  if (/welcome/.test(t)) return 'Welcome Drinks Only';
+  if (/client supplies|you supply|bar only|bar hire|dry hire/.test(t)) return 'Bar Only (client supplies alcohol)';
+  if (/full bar|open bar|full open/.test(t)) return 'Full Bar';
+  return null;
+}
+
 function freshState() {
   return {
     doctype: 'quote', invNum: '', date: new Date().toISOString().split('T')[0], due: '', salesPerson: 'Ruds',
@@ -303,7 +318,7 @@ function freshState() {
     nct: 3, nmt: 2, cocktailNames: ['', '', ''], mocktailNames: ['', ''],
     addons: addonsWithIds(DEF_ADDONS),
     compItems: withIds(DEF_COMP),
-    notes: '', base: '', disc: '',
+    notes: '', enquiryNotes: '', base: '', disc: '',
     // ── Internal costing (never printed on client quote) ──
     // Each line has: { id, category, name, qty, unitCost, inventoryId? }
     // inventoryId links to a live Inventory Item so unit cost stays current
@@ -393,6 +408,20 @@ export default function QuoteClient({ userEmail }) {
     return () => clearTimeout(t);
   }, [s]);
 
+  // Deep link from an enquiry row: /quotes?enquiry=<id> auto-loads that enquiry
+  // into the builder once the enquiry list is in. Runs once.
+  const deepLinkDone = useRef(false);
+  useEffect(() => {
+    if (deepLinkDone.current) return;
+    let id = null;
+    try { id = new URLSearchParams(window.location.search).get('enquiry'); } catch { /* no window */ }
+    if (!id) { deepLinkDone.current = true; return; }
+    if (!enquiries.length) return;            // wait for the list to load
+    deepLinkDone.current = true;
+    loadFromEnquiry(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquiries]);
+
   async function loadFromEnquiry(id) {
     if (!id) return;
     const e = enquiries.find(x => x.id === id);
@@ -414,11 +443,14 @@ export default function QuoteClient({ userEmail }) {
       }
     }
 
+    const mappedPkg = serviceToPkg(e.serviceType);
     set({
       enquiryId: e.id, client: e.name || '', venue: e.venue || '',
       edate: e.eventDate || '', guests: e.guestCount ?? '',
       etype: e.eventType || s.etype,
       email: e.email || '', phone: String(e.phone || ''),
+      enquiryNotes: e.internalNotes || '',
+      ...(mappedPkg ? { pkg: mappedPkg, ...(PKG_DEFAULTS[mappedPkg] || {}) } : {}),
     });
   }
 
@@ -458,7 +490,7 @@ export default function QuoteClient({ userEmail }) {
       const res = await fetch('/api/quotes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          enquiryId: s.enquiryId, name: s.client, amount: base, doctype: s.doctype,
+          enquiryId: s.enquiryId, name: s.client, amount: total, doctype: s.doctype,
           quotedSpirits, quotedBeer, quotedSoftDrinks,
         }),
       }).then(r => r.json());
@@ -600,6 +632,13 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
       <div className="no-print" style={{ background: '#fdf8ec', border: '1px solid var(--gold)', color: '#7a6300', padding: '8px 14px', borderRadius: 6, fontSize: 12, marginBottom: 14 }}>
         💡 In the print dialog, expand <strong>More settings</strong> → untick <strong>Headers and footers</strong> for a clean PDF (removes the URL &amp; timestamp).
       </div>
+
+      {s.enquiryNotes && s.enquiryNotes.trim() && (
+        <div className="no-print" style={{ background: 'var(--off)', border: '1px solid var(--border)', borderLeft: '3px solid var(--muted)', padding: '10px 14px', borderRadius: 6, fontSize: 12, marginBottom: 14, color: 'var(--text)' }}>
+          <strong style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)' }}>Internal note from enquiry · not shown to the client</strong>
+          <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.enquiryNotes}</div>
+        </div>
+      )}
 
       <div className="print-grid-collapse" style={{ display: 'grid', gridTemplateColumns: '340px 340px 1fr', gap: 20, alignItems: 'start' }}>
         <div className="no-print" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 20, position: 'sticky', top: 24, maxHeight: 'calc(100vh - 60px)', overflowY: 'auto' }}>

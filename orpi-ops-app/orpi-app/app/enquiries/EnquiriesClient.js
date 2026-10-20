@@ -171,15 +171,20 @@ export default function EnquiriesClient({ userEmail }) {
                   <Td><StatusBadge status={e.status} /></Td>
                   <Td muted={!(e.followUpDate < today)}>{fmtDate(e.followUpDate)}</Td>
                   <Td>
-                    {e.status !== 'Won' && e.status !== 'Lost' && (
-                      <span style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => markWon(e)} style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Won ✓</button>
-                        <button onClick={() => markLost(e)} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Lost</button>
-                      </span>
-                    )}
-                    {e.status === 'Lost' && e.lostReason && (
-                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>{e.lostReason}</span>
-                    )}
+                    <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {e.status !== 'Lost' && (
+                        <a href={`/quotes?enquiry=${e.id}`} style={{ background: 'var(--gold-bg)', color: '#7a6300', border: '1px solid var(--gold)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap' }}>Quote →</a>
+                      )}
+                      {e.status !== 'Won' && e.status !== 'Lost' && (
+                        <>
+                          <button onClick={() => markWon(e)} style={{ background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Won ✓</button>
+                          <button onClick={() => markLost(e)} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Lost</button>
+                        </>
+                      )}
+                      {e.status === 'Lost' && e.lostReason && (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{e.lostReason}</span>
+                      )}
+                    </span>
                   </Td>
                 </tr>
               ))}

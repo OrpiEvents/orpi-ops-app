@@ -3,6 +3,8 @@
 // reach the browser. Next.js API routes (app/api/**/route.js) are the only
 // place this gets called from.
 
+import { matchScore, SAME_AT } from './matching';
+
 const NOTION_VERSION = '2022-06-28';
 const BASE = 'https://api.notion.com/v1';
 
@@ -152,8 +154,22 @@ function enquiryToProperties(d) {
 // Deliberately conservative — a miss just means it's not suggested, not
 // fabricated.
 export function matchIngredientToStock(ingredientLine, stockItems) {
-  const clean = ingredientLine.toLowerCase();
-  return stockItems.find(s => clean.includes(s.name.toLowerCase())) || null;
+  // Size-insensitive: "50ml Absolut Vodka" matches "Absolut Vodka 1L", and a
+  // brand like "Jameson" matches "Jameson 1L". Best scorer wins if it clears
+  // the "same product" bar; a miss just isn't suggested.
+  let best = null, bestScore = 0;
+  for (const s of stockItems) {
+    const score = matchScore(ingredientLine, s.name);
+    if (score > bestScore) { best = s; bestScore = score; }
+  }
+  return bestScore >= SAME_AT ? best : null;
+}
+
+// Every stock item that is the same product as what was typed — so a brand
+// like "Jameson" surfaces all its sizes (1L and 70cl) on the run sheet for the
+// team to record which bottle they actually loaded, cost following each.
+export function matchAllStock(name, stockItems) {
+  return stockItems.filter(s => matchScore(name, s.name) >= SAME_AT);
 }
 
 // Builds a de-duplicated "suggested stock to pack" list from a set of
@@ -184,8 +200,11 @@ export function suggestStandardServiceStock(booking, stockItems) {
   selectionFields.split(',').forEach(chunk => {
     const cleaned = chunk.trim();
     if (!cleaned) return;
-    const item = matchIngredientToStock(cleaned, stockItems);
-    if (item && !matched.has(item.id)) matched.set(item.id, item);
+    // Brand → all its sizes, so the run sheet lists each bottle the team could
+    // have loaded; they record the one they used and the cost follows it.
+    matchAllStock(cleaned, stockItems).forEach(item => {
+      if (!matched.has(item.id)) matched.set(item.id, item);
+    });
   });
   return [...matched.values()];
 }

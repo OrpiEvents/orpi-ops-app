@@ -465,11 +465,16 @@ export async function listInventoryItems() {
 
 function pageToInventoryItem(page) {
   const p = page.properties;
+  const name = text(p['Item Name']);
+  const size = text(p['Size']);
   return {
     id: page.id,
-    name: text(p['Item Name']),
+    name,
     category: sel(p['Catagory']),
-    size: text(p['Size']),
+    size,
+    // Display brand = name minus the trailing size ("Jameson 1L" → "Jameson"),
+    // so the quote stays brand-level and the run sheet resolves the bottle.
+    brand: size && name.toLowerCase().endsWith(size.toLowerCase()) ? (name.slice(0, name.length - size.length).trim() || name) : name,
     unit: sel(p['Unit']),
     currentStock: num(p['Current Stock']),
     parLevel: num(p['Par Level']),

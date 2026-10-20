@@ -67,11 +67,15 @@ export async function GET() {
         const id = page.id;
         const volume = num(p['Container Volume ml']) || 0;
         const unitCost = unitCostFor(id.replace(/-/g, ''), priceIndex, page);
+        const nm = title(p['Item Name']);
+        const sz = text(p['Size']);
         return {
           id,
-          name: title(p['Item Name']),
+          name: nm,
           category: sel(p['Catagory']) || 'Other',   // spelled that way in Notion
-          size: text(p['Size']),
+          size: sz,
+          // Display brand = name minus the trailing size ("Jameson 1L" → "Jameson").
+          brand: sz && nm.toLowerCase().endsWith(sz.toLowerCase()) ? (nm.slice(0, nm.length - sz.length).trim() || nm) : nm,
           unit: sel(p['Unit']) || text(p['Unit']) || '',
           containerMl: volume,
           currentStock: num(p['Current Stock']) ?? 0,

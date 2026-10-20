@@ -67,6 +67,20 @@ function withIds(arr) { return arr.map(v => ({ id: uid(), text: v, on: true }));
 function spiritsWithIds(rows) { return rows.map(r => ({ id: uid(), cat: r.cat, on: true, items: withIds(r.items) })); }
 function addonsWithIds(arr) { return arr.map(a => ({ id: uid(), ...a })); }
 
+// Distinct brands from stock, for the spirits picker — so it suggests
+// "Jameson", not "Jameson 1L". The bottle size is resolved later on the run
+// sheet. Falls back to the full name for anything with no brand/size split.
+function brandOptions(stockItems) {
+  const seen = {};
+  for (const i of (stockItems || [])) {
+    const b = (i.brand || i.name || '').trim();
+    if (!b) continue;
+    const k = b.toLowerCase();
+    if (!seen[k]) seen[k] = { id: 'brand:' + k, name: b, category: i.category };
+  }
+  return Object.values(seen);
+}
+
 // ── Cost model ───────────────────────────────────────────────
 // Per-head figures pulled from real Event Costing rows in Notion, weighted
 // across completed events (Jul 2025 – Aug 2026). Change them here, once.
@@ -1092,7 +1106,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
                   ? 'Brand level only (e.g. Absolut, Grey Goose) — the client sees the brand; bottle size is set later on the run sheet.'
                   : 'Internal only — the spirits your cocktails are built from. Not shown on the client quote.'}
               </div>
-              <SpiritEditor rows={s.spiritRows} onChange={rows => set({ spiritRows: rows })} stock={stockItems} />
+              <SpiritEditor rows={s.spiritRows} onChange={rows => set({ spiritRows: rows })} stock={brandOptions(stockItems)} />
               <NewStockNote
                 names={[
                   ...s.spiritRows.flatMap(r => r.items.map(i => i.text)),

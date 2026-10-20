@@ -216,8 +216,11 @@ function hoursFrom(text) {
 // Which alcohol components this quote actually includes. Driven by the spirit
 // rows on the client-facing quote, so a package without wine isn't costed for
 // wine — and the printed inclusions can't claim it either.
-function alcoholParts(s) {
-  const rows = (s.spiritRows || []).filter(r => r.on && r.items.some(i => i.on && i.text.trim()));
+function alcoholParts(s, orpiOnly = false) {
+  // orpiOnly drops client-supplied items, so a bar where the client brings the
+  // beer isn't costed for it — the item still prints on the quote, just labelled.
+  const live = i => i.on && i.text.trim() && (!orpiOnly || (i.by || 'orpi') !== 'client');
+  const rows = (s.spiritRows || []).filter(r => r.on && r.items.some(live));
   // "Peroni 0%" matches /beer/ and "Non-Alcoholic Wine" matches /wine/, so
   // alcohol-free rows are filtered out once, up front, rather than guarded at
   // every test below.
@@ -234,7 +237,7 @@ function alcoholParts(s) {
 
 // The client-facing phrase for the alcohol line, built from what's actually on.
 function alcoholLine(s) {
-  const parts = alcoholParts(s);
+  const parts = alcoholParts(s, true);
   const grade = SPIRIT_TIERS[s.spiritTier] ? SPIRIT_TIERS[s.spiritTier].label : 'House';
   const bits = [];
   if (parts.spirits) bits.push(`${grade === 'Standard' ? 'House' : grade} spirits`);
@@ -254,7 +257,7 @@ function alcoholPerHead(s) {
   if (s.pkg === 'Bar Only (client supplies alcohol)' || s.pkg === 'Welcome Drinks Only') return 0;
   const manual = parseFloat(s.alcoholOverride);
   if (!isNaN(manual) && manual >= 0) return manual;
-  const parts = alcoholParts(s);
+  const parts = alcoholParts(s, true);
   const tier = SPIRIT_TIERS[s.spiritTier] || SPIRIT_TIERS.standard;
   return ALCOHOL_MIX.reduce((sum, m) => {
     if (!parts[m.key]) return sum;
@@ -273,11 +276,12 @@ const WELCOME_MATCH = [
   ['beer',     /beer|lager|cider|peroni|moretti|budweiser|\bbud\b|kingfisher|estrella|corona|heineken|stella|birra/i],
 ];
 
-function welcomeParts(s) {
+function welcomeParts(s, orpiOnly = false) {
   const out = { prosecco: false, beer: false, cocktail: false, mocktail: false };
   if (!s.wdOn) return out;
   (s.wdItems || []).forEach(i => {
     if (!i.on || !i.text.trim()) return;
+    if (orpiOnly && (i.by || 'orpi') === 'client') return;
     const hit = WELCOME_MATCH.find(([, re]) => re.test(i.text));
     if (hit) out[hit[0]] = true;
   });
@@ -289,7 +293,7 @@ function welcomeParts(s) {
 // since a guest takes one drink from the selection rather than one of each.
 function welcomePerHead(s) {
   if (!s.wdOn) return 0;
-  const parts = welcomeParts(s);
+  const parts = welcomeParts(s, true);
   const live = WELCOME_MIX.filter(m => parts[m.key]);
   if (!live.length) return 0;
   const perDrink = live.reduce((t, m) => t + m.perServe, 0) / live.length;
@@ -333,7 +337,7 @@ function computeCosts(s) {
   const isClientAlcohol = s.pkg === 'Bar Only (client supplies alcohol)';
   const alcPerHead = alcoholPerHead(s);
   const alcCost = alcPerHead * g;
-  const alcParts = alcoholParts(s);
+  const alcParts = alcoholParts(s, true);
   const alcManual = !isNaN(parseFloat(s.alcoholOverride)) && parseFloat(s.alcoholOverride) >= 0;
   const mixersCost = COST.mixersPerHead * g;
   const iceCost = COST.icePerHead * g;
@@ -341,7 +345,7 @@ function computeCosts(s) {
 
   // Arrival drinks, costed separately from the bar. Zero the moment welcome
   // drinks are switched off, or when nothing on the tray is recognisable.
-  const wdParts = welcomeParts(s);
+  const wdParts = welcomeParts(s, true);
   const wdPerHead = welcomePerHead(s);
   const wdCost = wdPerHead * g;
   const wdHours = s.wdOn ? hoursFrom(s.wdDur) : 0;
@@ -1066,7 +1070,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
               {['1 hour', '1.5 hours', '2 hours', '2.5 hours', '3 hours'].map(o => <option key={o}>{o}</option>)}
             </select>
           </div>
-          <EditableList items={s.wdItems} onChange={items => set({ wdItems: items })} addLabel="+ Add item" stock={stockItems} />
+          <EditableList items={s.wdItems} onChange={items => set({ wdItems: items })} addLabel="+ Add item" stock={stockItems} provider />
 
           <SectionHead>Extra inclusions</SectionHead>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, lineHeight: 1.5 }}>
@@ -1099,7 +1103,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, lineHeight: 1.5 }}>
             Keep these generic (Prosecco, Soda Water, Tonic) — the brand you bring varies, so the client quote stays unbranded.
           </div>
-          <EditableList items={s.softItems} onChange={items => set({ softItems: items })} addLabel="+ Add item" stock={stockItems} prefer="mixer" />
+          <EditableList items={s.softItems} onChange={items => set({ softItems: items })} addLabel="+ Add item" stock={stockItems} prefer="mixer" provider />
 
           {pkgShows(s.pkg).cocktails && (
             <>
@@ -1787,7 +1791,30 @@ function countNew(names, stock) {
   return names.filter(n => n && n.trim() && !inStock(n, stock || [])).length;
 }
 
-function EditableList({ items, onChange, addLabel, stock, prefer }) {
+// Per-item provider: ORPI supplies by default; flip to "Client" and the item
+// still prints on the quote (labelled) but drops out of our cost.
+function ProviderToggle({ by, onChange }) {
+  const client = (by || 'orpi') === 'client';
+  return (
+    <button type="button" onClick={() => onChange(client ? 'orpi' : 'client')}
+      title={client ? 'Client supplies this — shown on the quote, not costed to you' : 'ORPI supplies this — click if the client is bringing it'}
+      style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', padding: '3px 7px', borderRadius: 5, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+        border: client ? '1px solid var(--gold)' : '1px solid var(--border)',
+        background: client ? 'var(--gold-bg)' : '#fff',
+        color: client ? '#7a6300' : 'var(--muted)' }}>
+      {client ? 'Client' : 'ORPI'}
+    </button>
+  );
+}
+
+// The "(client supplied)" tag shown next to a client-provided item on the quote.
+function clientMark(item) {
+  return (item && item.by === 'client')
+    ? <span style={{ color: '#8a8880', fontStyle: 'italic', fontWeight: 400 }}> (client supplied)</span>
+    : null;
+}
+
+function EditableList({ items, onChange, addLabel, stock, prefer, provider }) {
   function update(id, patch) { onChange(items.map(i => i.id === id ? { ...i, ...patch } : i)); }
   function remove(id) { onChange(items.filter(i => i.id !== id)); }
   function add() { onChange([...items, { id: uid(), text: '', on: true }]); }
@@ -1799,6 +1826,7 @@ function EditableList({ items, onChange, addLabel, stock, prefer }) {
           {stock
             ? <Combobox value={item.text} onChange={v => update(item.id, { text: v })} options={stock} prefer={stockCatFor(prefer)} placeholder="Search stock or type a new one" />
             : <input style={{ ...miniInput, flex: 1 }} value={item.text} onChange={e => update(item.id, { text: e.target.value })} />}
+          {provider && <ProviderToggle by={item.by} onChange={by => update(item.id, { by })} />}
           <button onClick={() => remove(item.id)} style={rmBtn}>✕</button>
         </div>
       ))}
@@ -1836,6 +1864,7 @@ function SpiritEditor({ rows, onChange, stock }) {
                 {stock
                   ? <Combobox value={item.text} onChange={v => updateItem(row.id, item.id, { text: v })} options={stock} prefer={stockCatFor(row.cat)} placeholder="Search stock or type a new one" />
                   : <input style={{ ...miniInput, flex: 1 }} value={item.text} onChange={e => updateItem(row.id, item.id, { text: e.target.value })} />}
+                <ProviderToggle by={item.by} onChange={by => updateItem(row.id, item.id, { by })} />
                 <button onClick={() => removeItem(row.id, item.id)} style={rmBtn}>✕</button>
               </div>
             ))}
@@ -2092,7 +2121,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
         {shows.welcome && s.wdOn && wdActive.length > 0 && (
           <>
             <div style={sectionHead}>{s.wdDur} welcome drinks</div>
-            <div style={{ fontSize: 12, color: '#333' }}>{wdActive.map(i => i.text).join(' · ')}</div>
+            <div style={{ fontSize: 12, color: '#333' }}>{wdActive.map((i, idx) => <span key={i.id}>{idx > 0 ? ' · ' : ''}{i.text}{clientMark(i)}</span>)}</div>
           </>
         )}
 
@@ -2104,7 +2133,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
               {activeSpirits.map(row => (
                 <div key={row.cat}>
                   <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--gold)', marginBottom: 5 }}>{row.cat}</div>
-                  <div style={{ fontSize: 11.5, lineHeight: 1.85, color: '#333' }}>{row.items.map(i => <div key={i.id}>{i.text}</div>)}</div>
+                  <div style={{ fontSize: 11.5, lineHeight: 1.85, color: '#333' }}>{row.items.map(i => <div key={i.id}>{i.text}{clientMark(i)}</div>)}</div>
                 </div>
               ))}
             </div>
@@ -2115,7 +2144,7 @@ function QuotePreview({ s, addonTotal, total, dep }) {
         {shows.softs && softActive.length > 0 && (
           <>
             <div style={sectionHead}>Soft drinks &amp; mixers</div>
-            <div style={{ fontSize: 12, color: '#333' }}>{softActive.map(i => i.text).join(' · ')}</div>
+            <div style={{ fontSize: 12, color: '#333' }}>{softActive.map((i, idx) => <span key={i.id}>{idx > 0 ? ' · ' : ''}{i.text}{clientMark(i)}</span>)}</div>
           </>
         )}
 

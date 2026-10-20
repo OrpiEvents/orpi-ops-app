@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppShell from '../../../AppShell';
+import { createClient } from '@/lib/supabaseBrowser';
 
 const STANDARD_CHECKLIST = {
   'Admin & Booking': [
@@ -28,20 +29,38 @@ const STANDARD_CHECKLIST = {
 // "Bar Kit & Stock" ahead of the other items when applicable.
 const ALCOHOL_ONLY_ITEM = 'All spirits for menu ordered/packed';
 
-export default function ChecklistClient({ userEmail, booking, costs, cocktails, mocktails, stockItems, cocktailStock = [], serviceStock = [], error }) {
-  // Reconciliation state is pre-populated from BOTH stock groups. The rows
-  // themselves are grouped visually in the UI but share the same input state,
-  // because for stock accounting they're all the same thing — items leaving
-  // the warehouse and coming back.
+// Run-sheet draft, keyed by booking in the shared app_state table, so a van
+// load-out and the post-event reconcile can be done on different devices.
+async function saveRunsheetDraft(bookingId, state) {
+  try {
+    await createClient().from('app_state').upsert({
+      key: `runsheet:${bookingId}`, value: state, updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' });
+  } catch { /* best effort */ }
+}
+
+export default function ChecklistClient({ userEmail, booking, costs, cocktails, mocktails, stockItems, cocktailStock = [], serviceStock = [], savedRunsheet = null, garnishSuggestions = [], error }) {
   const combinedSuggested = [...cocktailStock, ...serviceStock];
-  const [reconcile, setReconcile] = useState(() => {
-    const initial = {};
-    combinedSuggested.forEach(s => { initial[s.id] = { takenOut: '', returned: '' }; });
-    return initial;
-  });
+  const suggestedIds = new Set(combinedSuggested.map(s => s.id));
+
+  // ── Run sheet: three buckets ─────────────────────────────────────
+  //  loaded  { [itemId]: { takenOut, returned } }  — stock we already owned
+  //  bought  [{ id, inventoryItemId, itemName, category, unitCost, boughtQty, returned, addToLibrary }]
+  //  garnish { [name]: cost }  — per-event actuals
+  const [loaded, setLoaded] = useState(() => savedRunsheet?.loaded || {});
+  const [bought, setBought] = useState(() => savedRunsheet?.bought || []);
+  const [garnish, setGarnish] = useState(() => savedRunsheet?.garnish || {});
   const [addItemId, setAddItemId] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+
+  // Autosave the in-progress sheet to the booking (debounced), so the van
+  // load-out and the post-event reconcile can happen on different devices.
+  useEffect(() => {
+    if (!booking?.id) return;
+    const t = setTimeout(() => saveRunsheetDraft(booking.id, { loaded, bought, garnish, savedAt: new Date().toISOString() }), 800);
+    return () => clearTimeout(t);
+  }, [loaded, bought, garnish, booking]);
 
   if (error || !booking) {
     return (
@@ -57,54 +76,65 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
   const flags = buildFlags(booking, cocktails, mocktails);
   const totalCost = costs.reduce((s, c) => s + (c.finalCost ?? c.cost ?? 0), 0);
   const staffNeeded = (booking.guestCount || 0) > 150 ? '6+' : '4+';
+  const num = v => Number(v) || 0;
 
-  // Reconciliation rows: suggested stock (from recipes) plus anything the
-  // team manually adds, each tracked as { itemId, takenOut, returned }
-  const reconcileList = Object.entries(reconcile).map(([itemId, v]) => ({
-    item: stockItems.find(s => s.id === itemId), ...v,
-  })).filter(r => r.item);
+  // Style shorthands, kept local so the three buckets read cleanly.
+  const inpStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 16, textAlign: 'center', background: '#faf9f6' };
+  const lblStyle = { fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', display: 'block', marginBottom: 4 };
+  const cardStyle = { background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 };
+  const bucketLabel = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--gold)', margin: '4px 0 8px' };
 
-  function initRow(itemId) {
-    if (reconcile[itemId]) return;
-    setReconcile(prev => ({ ...prev, [itemId]: { takenOut: '', returned: '' } }));
-  }
-  function updateRow(itemId, field, value) {
-    setReconcile(prev => ({ ...prev, [itemId]: { ...prev[itemId], [field]: value } }));
-  }
-  function removeRow(itemId) {
-    setReconcile(prev => { const next = { ...prev }; delete next[itemId]; return next; });
-  }
-  function addManualItem() {
-    if (!addItemId) return;
-    initRow(addItemId);
-    setAddItemId('');
+  // Loaded rows = suggested stock (always shown) + anything manually added.
+  const loadedIds = [...new Set([...combinedSuggested.map(s => s.id), ...Object.keys(loaded)])];
+  const loadedRows = loadedIds.map(id => ({ item: stockItems.find(s => s.id === id), manual: !suggestedIds.has(id), ...(loaded[id] || { takenOut: '', returned: '' }) })).filter(r => r.item);
+
+  function setLoadedField(id, field, value) { setLoaded(prev => ({ ...prev, [id]: { ...(prev[id] || { takenOut: '', returned: '' }), [field]: value } })); }
+  function clearLoaded(id) { setLoaded(prev => { const nx = { ...prev }; delete nx[id]; return nx; }); }
+  function addLoaded() { if (!addItemId) return; setLoaded(prev => prev[addItemId] ? prev : ({ ...prev, [addItemId]: { takenOut: '', returned: '' } })); setAddItemId(''); }
+
+  function addBought() { setBought(prev => [...prev, { id: Date.now(), inventoryItemId: '', itemName: '', category: 'Spirit', unitCost: '', boughtQty: '', returned: '', addToLibrary: false }]); }
+  function updateBought(id, patch) { setBought(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b)); }
+  function removeBought(id) { setBought(prev => prev.filter(b => b.id !== id)); }
+  function pickBoughtItem(id, invId) {
+    const it = stockItems.find(s => s.id === invId);
+    updateBought(id, it ? { inventoryItemId: invId, itemName: it.name, category: it.category, unitCost: it.averageUnitCost ?? '', addToLibrary: false } : { inventoryItemId: '' });
   }
 
-  async function saveReconciliation() {
-    const entries = reconcileList
-      .filter(r => r.takenOut !== '' || r.returned !== '')
-      .map(r => ({
-        inventoryItemId: r.item.id, itemName: r.item.name, category: r.item.category,
-        currentStock: r.item.currentStock, averageUnitCost: r.item.averageUnitCost,
-        takenOut: r.takenOut, returned: r.returned,
-      }));
-    if (!entries.length) { alert('Enter at least one taken-out quantity.'); return; }
-    setSaving(true);
-    setSaveMsg('');
+  const garnishNames = [...new Set([...garnishSuggestions, ...Object.keys(garnish)])];
+  function setGarnishCost(name, value) { setGarnish(prev => ({ ...prev, [name]: value })); }
+  function addGarnish(name) { const t = (name || '').trim(); if (!t) return; setGarnish(prev => ({ ...prev, [t]: prev[t] ?? '' })); }
+
+  const loadedCost = loadedRows.reduce((t, r) => t + Math.max(0, num(r.takenOut) - num(r.returned)) * num(r.item.averageUnitCost), 0);
+  const boughtCost = bought.reduce((t, b) => t + Math.max(0, num(b.boughtQty) - num(b.returned)) * num(b.unitCost), 0);
+  const garnishTotal = garnishNames.reduce((t, nm) => t + num(garnish[nm]), 0);
+  const eventCost = loadedCost + boughtCost + garnishTotal;
+  const backToStock = loadedRows.reduce((t, r) => t + num(r.returned), 0) + bought.reduce((t, b) => t + num(b.returned), 0);
+
+  async function saveRunSheet() {
+    const loadedPayload = loadedRows.filter(r => r.takenOut !== '' || r.returned !== '').map(r => ({
+      inventoryItemId: r.item.id, itemName: r.item.name, category: r.item.category,
+      currentStock: r.item.currentStock, averageUnitCost: r.item.averageUnitCost,
+      takenOut: r.takenOut, returned: r.returned,
+    }));
+    const boughtPayload = bought.filter(b => num(b.boughtQty) > 0).map(b => ({
+      inventoryItemId: b.inventoryItemId || null, itemName: b.itemName || 'Unnamed item', category: b.category,
+      currentStock: b.inventoryItemId ? (stockItems.find(s => s.id === b.inventoryItemId)?.currentStock ?? 0) : 0,
+      unitCost: b.unitCost, boughtQty: b.boughtQty, returned: b.returned, addToLibrary: !b.inventoryItemId && b.addToLibrary,
+    }));
+    const garnishPayload = garnishNames.filter(nm => num(garnish[nm]) > 0).map(nm => ({ name: nm, cost: garnish[nm] }));
+    if (!loadedPayload.length && !boughtPayload.length && !garnishPayload.length) { alert('Enter some usage, a purchase, or a garnish cost first.'); return; }
+    setSaving(true); setSaveMsg('');
     try {
       const res = await fetch(`/api/bookings/${booking.id}/stock-reconcile`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entries }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loaded: loadedPayload, bought: boughtPayload, garnish: garnishPayload }),
       }).then(r => r.json());
       if (res.error) throw new Error(res.error);
-      setSaveMsg(`✓ Stock updated and ${res.processed} cost line(s) added — refresh the booking to see them`);
-      setReconcile({});
-    } catch (err) {
-      alert('Failed to save: ' + err.message);
-    } finally {
-      setSaving(false);
-    }
+      const bits = [res.loaded && `${res.loaded} loaded`, res.bought && `${res.bought} bought`, res.garnish && `${res.garnish} garnish`].filter(Boolean).join(', ');
+      setSaveMsg(`✓ Saved — ${bits} costed${res.newItems ? `, ${res.newItems} new to library` : ''}${res.backToStock ? `, ${res.backToStock} back in stock` : ''}. Refresh the booking to see the cost lines.`);
+    } catch (err) { alert('Failed to save: ' + err.message); }
+    finally { setSaving(false); }
   }
-
   return (
     <AppShell active="/bookings" userEmail={userEmail}>
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -244,130 +274,115 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
             );
           })}
 
-          {/* Stock pack list — split by purpose so the warehouse knows
-              WHY each item is being packed and can spot missing categories */}
-          {providesAlcohol && (cocktailStock.length > 0 || serviceStock.length > 0) && (
-            <>
-              <SectionHead icon="📦">Stock to pack</SectionHead>
-              <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
-                Two separate lists — cocktail/mocktail ingredients (from recipes above) and standard service items (from the client's package). Check against par before loading.
-              </p>
+          {/* ── RUN SHEET — three buckets: loaded / bought / garnish ──
+              Saving costs the event for what was used, returns leftover stock
+              to inventory, logs the buys, and writes the cost lines. */}
+          <div className="no-print" style={{ marginTop: 20 }}>
+            <SectionHead icon="🚐">Run sheet — stock &amp; costs</SectionHead>
+            <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.55 }}>
+              Log what you <strong>loaded</strong> from stock, anything you <strong>bought</strong> for the event, and the <strong>garnish</strong> spend. The event is charged only for what's used; leftover bottles go back into stock. Autosaves as you go.
+            </p>
 
-              {cocktailStock.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--gold)', marginBottom: 6 }}>For cocktails &amp; mocktails</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 6 }}>
-                    {cocktailStock.map(s => (
-                      <div key={s.id} style={{ display: 'contents' }}>
-                        <div style={{ fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>{s.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Stock: {s.currentStock ?? '—'}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Par: {s.parLevel ?? '—'}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {serviceStock.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--gold)', marginBottom: 6 }}>For standard service (spirits, beer, mixers)</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 6 }}>
-                    {serviceStock.map(s => (
-                      <div key={s.id} style={{ display: 'contents' }}>
-                        <div style={{ fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>{s.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Stock: {s.currentStock ?? '—'}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--off)' }}>Par: {s.parLevel ?? '—'}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── Van loadout & return (mobile-friendly, no-print) ──
-              Two-step flow: log what's going on the van before the event,
-              log what comes back after. Both feed the same cost line — the
-              "taken minus returned" delta becomes locked-cost consumption. */}
-          {providesAlcohol && (
-            <div className="no-print" style={{ marginTop: 20 }}>
-              <SectionHead icon="🚐">Van loadout &amp; return</SectionHead>
-              <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.55 }}>
-                <strong>Before the event:</strong> enter what's being loaded onto the van.<br />
-                <strong>After the event:</strong> come back and enter what came back.<br />
-                Save once at the end — this updates stock levels <strong>and</strong> adds the used amount as a cost line automatically.
-              </p>
-
-              {reconcileList.map(r => (
-                <div key={r.item.id} style={{
-                  background: '#fff', border: '1px solid var(--border)', borderRadius: 10,
-                  padding: '12px 14px', marginBottom: 10, position: 'relative',
-                }}>
+            {/* 1 — LOADED FROM STOCK */}
+            <div style={bucketLabel}>1 · Loaded from stock</div>
+            {loadedRows.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>Nothing suggested for this booking — add stock below.</p>}
+            {loadedRows.map(r => {
+              const used = Math.max(0, num(r.takenOut) - num(r.returned));
+              const line = used * num(r.item.averageUnitCost);
+              return (
+                <div key={r.item.id} style={cardStyle}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{r.item.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                        {r.item.category} · Stock now: <strong>{r.item.currentStock ?? '—'}</strong>
-                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{r.item.category} · stock now {r.item.currentStock ?? '—'} · {gbp(r.item.averageUnitCost)}/unit</div>
                     </div>
-                    <button onClick={() => removeRow(r.item.id)}
-                      style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 4 }}
-                      aria-label="Remove row">✕</button>
+                    {r.manual && <button onClick={() => clearLoaded(r.item.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 4 }} aria-label="Remove">✕</button>}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Taken out</label>
-                      <input type="number" inputMode="numeric" min="0" placeholder="0"
-                        value={r.takenOut}
-                        onChange={e => updateRow(r.item.id, 'takenOut', e.target.value)}
-                        style={{
-                          width: '100%', padding: '10px 12px', border: '1px solid var(--border)',
-                          borderRadius: 8, fontSize: 16, textAlign: 'center', background: '#faf9f6',
-                        }} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Returned</label>
-                      <input type="number" inputMode="numeric" min="0" placeholder="0"
-                        value={r.returned}
-                        onChange={e => updateRow(r.item.id, 'returned', e.target.value)}
-                        style={{
-                          width: '100%', padding: '10px 12px', border: '1px solid var(--border)',
-                          borderRadius: 8, fontSize: 16, textAlign: 'center', background: '#faf9f6',
-                        }} />
-                    </div>
+                    <div><label style={lblStyle}>Taken out</label><input type="number" inputMode="numeric" min="0" placeholder="0" value={r.takenOut} onChange={e => setLoadedField(r.item.id, 'takenOut', e.target.value)} style={inpStyle} /></div>
+                    <div><label style={lblStyle}>Came back (sealed)</label><input type="number" inputMode="numeric" min="0" placeholder="0" value={r.returned} onChange={e => setLoadedField(r.item.id, 'returned', e.target.value)} style={inpStyle} /></div>
                   </div>
-                  {r.takenOut !== '' && r.returned !== '' && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)', textAlign: 'right' }}>
-                      Used: <strong style={{ color: 'var(--text)' }}>{Math.max(0, (parseInt(r.takenOut, 10) || 0) - (parseInt(r.returned, 10) || 0))}</strong>
-                    </div>
+                  {(r.takenOut !== '' || r.returned !== '') && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)', textAlign: 'right' }}>Used <strong style={{ color: 'var(--text)' }}>{used}</strong> · <strong style={{ color: 'var(--gold)' }}>{gbp(line)}</strong></div>
                   )}
                 </div>
-              ))}
-
-              {/* Add-another selector */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
-                <select value={addItemId} onChange={e => setAddItemId(e.target.value)}
-                  style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14, background: '#fff' }}>
-                  <option value="">— add another item —</option>
-                  {stockItems.filter(s => !reconcile[s.id]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-                <button onClick={addManualItem}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', fontSize: 14 }}>+ Add</button>
-              </div>
-
-              {/* Save row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 }}>
-                <button onClick={saveReconciliation} disabled={saving}
-                  style={{
-                    background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 10,
-                    padding: '12px 22px', fontSize: 15, fontWeight: 500, cursor: 'pointer',
-                  }}>
-                  {saving ? 'Saving…' : 'Save & update stock + cost'}
-                </button>
-                {saveMsg && <span style={{ fontSize: 13, color: 'var(--success)' }}>{saveMsg}</span>}
-              </div>
+              );
+            })}
+            <div style={{ display: 'flex', gap: 8, margin: '6px 0 22px', alignItems: 'center' }}>
+              <select value={addItemId} onChange={e => setAddItemId(e.target.value)} style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14, background: '#fff' }}>
+                <option value="">— add stock item —</option>
+                {stockItems.filter(s => !loaded[s.id] && !combinedSuggested.find(c => c.id === s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <button onClick={addLoaded} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', fontSize: 14 }}>+ Add</button>
             </div>
-          )}
+
+            {/* 2 — BOUGHT FOR THE EVENT */}
+            <div style={bucketLabel}>2 · Bought for the event</div>
+            <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>Stock bought for the day — pick an item or type an off-catalogue one. Charged for what's used; leftovers return to stock.</p>
+            {bought.map(b => {
+              const used = Math.max(0, num(b.boughtQty) - num(b.returned));
+              const line = used * num(b.unitCost);
+              const isNew = !b.inventoryItemId;
+              return (
+                <div key={b.id} style={cardStyle}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                    <select value={b.inventoryItemId} onChange={e => pickBoughtItem(b.id, e.target.value)} style={{ flex: 1, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: '#fff' }}>
+                      <option value="">— off-catalogue (type below) —</option>
+                      {stockItems.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <button onClick={() => removeBought(b.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18, padding: 4 }} aria-label="Remove">✕</button>
+                  </div>
+                  {isNew && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 8, marginBottom: 10 }}>
+                      <input placeholder="Item name (e.g. Smirnoff 1L)" value={b.itemName} onChange={e => updateBought(b.id, { itemName: e.target.value })} style={{ ...inpStyle, textAlign: 'left', fontSize: 14 }} />
+                      <select value={b.category} onChange={e => updateBought(b.id, { category: e.target.value })} style={{ padding: '10px 8px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: '#fff' }}>
+                        {['Spirit', 'Liqueur', 'Mixer', 'Beer', 'Wine', 'Prosecco', 'Garnish', 'Other'].map(c => <option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <div><label style={lblStyle}>£ / unit</label><input type="number" inputMode="decimal" min="0" placeholder="0.00" value={b.unitCost} onChange={e => updateBought(b.id, { unitCost: e.target.value })} style={inpStyle} /></div>
+                    <div><label style={lblStyle}>Bought</label><input type="number" inputMode="numeric" min="0" placeholder="0" value={b.boughtQty} onChange={e => updateBought(b.id, { boughtQty: e.target.value })} style={inpStyle} /></div>
+                    <div><label style={lblStyle}>Came back</label><input type="number" inputMode="numeric" min="0" placeholder="0" value={b.returned} onChange={e => updateBought(b.id, { returned: e.target.value })} style={inpStyle} /></div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, minHeight: 20 }}>
+                    {isNew && b.itemName.trim()
+                      ? <label style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><input type="checkbox" checked={b.addToLibrary} onChange={e => updateBought(b.id, { addToLibrary: e.target.checked })} /> Add to Notion library</label>
+                      : <span />}
+                    {b.boughtQty !== '' && <div style={{ fontSize: 12, color: 'var(--muted)' }}>Used <strong style={{ color: 'var(--text)' }}>{used}</strong> · <strong style={{ color: 'var(--gold)' }}>{gbp(line)}</strong></div>}
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={addBought} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', fontSize: 14, marginBottom: 22 }}>+ Add a purchase</button>
+
+            {/* 3 — GARNISH */}
+            <div style={bucketLabel}>3 · Garnish (per-event spend)</div>
+            {garnishNames.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>No garnishes on this menu — add any below.</p>}
+            {garnishNames.map(nm => (
+              <div key={nm} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ flex: 1, fontSize: 13 }}>{nm}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: 'var(--muted)' }}>£</span>
+                  <input type="number" inputMode="decimal" min="0" placeholder="0.00" value={garnish[nm] ?? ''} onChange={e => setGarnishCost(nm, e.target.value)} style={{ width: 90, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 15, textAlign: 'center', background: '#faf9f6' }} />
+                </div>
+              </div>
+            ))}
+            <GarnishAdder onAdd={addGarnish} />
+
+            {/* SUMMARY + SAVE */}
+            <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginTop: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}><span style={{ color: 'var(--muted)' }}>Loaded from stock</span><span>{gbp(loadedCost)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}><span style={{ color: 'var(--muted)' }}>Bought for event</span><span>{gbp(boughtCost)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}><span style={{ color: 'var(--muted)' }}>Garnish</span><span>{gbp(garnishTotal)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 600, paddingTop: 8, borderTop: '1px solid var(--border)' }}><span>Event cost</span><span style={{ color: 'var(--gold)' }}>{gbp(eventCost)}</span></div>
+              {backToStock > 0 && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>{backToStock} unit(s) coming back into stock</div>}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={saveRunSheet} disabled={saving} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 22px', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Save run sheet'}</button>
+              {saveMsg && <span style={{ fontSize: 12.5, color: 'var(--success)' }}>{saveMsg}</span>}
+            </div>
+          </div>
 
           <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
             ORPI Events LTD &nbsp;|&nbsp; Unit 5 Clements Court, Clements Lane, Ilford, IG1 2QY &nbsp;|&nbsp; hello@orpi.events
@@ -469,3 +484,14 @@ function DrinkCard({ drink }) {
 
 function fmtDateLong(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); } catch { return d; } }
 function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function GarnishAdder({ onAdd }) {
+  const [v, setV] = useState('');
+  const add = () => { onAdd(v); setV(''); };
+  return (
+    <div className="no-print" style={{ display: 'flex', gap: 8, margin: '4px 0 22px' }}>
+      <input placeholder="+ add a garnish" value={v} onChange={e => setV(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(); }} style={{ flex: 1, padding: '9px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14, background: '#fff' }} />
+      <button onClick={add} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 16px', fontSize: 14 }}>Add</button>
+    </div>
+  );
+}
+

@@ -8,6 +8,7 @@ export default async function ChecklistPage({ params }) {
 
   let booking = null, costs = [], cocktails = [], mocktails = [], stockItems = [];
   let cocktailStock = [], serviceStock = [], error = null;
+  let savedRunsheet = null, garnishSuggestions = [];
   try {
     booking = await getBookingById(params.id);
     const [drinksLibrary, allStock] = await Promise.all([listDrinks(), listInventoryItems()]);
@@ -17,6 +18,9 @@ export default async function ChecklistPage({ params }) {
       resolveMenu(booking.cocktailMenu, drinksLibrary, booking.cocktailRecipeOverrides),
       resolveMenu(booking.mocktailMenu, drinksLibrary, booking.mocktailRecipeOverrides),
     ]);
+    const { data: draftData } = await supabase.from('app_state').select('value').eq('key', `runsheet:${params.id}`).maybeSingle();
+    savedRunsheet = draftData?.value || null;
+    garnishSuggestions = [...new Set([...cocktails, ...mocktails].map(d => d.garnish).filter(Boolean))];
     const providesAlcohol = booking.alcoholProvidedBy === 'ORPI';
     if (providesAlcohol) {
       cocktailStock = suggestStockForDrinks([...cocktails, ...mocktails], stockItems);
@@ -42,6 +46,8 @@ export default async function ChecklistPage({ params }) {
       stockItems={stockItems}
       cocktailStock={cocktailStock}
       serviceStock={serviceStock}
+      savedRunsheet={savedRunsheet}
+      garnishSuggestions={garnishSuggestions}
       error={error}
     />
   );

@@ -21,7 +21,11 @@ export async function POST(request) {
 
   try {
     const record = await createInvoice({ snapshot, enquiryId, createdByEmail: user.email });
-    const url = `${request.nextUrl.origin}/i/${record.token}`;
+    // Prefer a branded origin (e.g. https://book.orpi.events) when configured,
+    // so client links never show the orpi-app.vercel.app host. Falls back to
+    // whatever host ORPI is on.
+    const base = (process.env.BOOKING_ORIGIN || request.nextUrl.origin).replace(/\/+$/, '');
+    const url = `${base}/i/${record.token}`;
     await logActivity({
       userEmail: user.email,
       action: 'invoice.link',

@@ -900,8 +900,7 @@ function SigningLink({ s, addonTotal, total, dep }) {
       const res = await fetch(`/api/invoices/${token}`);
       const data = await res.json();
       if (res.ok && data.invoice) {
-        const a = data.invoice.agreement;
-        setStatus(a ? { accepted: true, name: a.name } : { accepted: false });
+        setStatus({ state: data.invoice.status, name: data.invoice.agreement && data.invoice.agreement.name });
       }
     } catch { /* leave status as-is */ }
   }
@@ -922,12 +921,15 @@ function SigningLink({ s, addonTotal, total, dep }) {
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8 }}>
             <button onClick={checkStatus} style={addLinkStyle}>Check acceptance status</button>
-            {status && (status.accepted
-              ? <span style={{ fontSize: 11, color: 'var(--success)' }}>✓ Accepted by {status.name}</span>
-              : <span style={{ fontSize: 11, color: 'var(--muted)' }}>Not yet accepted</span>)}
+            {status && (
+              status.state === 'accepted' ? <span style={{ fontSize: 11, color: 'var(--success)' }}>✓ Accepted by {status.name}</span>
+                : status.state === 'expired' ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>Link expired</span>
+                : status.state === 'revoked' ? <span style={{ fontSize: 11, color: 'var(--muted)' }}>Replaced by a newer link</span>
+                : <span style={{ fontSize: 11, color: 'var(--muted)' }}>Not yet accepted</span>
+            )}
           </div>
           <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-            Send this to the client over WhatsApp or email. It shows the invoice, the full T&amp;Cs to accept, then the bank details. Acceptance also appears in Activity.
+            Send this to the client over WhatsApp or email. It shows the invoice, the full T&amp;Cs to accept, then the bank details. Valid for 14 days; creating a new link replaces any earlier one for this quote. Acceptance also appears in Activity.
           </div>
         </div>
       )}

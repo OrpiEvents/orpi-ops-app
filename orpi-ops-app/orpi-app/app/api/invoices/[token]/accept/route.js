@@ -21,6 +21,8 @@ export async function POST(request, { params }) {
   try {
     const res = await recordAcceptance(params.token, { name, ip });
     if (res.notFound) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (res.revoked) return NextResponse.json({ error: 'This link has been replaced by a newer one — please use the latest link from ORPI.' }, { status: 410 });
+    if (res.expired) return NextResponse.json({ error: 'This link has expired — please contact ORPI for an up-to-date link.' }, { status: 410 });
     if (!res.already) {
       await logActivity({
         userEmail: 'client',

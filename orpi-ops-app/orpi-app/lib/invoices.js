@@ -10,6 +10,11 @@
 // All reads/writes here use the service-role admin client, because the client
 // is NOT signed in. The token is the capability: anyone with the link can view
 // and accept that one invoice, and nothing else.
+//
+// Safety model: the token is 144-bit random (unguessable); the snapshot is
+// sanitised (no costs/margin/pay rates); a link is valid for EXPIRY_DAYS, then
+// an unsigned link stops working; creating a new link for an enquiry retires
+// earlier unsigned links; and once signed, acceptance is locked.
 
 import crypto from 'crypto';
 import { createAdminClient } from './supabaseServer';
@@ -17,8 +22,28 @@ import { TERMS_VERSION } from './terms';
 
 const keyFor = token => `invoice:${token}`;
 
+// How long a signing link stays usable. Matches the 14-day quote validity.
+export const EXPIRY_DAYS = 14;
+
+function addDays(iso, days) {
+  const t = new Date(iso || Date.now()).getTime();
+  return new Date(t + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+// The live state of a link. A signed link is always viewable (it's a committed
+// booking); an unsigned one goes stale once revoked or past its expiry.
+//   active | accepted | expired | revoked | missing
+export function invoiceState(record) {
+  if (!record) return 'missing';
+  if (record.agreement) return 'accepted';
+  if (record.revoked) return 'revoked';
+  const exp = record.expiresAt || addDays(record.createdAt, EXPIRY_DAYS);
+  if (Date.now() > new Date(exp).getTime()) return 'expired';
+  return 'active';
+}
+
 export function newToken() {
-  // URL-safe, unguessable. ~24 chars.
+  // URL-safe, unguessable. ~24 chars, 144 bits of entropy.
   return crypto.randomBytes(18).toString('base64url');
 }
 
@@ -53,11 +78,14 @@ export function sanitizeSnapshot(snap) {
 export async function createInvoice({ snapshot, enquiryId, createdByEmail }) {
   const token = newToken();
   const clean = sanitizeSnapshot(snapshot);
+  const createdAt = new Date().toISOString();
   const record = {
     token,
     enquiryId: enquiryId || null,
     client: (clean.s && clean.s.client) || '',
-    createdAt: new Date().toISOString(),
+    createdAt,
+    expiresAt: addDays(createdAt, EXPIRY_DAYS),
+    revoked: false,
     createdByEmail: createdByEmail || null,   // internal only — never sent to the public view
     termsVersion: TERMS_VERSION,
     snapshot: clean,
@@ -65,10 +93,16 @@ export async function createInvoice({ snapshot, enquiryId, createdByEmail }) {
   };
   const supabase = createAdminClient();
   const { error } = await supabase.from('app_state').upsert(
-    { key: keyFor(token), value: record, updated_at: record.createdAt },
+    { key: keyFor(token), value: record, updated_at: createdAt },
     { onConflict: 'key' }
   );
   if (error) throw new Error(error.message);
+
+  // Replacing the client's link: retire any earlier UNSIGNED links for the same
+  // enquiry, so a client can't accept a superseded version. Best-effort.
+  if (record.enquiryId) {
+    try { await revokeSupersededForEnquiry(record.enquiryId, token); } catch { /* non-fatal */ }
+  }
   return record;
 }
 
@@ -81,12 +115,38 @@ export async function getInvoice(token) {
   return data ? data.value : null;
 }
 
+// Mark earlier unsigned links for the same enquiry as revoked. A signed link is
+// never touched — its acceptance is a real record.
+export async function revokeSupersededForEnquiry(enquiryId, exceptToken) {
+  if (!enquiryId) return;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('app_state').select('key,value').like('key', 'invoice:%');
+  if (error || !data) return;
+  for (const row of data) {
+    const rec = row.value;
+    if (!rec || rec.token === exceptToken) continue;
+    if (String(rec.enquiryId) !== String(enquiryId)) continue;
+    if (rec.agreement || rec.revoked) continue;   // never retire a signed (or already-retired) link
+    rec.revoked = true;
+    rec.revokedAt = new Date().toISOString();
+    await supabase.from('app_state').upsert(
+      { key: row.key, value: rec, updated_at: rec.revokedAt },
+      { onConflict: 'key' }
+    );
+  }
+}
+
 // Record the client's typed acceptance. Idempotent: once accepted, the first
-// acceptance stands and is returned unchanged.
+// acceptance stands. Refuses a revoked or expired link.
 export async function recordAcceptance(token, { name, ip }) {
   const record = await getInvoice(token);
   if (!record) return { ok: false, notFound: true };
   if (record.agreement) return { ok: true, record, already: true };
+
+  const st = invoiceState(record);
+  if (st === 'revoked') return { ok: false, revoked: true };
+  if (st === 'expired') return { ok: false, expired: true };
 
   record.agreement = {
     name: String(name || '').trim().slice(0, 120),
@@ -110,6 +170,8 @@ export function publicView(record) {
     token: record.token,
     client: record.client,
     createdAt: record.createdAt,
+    expiresAt: record.expiresAt || addDays(record.createdAt, EXPIRY_DAYS),
+    status: invoiceState(record),
     termsVersion: record.termsVersion,
     snapshot: record.snapshot,
     agreement: record.agreement || null,

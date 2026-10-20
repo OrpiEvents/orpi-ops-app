@@ -21,24 +21,29 @@ function Shell({ children }) {
   );
 }
 
+function Notice({ children }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '48px 32px', textAlign: 'center', marginTop: 40 }}>
+      <div style={{ fontFamily: 'var(--serif)', fontSize: 26, letterSpacing: '.25em', color: '#0a0a0a' }}>ORPI</div>
+      <div style={{ fontSize: 9.5, letterSpacing: '.38em', color: 'var(--gold)', marginTop: 6, fontWeight: 500 }}>MOBILE BAR &amp; EVENTS</div>
+      <p style={{ marginTop: 24, color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>{children}</p>
+    </div>
+  );
+}
+
 export default async function InvoicePage({ params }) {
   let record = null;
   try { record = await getInvoice(params.token); } catch { record = null; }
   const inv = publicView(record);
 
   if (!inv) {
-    return (
-      <Shell>
-        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '48px 32px', textAlign: 'center', marginTop: 40 }}>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 26, letterSpacing: '.25em', color: '#0a0a0a' }}>ORPI</div>
-          <div style={{ fontSize: 9.5, letterSpacing: '.38em', color: 'var(--gold)', marginTop: 6, fontWeight: 500 }}>MOBILE BAR &amp; EVENTS</div>
-          <p style={{ marginTop: 24, color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
-            This booking link isn&rsquo;t valid or has expired.<br />
-            Please check the link, or contact us at <strong>hello@orpi.events</strong>.
-          </p>
-        </div>
-      </Shell>
-    );
+    return <Shell><Notice>This booking link isn&rsquo;t valid. Please check the link, or contact us at <strong>hello@orpi.events</strong>.</Notice></Shell>;
+  }
+  if (inv.status === 'revoked') {
+    return <Shell><Notice>This booking link has been replaced by a newer version. Please use the most recent link we sent you, or contact us at <strong>hello@orpi.events</strong>.</Notice></Shell>;
+  }
+  if (inv.status === 'expired') {
+    return <Shell><Notice>This booking link has expired. Please contact us at <strong>hello@orpi.events</strong> and we&rsquo;ll send an up-to-date one.</Notice></Shell>;
   }
 
   const s = inv.snapshot.s;

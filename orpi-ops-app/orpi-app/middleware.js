@@ -28,9 +28,17 @@ export async function middleware(request) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login');
+  const { pathname } = request.nextUrl;
+  const isLoginPage = pathname.startsWith('/login');
+  // Public, tokenised client pages and their read/accept APIs need no sign-in —
+  // the token in the URL is the capability. Creating an invoice
+  // (POST /api/invoices, which has no token segment) stays protected.
+  const isPublicInvoice =
+    pathname.startsWith('/i/') ||
+    /^\/api\/invoices\/[^/]+(?:\/accept)?\/?$/.test(pathname);
+  const isPublic = isLoginPage || isPublicInvoice;
 
-  if (!user && !isLoginPage) {
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

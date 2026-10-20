@@ -4,6 +4,13 @@ import { matchScore, inStock, nearMatches } from '@/lib/matching';
 import { createClient } from '@/lib/supabaseBrowser';
 import { useEffect, useState } from 'react';
 import AppShell from '../AppShell';
+import QuotePreview from './QuotePreview';
+import {
+  num, hoursFrom, COST, ALCOHOL_MIX, WELCOME_MIX, WELCOME_PER_HOUR, SPIRIT_TIERS,
+  DRINKWARE, COST_CHECKS, PPH, PKG_SHOWS, pkgShows, WELCOME_MATCH, defaultCrew, crewFor,
+  alcoholParts, alcoholLine, alcoholPerHead, welcomeParts, welcomePerHead, tastingState,
+  computeCosts, unresolvedChecks, buildInclusions, fmtDate, fmtDatePretty, fmtDateLong, gbp,
+} from '@/lib/quoteModel';
 
 let idCounter = 0;
 const uid = () => `item_${++idCounter}_${Date.now()}`;
@@ -81,376 +88,6 @@ function brandOptions(stockItems) {
   return Object.values(seen);
 }
 
-// ── Cost model ───────────────────────────────────────────────
-// Per-head figures pulled from real Event Costing rows in Notion, weighted
-// across completed events (Jul 2025 – Aug 2026). Change them here, once.
-//   Alcohol  £7.50  historical weighted average, alcohol only
-//   Mixers   £1.00  16 events / 2,150 guests (weighted £0.89, median £1.00)
-//   Ice      £1.00  18 events / 2,966 guests (weighted £0.94, median £1.00)
-//   Garnish  £0.50  ESTIMATE — Notion has no Garnish cost type yet, so this is
-//                   the only line still guessed. Add the type and it goes real.
-// Drinkware is per unit, not per head. Actual glassware spend runs £2.49/head
-// weighted, which at £0.65 a glass implies ~3.8 glasses a head — hence the
-// default of 4, not the 5 the old panel assumed.
-const COST = {
-  alcoholPerHead: 7.50,
-  mixersPerHead: 1.00,
-  icePerHead: 1.00,
-  garnishPerHead: 0.50,
-  glassRate: 0.65,
-  plasticRate: 0.15,
-  staffRate: 16,
-  leadRate: 18,
-  prepRate: 16,            // shadow rate — prep is absorbed by directors
-  setupHrs: 4,             // on site 4 hours before service
-  packdownHrs: 1.5,
-  tastingThreshold: 150,   // guests at/above which a tasting is included
-  tastingChargePerHead: 20,
-  tastingIngredientsPerHead: 10,
-  tastingStaffHours: 3,
-  tastingDefaultGuests: 4,
-};
-
-// ── What the £7.50 is actually made of ──────────────────────────────
-// Every alcohol line ever logged in Event Costing, split by category. Syrups
-// were miscategorised as Alcohol (£0.05/head) and are stripped out here — they
-// belong under mixers. That leaves a £7.45 base.
-// Components switch off when the client quote doesn't include them, which is
-// why dropping wine from a package actually moves the cost.
-const ALCOHOL_MIX = [
-  { key: 'spirits',  label: 'Spirits',  perHead: 6.07, tiered: true },
-  { key: 'beer',     label: 'Beer',     perHead: 0.54 },
-  { key: 'liqueurs', label: 'Liqueurs', perHead: 0.44 },
-  { key: 'prosecco', label: 'Prosecco', perHead: 0.30 },
-  { key: 'wine',     label: 'Wine',     perHead: 0.10 },
-];
-
-// ── Welcome drinks ──────────────────────────────────────────────────
-// The standard tray: prosecco, beers, one welcome cocktail, one welcome
-// mocktail. Costed per serve from ORPI's own prices — prosecco is Freixenet at
-// £7.23/75cl over six 125ml pours, beer is Birra Moretti 330ml, and the two
-// mixed drinks are the medians of the eight welcome cocktails and eight welcome
-// mocktails in the library.
-//
-// Same rule as ALCOHOL_MIX: a component only costs anything when it's actually
-// on the tray, read from the welcome drinks list on the client quote. Take the
-// prosecco off and the cost drops.
-const WELCOME_MIX = [
-  { key: 'prosecco', label: 'Prosecco',         perServe: 1.21 },
-  { key: 'beer',     label: 'Beer',             perServe: 0.85 },
-  { key: 'cocktail', label: 'Welcome cocktail', perServe: 2.11 },
-  { key: 'mocktail', label: 'Welcome mocktail', perServe: 1.09 },
-];
-
-// How many drinks a guest gets through per hour of arrival drinks. A guess
-// until enough events close through the run sheet to measure it — editable on
-// the quote so it can be corrected without a deploy.
-const WELCOME_PER_HOUR = 1.0;
-
-// Spirit grade multiplier, applied to the spirits component only — upgrading
-// the vodka doesn't make the beer cost more.
-// Derived from real purchase prices: premium brands (Grey Goose, Ciroc,
-// Hennessy, Black Label, Woodford, Bombay) run £34.95/litre against £21.62 for
-// the house list, and past events blend the two at roughly 46/54. Index 1.00
-// is that historical blend, which is what produced the £7.50 figure — so
-// "premium" is an uplift on the blend, not on a clean house baseline.
-const SPIRIT_TIERS = {
-  house:    { label: 'House',    index: 0.83, note: 'Absolut, Gordon\'s, Jameson, Bacardi' },
-  standard: { label: 'Standard', index: 1.00, note: 'the house/premium mix we actually book' },
-  premium:  { label: 'Premium',  index: 1.33, note: 'Grey Goose, Ciroc, Black Label throughout' },
-  luxury:   { label: 'Luxury',   index: 1.85, note: 'estimate — no luxury events logged yet' },
-};
-
-// Drinkware presets → units per head. "Mixed" is the normal ORPI night:
-// real glass through service, plastics for the late-night tail.
-const DRINKWARE = {
-  mixed:   { label: 'Glass + late-night plastics', glass: 4, plastic: 1.5 },
-  glass:   { label: 'Glassware only',              glass: 5, plastic: 0 },
-  plastic: { label: 'Plastics only',               glass: 0, plastic: 6 },
-};
-
-// Every cost that should be considered before a quote goes out. `auto` lines
-// are computed by the model and resolve themselves; the rest need either a
-// one-off cost line or an explicit "n/a" before the margin figure commits.
-const COST_CHECKS = [
-  { key: 'alcohol',     label: 'Alcohol',                   auto: true },
-  { key: 'welcome',     label: 'Welcome drinks',            auto: 'conditional' },
-  { key: 'mixers',      label: 'Mixers & soft drinks',      auto: true },
-  { key: 'ice',         label: 'Ice',                       auto: true },
-  { key: 'garnish',     label: 'Garnishes & sundries',      auto: true },
-  { key: 'drinkware',   label: 'Glassware / plastics',      auto: true },
-  { key: 'staff',       label: 'Staff (incl. set-up)',      auto: true },
-  { key: 'tasting',     label: 'Drinks tasting',            auto: 'conditional' },
-  { key: 'travel',      label: 'Staff travel (receipts)' },
-  { key: 'van',         label: 'Van, fuel & parking' },
-  { key: 'prints',      label: 'Printed menus & signage' },
-  { key: 'barhire',     label: 'Bar hire, structure & décor' },
-  { key: 'equipment',   label: 'Equipment hire' },
-  { key: 'accom',       label: 'Accommodation' },
-  { key: 'contingency', label: 'Contingency' },
-];
-
-// Base price-per-head defaults. NOTE: these were set against the old
-// alcohol-only cost model. True cost per head is now ~£17–18 on a mid-size
-// event, so Premium still clears 60% but the cheaper packages do not —
-// revisit this table before leaning on the suggested-price button.
-// { glass, plastic } per package. Suggested only — the typed base always wins.
-const PPH = {
-  'Premium': { glass: 45, plastic: 35 },
-  'Ultimate': { glass: 55, plastic: 45 },
-  'Full Bar': { glass: 40, plastic: 30 },
-  'Cocktail Experience': { glass: 24, plastic: 20 },
-  'Welcome Drinks Only': { glass: 15, plastic: 12 },
-  'Bar Only (client supplies alcohol)': { glass: 15, plastic: 12 },
-  'Custom': { glass: 0, plastic: 0 },
-};
-
-// Default crew at 1 per 50 guests: one lead, the rest bartenders. Returned
-// only when the user hasn't set their own crew — staffRows === null means
-// "use the default", any array means they've taken control of it.
-function defaultCrew(guests) {
-  const g = Number(guests) || 0;
-  if (!g) return [];
-  const n = Math.max(1, Math.ceil(g / 50));
-  const crew = [{ id: 'crew_lead', role: 'Lead bartender', count: 1, rate: COST.leadRate }];
-  if (n > 1) crew.push({ id: 'crew_bar', role: 'Bartender', count: n - 1, rate: COST.staffRate });
-  return crew;
-}
-function crewFor(s) {
-  return Array.isArray(s.staffRows) ? s.staffRows : defaultCrew(s.guests);
-}
-function num(v, fallback = 0) {
-  const n = parseFloat(v);
-  return isNaN(n) ? fallback : n;
-}
-function hoursFrom(text) {
-  return parseFloat(String(text || '').replace(/[^0-9.]/g, '')) || 0;
-}
-
-// Which alcohol components this quote actually includes. Driven by the spirit
-// rows on the client-facing quote, so a package without wine isn't costed for
-// wine — and the printed inclusions can't claim it either.
-function alcoholParts(s, orpiOnly = false) {
-  // orpiOnly drops client-supplied items, so a bar where the client brings the
-  // beer isn't costed for it — the item still prints on the quote, just labelled.
-  const live = i => i.on && i.text.trim() && (!orpiOnly || (i.by || 'orpi') !== 'client');
-  const rows = (s.spiritRows || []).filter(r => r.on && r.items.some(live));
-  // "Peroni 0%" matches /beer/ and "Non-Alcoholic Wine" matches /wine/, so
-  // alcohol-free rows are filtered out once, up front, rather than guarded at
-  // every test below.
-  const dry = /non.?alcohol|alcohol.?free|\b0%/i;
-  const wet = rows.filter(r => !dry.test(r.cat));
-  const has = re => wet.some(r => re.test(r.cat));
-  const toastOn = (s.addons || []).some(a => a.on && /toast/i.test(a.label));
-  const beer = has(/beer|lager|cider/i);
-  const wine = has(/\bwine\b/i);
-  const prosecco = has(/prosecco|champagne|sparkl|fizz/i) || toastOn;
-  const spirits = wet.some(r => !/beer|lager|cider|\bwine\b|prosecco|champagne|sparkl|fizz/i.test(r.cat));
-  return { spirits, beer, wine, prosecco, liqueurs: spirits };
-}
-
-// The client-facing phrase for the alcohol line, built from what's actually on.
-function alcoholLine(s) {
-  const parts = alcoholParts(s, true);
-  const grade = SPIRIT_TIERS[s.spiritTier] ? SPIRIT_TIERS[s.spiritTier].label : 'House';
-  const bits = [];
-  if (parts.spirits) bits.push(`${grade === 'Standard' ? 'House' : grade} spirits`);
-  if (parts.beer) bits.push('beer');
-  if (parts.wine) bits.push('wine');
-  if (parts.prosecco) bits.push('prosecco');
-  if (!bits.length) return null;
-  if (bits.length === 1) return bits[0];
-  return bits.slice(0, -1).join(', ') + ' & ' + bits[bits.length - 1];
-}
-
-// Alcohol cost per head: sum the live components, tier the spirits, and let a
-// typed override beat the lot.
-function alcoholPerHead(s) {
-  // No ORPI-supplied drinking spirits to cost here: Bar Only uses the client's
-  // own, and Welcome Drinks Only has only the arrival tray (costed separately).
-  if (s.pkg === 'Bar Only (client supplies alcohol)' || s.pkg === 'Welcome Drinks Only') return 0;
-  const manual = parseFloat(s.alcoholOverride);
-  if (!isNaN(manual) && manual >= 0) return manual;
-  const parts = alcoholParts(s, true);
-  const tier = SPIRIT_TIERS[s.spiritTier] || SPIRIT_TIERS.standard;
-  return ALCOHOL_MIX.reduce((sum, m) => {
-    if (!parts[m.key]) return sum;
-    return sum + m.perHead * (m.tiered ? tier.index : 1);
-  }, 0);
-}
-
-// Which of the four welcome components are actually on the tray, read from the
-// welcome drinks list the client sees. Classified most specific first, so
-// "Pimms Cocktails" lands as a cocktail rather than being caught by something
-// broader, and "Ombre Juices" as the mocktail it is.
-const WELCOME_MATCH = [
-  ['mocktail', /mocktail|virgin|non.?alcohol|alcohol.?free|juice|ombre|lemonade|press[eé]|soft/i],
-  ['cocktail', /cocktail|spritz|pimms|aperol|hugo|bellini|martini|punch|sangria|mojito/i],
-  ['prosecco', /prosecco|champagne|cava|sparkl|fizz|bubbl|moet|freixenet|lanson/i],
-  ['beer',     /beer|lager|cider|peroni|moretti|budweiser|\bbud\b|kingfisher|estrella|corona|heineken|stella|birra/i],
-];
-
-function welcomeParts(s, orpiOnly = false) {
-  const out = { prosecco: false, beer: false, cocktail: false, mocktail: false };
-  if (!s.wdOn) return out;
-  (s.wdItems || []).forEach(i => {
-    if (!i.on || !i.text.trim()) return;
-    if (orpiOnly && (i.by || 'orpi') === 'client') return;
-    const hit = WELCOME_MATCH.find(([, re]) => re.test(i.text));
-    if (hit) out[hit[0]] = true;
-  });
-  return out;
-}
-
-// Welcome drinks cost per head. Drinks per head comes from the duration already
-// on the quote; the cost of each one is the average of whatever's on the tray,
-// since a guest takes one drink from the selection rather than one of each.
-function welcomePerHead(s) {
-  if (!s.wdOn) return 0;
-  const parts = welcomeParts(s, true);
-  const live = WELCOME_MIX.filter(m => parts[m.key]);
-  if (!live.length) return 0;
-  const perDrink = live.reduce((t, m) => t + m.perServe, 0) / live.length;
-  const perHour = num(s.wdPerHour, WELCOME_PER_HOUR);
-  return hoursFrom(s.wdDur) * perHour * perDrink;
-}
-
-// Is a tasting part of this quote? 'auto' follows the guest threshold; the
-// other three are manual overrides for the odd case.
-function tastingState(s) {
-  const g = Number(s.guests) || 0;
-  if (s.tastingMode === 'included') return 'included';
-  if (s.tastingMode === 'charged') return 'charged';
-  if (s.tastingMode === 'none') return 'none';
-  return g >= COST.tastingThreshold ? 'included' : 'none';
-}
-
-// The single source of truth for what this event costs us. Both the internal
-// panel and the generated client inclusions read from here, so the two can't
-// drift apart.
-function computeCosts(s) {
-  const g = Number(s.guests) || 0;
-  const serviceHrs = hoursFrom(s.duration);
-  const setupHrs = num(s.setupHrs, COST.setupHrs);
-  const packdownHrs = num(s.packdownHrs, COST.packdownHrs);
-  const paidHrs = setupHrs + serviceHrs + packdownHrs;
-
-  const crew = crewFor(s);
-  const headcount = crew.reduce((n, r) => n + num(r.count), 0);
-  const crewCostPerHour = crew.reduce((sum, r) => sum + num(r.count) * num(r.rate), 0);
-  const staffCost = crewCostPerHour * paidHrs;
-
-  // Prep is real time that currently costs no cash — the directors absorb it.
-  // Shown as a shadow figure so it's visible without distorting margin. Put a
-  // rate in the box the day someone starts getting paid for it.
-  const prepHrs = num(s.prepHrs);
-  const prepRate = num(s.prepRate, 0);
-  const prepCost = prepHrs * prepRate;
-  const prepShadow = prepHrs * COST.prepRate;
-
-  const isClientAlcohol = s.pkg === 'Bar Only (client supplies alcohol)';
-  const alcPerHead = alcoholPerHead(s);
-  const alcCost = alcPerHead * g;
-  const alcParts = alcoholParts(s, true);
-  const alcManual = !isNaN(parseFloat(s.alcoholOverride)) && parseFloat(s.alcoholOverride) >= 0;
-  // Client-supplied soft drinks come off the flat mixer cost proportionally —
-  // if half the softs on the quote are the client's, we carry half the mixers.
-  const softsList = (s.softItems || []).filter(i => i.on && i.text.trim());
-  const orpiSofts = softsList.filter(i => (i.by || 'orpi') !== 'client');
-  const softFrac = softsList.length ? orpiSofts.length / softsList.length : 1;
-  const mixersCost = COST.mixersPerHead * g * softFrac;
-  const iceCost = COST.icePerHead * g;
-  const garnishCost = COST.garnishPerHead * g;
-
-  // Arrival drinks, costed separately from the bar. Zero the moment welcome
-  // drinks are switched off, or when nothing on the tray is recognisable.
-  const wdParts = welcomeParts(s, true);
-  const wdPerHead = welcomePerHead(s);
-  const wdCost = wdPerHead * g;
-  const wdHours = s.wdOn ? hoursFrom(s.wdDur) : 0;
-  const wdPerHour = num(s.wdPerHour, WELCOME_PER_HOUR);
-  const wdDrinks = wdHours * wdPerHour;
-  const wdLive = WELCOME_MIX.filter(m => wdParts[m.key]);
-
-  const glassPerHead = num(s.glassPerHead, DRINKWARE.mixed.glass);
-  const plasticPerHead = num(s.plasticPerHead, DRINKWARE.mixed.plastic);
-  const glassCost = glassPerHead * COST.glassRate * g;
-  const plasticCost = plasticPerHead * COST.plasticRate * g;
-  const drinkwareCost = glassCost + plasticCost;
-
-  const tasting = tastingState(s);
-  const tGuests = num(s.tastingGuests, COST.tastingDefaultGuests);
-  const tastingCost = tasting === 'none' ? 0
-    : tGuests * COST.tastingIngredientsPerHead + COST.tastingStaffHours * COST.staffRate;
-  const tastingCharge = tasting === 'charged' ? tGuests * COST.tastingChargePerHead : 0;
-
-  const oneOffs = s.costLines.reduce((sum, l) => sum + num(l.qty) * num(l.unitCost), 0);
-
-  const internalCost = alcCost + wdCost + mixersCost + iceCost + garnishCost
-    + drinkwareCost + staffCost + prepCost + tastingCost + oneOffs;
-
-  return {
-    g, serviceHrs, setupHrs, packdownHrs, paidHrs, crew, headcount, crewCostPerHour,
-    staffCost, prepHrs, prepCost, prepShadow, isClientAlcohol, alcPerHead, alcCost,
-    alcParts, alcManual,
-    wdParts, wdPerHead, wdCost, wdHours, wdPerHour, wdDrinks, wdLive,
-    mixersCost, iceCost, garnishCost, glassPerHead, plasticPerHead, glassCost,
-    plasticCost, drinkwareCost, tasting, tGuests, tastingCost, tastingCharge,
-    oneOffs, internalCost,
-    costPerHead: g ? internalCost / g : 0,
-  };
-}
-
-// Which checklist lines are still hanging. Auto lines resolve themselves; a
-// manual line is settled by an "n/a" tick or by a one-off cost tagged to it.
-function unresolvedChecks(s) {
-  const tagged = new Set(s.costLines.map(l => l.check).filter(Boolean));
-  return COST_CHECKS.filter(c => {
-    if (c.auto) return false; // tasting included/charged is costed in the model
-    if ((s.costChecks || {})[c.key] === 'na') return false;
-    return !tagged.has(c.key);
-  });
-}
-
-// The client-facing inclusions list, generated rather than typed, so it always
-// matches the quote it's printed on.
-function buildInclusions(s) {
-  const c = computeCosts(s);
-  const out = [];
-
-  if (pkgShows(s.pkg).cocktails && (s.nct > 0 || s.nmt > 0)) {
-    out.push(`${s.nct} bespoke cocktail${s.nct !== 1 ? 's' : ''} & ${s.nmt} mocktail${s.nmt !== 1 ? 's' : ''} from our menu`);
-  }
-  out.push(c.headcount
-    ? `Professional bar team — ${c.headcount} ORPI staff for your ${c.g} guests`
-    : 'Professional bar staff scaled to your guest count');
-
-  if (c.glassPerHead > 0 && c.plasticPerHead > 0) out.push('Standard glassware, with premium disposables late in the night');
-  else if (c.glassPerHead > 0) out.push('Standard glassware throughout');
-  else if (c.plasticPerHead > 0) out.push('Premium disposable barware throughout');
-
-  out.push('Cubed & crushed ice');
-  out.push('Garnishes, straws & napkins');
-  out.push('Bar caddies & bar-top styling');
-  out.push('Standard back-bar décor');
-  out.push('Bespoke printed menus');
-  out.push('Set-up, service & pack-down');
-  out.push('Stock planning & bar management');
-  const shows = pkgShows(s.pkg);
-  const alc = shows.alcohol ? alcoholLine(s) : null;
-  if (alc) out.push(alc.charAt(0).toUpperCase() + alc.slice(1));
-  // Say it plainly rather than leave a gap the client has to notice.
-  if (!shows.alcohol && s.pkg === 'Bar Only (client supplies alcohol)') {
-    out.push('Full bar service — you supply the alcohol');
-  }
-  if (pkgShows(s.pkg).softs) out.push('Full soft drinks & mixer range');
-  if (c.tasting === 'included') out.push('Pre-event drinks tasting');
-  if (s.wdOn) out.push(`${s.wdDur} of welcome drinks on arrival`);
-
-  s.inclItems.filter(i => i.on && i.text.trim()).forEach(i => out.push(i.text.trim()));
-  return out;
-}
-
 // ── Client message ───────────────────────────────────────────
 // The WhatsApp/email message that goes out with the quote, built from the
 // quote itself so it can never say something the PDF doesn't.
@@ -467,21 +104,6 @@ const ETYPE_SAID = {
   'House Party': 'Party',
   'Other': 'Event',
 };
-
-// What a client is buying, per package. The PDF reads from this rather than
-// showing every section regardless — a Bar Only quote listing our spirits is
-// promising something the client is supplying themselves, and a Welcome Drinks
-// quote with a full back bar on it invites an awkward conversation on the day.
-const PKG_SHOWS = {
-  'Premium':                            { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
-  'Ultimate':                           { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
-  'Full Bar':                           { alcohol: true,  softs: true,  cocktails: false, welcome: true },
-  'Cocktail Experience':                { alcohol: false, softs: true,  cocktails: true,  welcome: true },
-  'Welcome Drinks Only':                { alcohol: false, softs: true,  cocktails: false, welcome: true },
-  'Bar Only (client supplies alcohol)': { alcohol: false, softs: true,  cocktails: true,  welcome: true },
-  'Custom':                             { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
-};
-const pkgShows = pkg => PKG_SHOWS[pkg] || PKG_SHOWS['Custom'];
 
 const PKG_SAID = {
   'Premium': 'Premium Bar Service',
@@ -1208,6 +830,8 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             </div>
           )}
 
+          <SigningLink s={s} addonTotal={addonTotal} total={total} dep={dep} />
+
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 6 }}>Your default template</div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
@@ -1232,6 +856,81 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
       </div>
 
       <ClientMessage s={s} total={total} />
+    </div>
+  );
+}
+
+// ---- Client signing link ----------------------------------------------------
+// Turns the agreed quote into a secure, tokenised link. The client opens it,
+// reads the full T&Cs, accepts in writing, then sees the deposit details — all
+// logged before any money moves. The snapshot is sanitised server-side (no
+// cost lines, margin or pay rates) before it is stored.
+function SigningLink({ s, addonTotal, total, dep }) {
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState('');
+  const [token, setToken] = useState('');
+  const [err, setErr] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  async function create() {
+    setErr(''); setCopied(false); setStatus(null);
+    if (!s.client || !s.client.trim()) { setErr('Add a client name first.'); return; }
+    setBusy(true);
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enquiryId: s.enquiryId, snapshot: { s, addonTotal, total, dep } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'Could not create the link.'); setBusy(false); return; }
+      setLink(data.url); setToken(data.token);
+    } catch { setErr('Network error — please try again.'); }
+    setBusy(false);
+  }
+
+  async function copy() {
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2500); }
+    catch { setErr('Copy failed — select the link and copy it manually.'); }
+  }
+
+  async function checkStatus() {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/invoices/${token}`);
+      const data = await res.json();
+      if (res.ok && data.invoice) {
+        const a = data.invoice.agreement;
+        setStatus(a ? { accepted: true, name: a.name } : { accepted: false });
+      }
+    } catch { /* leave status as-is */ }
+  }
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 6 }}>Client signing link</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+        Once you&rsquo;ve agreed the final price and list, create a secure link. Your client reads the full terms, accepts in writing, then gets the deposit details — all logged before they pay.
+      </div>
+      <button onClick={create} disabled={busy} style={btnGold}>{busy ? 'Creating…' : (link ? 'Create a new link' : 'Create signing link')}</button>
+      {err && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{err}</div>}
+      {link && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input readOnly value={link} onFocus={e => e.target.select()} style={{ ...inputStyle, flex: 1, fontSize: 12 }} />
+            <button onClick={copy} style={btnOutline}>{copied ? '✓ Copied' : 'Copy'}</button>
+          </div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8 }}>
+            <button onClick={checkStatus} style={addLinkStyle}>Check acceptance status</button>
+            {status && (status.accepted
+              ? <span style={{ fontSize: 11, color: 'var(--success)' }}>✓ Accepted by {status.name}</span>
+              : <span style={{ fontSize: 11, color: 'var(--muted)' }}>Not yet accepted</span>)}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+            Send this to the client over WhatsApp or email. It shows the invoice, the full T&amp;Cs to accept, then the bank details. Acceptance also appears in Activity.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1826,13 +1525,6 @@ function ProviderToggle({ by, onChange }) {
   );
 }
 
-// The "(client supplied)" tag shown next to a client-provided item on the quote.
-function clientMark(item) {
-  return (item && item.by === 'client')
-    ? <span style={{ color: '#8a8880', fontStyle: 'italic', fontWeight: 400 }}> (client supplied)</span>
-    : null;
-}
-
 function EditableList({ items, onChange, addLabel, stock, prefer, provider }) {
   function update(id, patch) { onChange(items.map(i => i.id === id ? { ...i, ...patch } : i)); }
   function remove(id) { onChange(items.filter(i => i.id !== id)); }
@@ -1968,349 +1660,6 @@ const addLinkStyle = { fontSize: 12, color: 'var(--gold)', cursor: 'pointer', ma
 const btnBlack = { background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13 };
 const btnGold = { background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13 };
 const btnOutline = { background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13 };
-
-function fmtDate(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } }
-function fmtDatePretty(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch { return d; } }
-function fmtDateLong(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); } catch { return d; } }
-function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-
-// ---- Printable preview ------------------------------------------------------
-function QuotePreview({ s, addonTotal, total, dep }) {
-  const docLabels = { quote: 'Quotation', deposit: 'Deposit Invoice', balance: 'Balance Invoice' };
-  const wdActive = s.wdItems.filter(i => i.on && i.text.trim());
-  const inclusions = buildInclusions(s);
-  const shows = pkgShows(s.pkg);
-  const softActive = s.softItems.filter(i => i.on && i.text.trim());
-  const compActive = s.compItems.filter(i => i.on && i.text.trim());
-  const activeSpirits = s.spiritRows.filter(r => r.on).map(r => ({ cat: r.cat, items: r.items.filter(i => i.on && i.text.trim()) })).filter(r => r.items.length);
-  const activeAddons = s.addons.filter(a => a.on && parseFloat(a.price) > 0);
-  // Every ticked extra, named on the quote (price folded into the total, never
-  // itemised) — so the headline figure has visible value behind it.
-  const selectedAddons = s.addons.filter(a => a.on);
-  // A chosen ORPI bar rides along in the package extras; the venue's own bar is
-  // only an event-details note, so it never appears here.
-  const barExtra = (s.barUsed && s.barUsed !== "Venue's own bar") ? [{ id: 'bar', label: s.barUsed, desc: '' }] : [];
-  const packageExtras = [...barExtra, ...selectedAddons];
-
-  if (!s.client && !s.venue) {
-    return <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, textAlign: 'center', padding: '60px 40px', color: 'var(--muted)', fontSize: 13 }}>Fill in the builder to preview the quote</div>;
-  }
-
-  const rowMuted = { color: '#8a8880', fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', padding: '4px 0' };
-  const rowValue = { color: '#1c1b18', fontSize: 12, padding: '4px 0' };
-  const sectionHead = { fontSize: 10, letterSpacing: '.28em', textTransform: 'uppercase', color: '#0a0a0a', margin: '22px 0 12px', fontWeight: 500, borderBottom: '1px solid #e8e6e0', paddingBottom: 8 };
-  const goldLabelSmall = { fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#b8953a', marginBottom: 5, fontWeight: 500 };
-
-  return (
-    <div className="inv-preview-doc" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', fontFamily: 'var(--sans)' }}>
-      {/* ── White header with brand + Ref number ── */}
-      <div className="print-avoid-break" style={{ background: '#fff', color: '#0a0a0a', padding: '36px 44px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 30, borderBottom: '1px solid #e8e6e0' }}>
-        <div>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 30, letterSpacing: '.3em', fontWeight: 500, lineHeight: 1, color: '#0a0a0a' }}>ORPI</div>
-          <div style={{ fontSize: 9.5, letterSpacing: '.38em', color: 'var(--gold)', marginTop: 6, fontWeight: 500 }}>MOBILE BAR &amp; EVENTS</div>
-          <div style={{ marginTop: 22, fontSize: 10.5, color: '#555', lineHeight: 1.8, letterSpacing: '.02em' }}>
-            Unit 5 Clements Court, Clements Lane, Ilford, IG1 2QY<br />
-            Rudhra: +44 7424 505763 &nbsp;|&nbsp; Rahul: +44 7405 812971
-          </div>
-        </div>
-        {s.invNum && (
-          <div style={{ textAlign: 'right', fontSize: 9.5, letterSpacing: '.16em', color: '#8a8880', lineHeight: 1.8, textTransform: 'uppercase' }}>
-            Reference<br />
-            <strong style={{ color: '#0a0a0a', fontWeight: 500, letterSpacing: '.2em', fontSize: 12 }}>{s.invNum}</strong>
-          </div>
-        )}
-      </div>
-      {/* Gold band */}
-      <div style={{ height: 2, background: 'var(--gold)' }} />
-
-      {/* ── Doctype bar ── */}
-      <div style={{ padding: '18px 44px', background: '#faf9f6', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid #e8e6e0' }}>
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 22, letterSpacing: '.04em', fontStyle: 'italic' }}>{docLabels[s.doctype]}</div>
-        <div style={{ fontSize: 9.5, letterSpacing: '.16em', textTransform: 'uppercase', color: '#666' }}>
-          {s.date && <>Issued <strong style={{ color: '#0a0a0a', fontWeight: 500 }}>{fmtDatePretty(s.date)}</strong></>}
-          {s.due && <> &nbsp;·&nbsp; {s.doctype === 'quote' ? 'Valid' : 'Due'} <strong style={{ color: '#0a0a0a', fontWeight: 500 }}>{fmtDatePretty(s.due)}</strong></>}
-        </div>
-      </div>
-
-      {/* ── Body ── */}
-      <div style={{ padding: '28px 44px' }}>
-        {/* Client + preparer row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 30, padding: '4px 0 22px', borderBottom: '1px solid #f0eee8' }}>
-          <div>
-            <div style={goldLabelSmall}>Prepared for</div>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: '#0a0a0a' }}>{s.client || '—'}</div>
-          </div>
-          <div>
-            <div style={goldLabelSmall}>Prepared by</div>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: '#0a0a0a' }}>{s.salesPerson}</div>
-          </div>
-        </div>
-
-        {/* Event details */}
-        <div style={sectionHead}>Event details</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '2px 20px' }}>
-          <div style={rowMuted}>Event type</div><div style={rowValue}>{s.etype || '—'}</div>
-          <div style={rowMuted}>Venue</div><div style={rowValue}>{s.venue || '—'}</div>
-          <div style={rowMuted}>Date</div><div style={rowValue}>{s.edate ? fmtDateLong(s.edate) : '—'}</div>
-          <div style={rowMuted}>Service time</div><div style={rowValue}>{s.etime || '—'}</div>
-          <div style={rowMuted}>Guests</div><div style={rowValue}>{s.guests || '—'}</div>
-          <div style={rowMuted}>Package</div><div style={rowValue}>{s.pkg}</div>
-          <div style={rowMuted}>Duration</div><div style={rowValue}>{s.duration || '—'}</div>
-          {s.barUsed === "Venue's own bar" && <><div style={rowMuted}>Bar</div><div style={rowValue}>{s.barUsed}</div></>}
-          {s.setup && <><div style={rowMuted}>Setup access</div><div style={rowValue}>{s.setup}</div></>}
-        </div>
-
-        {/* Package summary — what this specific package includes.
-            Makes it crystal clear to the client what they're getting,
-            what each package includes for this event. */}
-        {s.pkg !== 'Custom' && (
-          <div style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderLeft: '3px solid var(--gold)', padding: '14px 18px', borderRadius: '0 6px 6px 0', marginTop: 22 }}>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 500, marginBottom: 8, letterSpacing: '.02em' }}>
-              The <em style={{ color: 'var(--gold)' }}>{s.pkg}</em> Package
-            </div>
-            <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
-              {shows.cocktails && (s.nct > 0 || s.nmt > 0) && (
-                <div><strong>{s.nct} cocktail{s.nct!==1?'s':''} &amp; {s.nmt} mocktail{s.nmt!==1?'s':''}</strong> — chosen from our menu at your tasting</div>
-              )}
-              {s.pkg === 'Premium' && (
-                <div><strong>Open bar with a 2-hour cocktail &amp; mocktail service</strong> — house spirits, beer &amp; wine through the evening, plus bespoke drinks from your chosen menu</div>
-              )}
-              {s.pkg === 'Ultimate' && (
-                <div><strong>Unlimited cocktail &amp; mocktail service all evening</strong> — no time limit on your bar</div>
-              )}
-              {s.pkg === 'Full Bar' && (
-                <div><strong>Full open bar</strong> — house spirits, beers, wines and soft drinks throughout your event</div>
-              )}
-              {s.pkg === 'Cocktail Experience' && (
-                <div><strong>Cocktail &amp; mocktail service</strong> — a curated menu for your event</div>
-              )}
-              {s.pkg === 'Welcome Drinks Only' && (
-                <div><strong>Reception drinks service</strong> — welcome cocktails and mocktails on arrival</div>
-              )}
-              {s.pkg === 'Bar Only (client supplies alcohol)' && (
-                <div><strong>Professional bar service</strong> — our team, bar and expertise; you supply the alcohol</div>
-              )}
-            </div>
-          </div>
-        )}
-        {/* ── Included in your package ──
-            Generated from the package, crew and drinkware rather than typed, so
-            it can't promise glassware on a plastics job or a tasting the client
-            isn't getting. Boxed and ticked so it reads as value, not small print. */}
-        {inclusions.length > 0 && (
-          <div className="print-avoid-break" style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderRadius: 8, padding: '18px 22px', marginTop: 24 }}>
-            <div style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, marginBottom: 12 }}>
-              Included in your package
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2px 22px' }}>
-              {inclusions.map((text, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '4px 0', fontSize: 11.5, color: '#333', lineHeight: 1.45 }}>
-                  <span style={{ color: 'var(--gold)', fontSize: 11, lineHeight: 1.45, flexShrink: 0 }}>✓</span>
-                  <span>{text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Added to your package ──
-            The paid extras the client has chosen, named so the single total has
-            something visible behind it. Price is folded into the total, never
-            itemised here. Parallels "Enhancements you might like" below. */}
-        {packageExtras.length > 0 && (
-          <div className="print-avoid-break" style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderRadius: 8, padding: '18px 22px', marginTop: 24 }}>
-            <div style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, marginBottom: 12 }}>
-              Added to your package
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 22px' }}>
-              {packageExtras.map(a => (
-                <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '2px 0' }}>
-                  <span style={{ color: 'var(--gold)', fontSize: 11, lineHeight: 1.45, flexShrink: 0 }}>✓</span>
-                  <span style={{ fontSize: 11.5, color: '#333', lineHeight: 1.45 }}>
-                    <span style={{ fontWeight: 500 }}>{a.label}</span>
-                    {a.desc ? <span style={{ color: '#8a8880' }}> — {a.desc}</span> : null}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Welcome drinks */}
-        {shows.welcome && s.wdOn && wdActive.length > 0 && (
-          <>
-            <div style={sectionHead}>{s.wdDur} welcome drinks</div>
-            <div style={{ fontSize: 12, color: '#333' }}>{wdActive.map((i, idx) => <span key={i.id}>{idx > 0 ? ' · ' : ''}{i.text}{clientMark(i)}</span>)}</div>
-          </>
-        )}
-
-        {/* Spirits & alcohol */}
-        {shows.alcohol && activeSpirits.length > 0 && (
-          <>
-            <div style={sectionHead}>Spirits &amp; alcohol</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {activeSpirits.map(row => (
-                <div key={row.cat}>
-                  <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--gold)', marginBottom: 5 }}>{row.cat}</div>
-                  <div style={{ fontSize: 11.5, lineHeight: 1.85, color: '#333' }}>{row.items.map(i => <div key={i.id}>{i.text}{clientMark(i)}</div>)}</div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Soft drinks */}
-        {shows.softs && softActive.length > 0 && (
-          <>
-            <div style={sectionHead}>Soft drinks &amp; mixers</div>
-            <div style={{ fontSize: 12, color: '#333' }}>{softActive.map((i, idx) => <span key={i.id}>{idx > 0 ? ' · ' : ''}{i.text}{clientMark(i)}</span>)}</div>
-          </>
-        )}
-
-        {/* Cocktails & mocktails */}
-        {shows.cocktails && (s.nct > 0 || s.nmt > 0) && (
-          <>
-            <div style={sectionHead}>Cocktails &amp; mocktails</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              {s.nct > 0 && (
-                <div>
-                  <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--gold)', marginBottom: 6 }}>Cocktails ×{s.nct}</div>
-                  {s.cocktailNames.slice(0, s.nct).map((n, i) => <div key={i} style={{ fontSize: 12, padding: '2px 0', color: '#333' }}>{i + 1}. {n || 'TBC'}</div>)}
-                </div>
-              )}
-              {s.nmt > 0 && (
-                <div>
-                  <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.14em', color: 'var(--gold)', marginBottom: 6 }}>Mocktails ×{s.nmt}</div>
-                  {s.mocktailNames.slice(0, s.nmt).map((n, i) => <div key={i} style={{ fontSize: 12, padding: '2px 0', color: '#333' }}>{i + 1}. {n || 'TBC'}</div>)}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Add-ons are folded into the package total — not itemised on the client quote */}
-
-        {/* Complimentary */}
-        {compActive.length > 0 && (
-          <>
-            <div style={sectionHead}>Complimentary</div>
-            <div style={{ fontSize: 12, color: '#333' }}>{compActive.map(i => i.text).join(' · ')}</div>
-          </>
-        )}
-
-        {/* Notes */}
-        {s.notes && (
-          <div style={{ background: 'var(--gold-bg)', borderLeft: '3px solid var(--gold)', padding: '10px 14px', fontSize: 12, borderRadius: '0 4px 4px 0', marginTop: 18, color: '#555' }}>{s.notes}</div>
-        )}
-      </div>
-
-      {/* ── Pricing block (light, legible, with bank details) ── */}
-      <div className="print-avoid-break" style={{ background: '#faf9f6', color: '#1c1b18', padding: '26px 44px', borderTop: '1px solid #e8e6e0' }}>
-        {/* Subtotal + discount only show when there's a discount — otherwise the
-            client sees one clean Total with nothing to reconcile. Add-ons are
-            folded into the figure either way, never itemised. */}
-        {parseFloat(s.disc) > 0 && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
-              <span>Package total</span><span>{gbp((parseFloat(s.base) || 0) + addonTotal)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 12, color: '#666' }}>
-              <span>Discount</span><span>−{gbp(parseFloat(s.disc))}</span>
-            </div>
-          </>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 14, marginTop: 10, borderTop: '1px solid #d9d5c8', alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--sans)', fontSize: 11, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 500 }}>
-            {s.doctype === 'quote' ? 'Total' : s.doctype === 'deposit' ? 'Deposit due (50%)' : 'Balance due'}
-          </span>
-          <span style={{ fontFamily: 'var(--serif)', fontSize: 32, color: '#0a0a0a', fontWeight: 500 }}>
-            {gbp(s.doctype === 'quote' ? total : dep)}
-          </span>
-        </div>
-        {s.doctype === 'quote' && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#555', marginTop: 10 }}>
-              <span>50% deposit on confirmation</span><span>{gbp(dep)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#555' }}>
-              <span>Balance due 14 days before</span><span>{gbp(dep)}</span>
-            </div>
-          </>
-        )}
-
-        {/* ── Bank details, right beside the amount that needs paying ── */}
-        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #d9d5c8', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Payee</div>
-            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500 }}>ORPI Events LTD</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Sort code</div>
-            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500, letterSpacing: '.06em' }}>04-06-05</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Account no.</div>
-            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500, letterSpacing: '.06em' }}>27534338</div>
-          </div>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 10.5, color: '#8a8880', fontStyle: 'italic' }}>
-          Reference &nbsp;·&nbsp; {s.client || 'Your surname'} &nbsp;+&nbsp; {s.edate ? fmtDatePretty(s.edate) : 'event date'}
-        </div>
-      </div>
-
-      {/* ── Enhancements you might like (unselected add-ons) ──
-          Shown greyed-out below pricing so clients can see what else we
-          offer without feeling pitched to. Only appears when there are
-          any unselected add-ons — a clean, all-selected quote won't show
-          this section at all. */}
-      {(() => {
-        const unselectedAddons = s.addons.filter(a => !a.on);
-        if (unselectedAddons.length === 0) return null;
-        return (
-          <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff', borderTop: '1px solid #e8e6e0' }}>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 500, marginBottom: 4, letterSpacing: '.02em', fontStyle: 'italic', color: '#0a0a0a' }}>
-              Enhancements you might like
-            </div>
-            <div style={{ fontSize: 10.5, color: '#8a8880', marginBottom: 14, fontStyle: 'italic' }}>
-              Not included in this quote — let us know if you'd like to add any.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
-              {unselectedAddons.map(a => (
-                <div key={a.id} style={{ opacity: 0.72, borderLeft: '1px solid #e8e6e0', paddingLeft: 12, minHeight: 34 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 500, color: '#333' }}>{a.label}</div>
-                  {a.desc && <div style={{ fontSize: 10, color: '#8a8880', marginTop: 2, lineHeight: 1.45 }}>{a.desc}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Key terms ── */}
-      <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff' }}>
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 500, marginBottom: 10, letterSpacing: '.02em', fontStyle: 'italic' }}>Key terms &amp; conditions</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px', fontSize: 10.5, color: '#333', lineHeight: 1.55 }}>
-          <div><strong>Booking confirmation</strong> — 50% deposit secures your date; until received, the date remains open.</div>
-          <div><strong>Balance</strong> — remaining 50% due no later than 14 days before the event.</div>
-          <div><strong>Quote validity</strong> — this quote is valid for 14 days; pricing may change after.</div>
-          <div><strong>Guest numbers</strong> — final count required 7 days before; increases charged at agreed rate.</div>
-          <div><strong>Cancellation</strong> — {'>'}60 days: deposit retained · within 60: 50% · within 14: 100%.</div>
-          <div><strong>Substitutions</strong> — if a spirit brand is unavailable, we substitute for equal/higher quality.</div>
-          <div><strong>Access &amp; power</strong> — client provides venue access, parking &amp; power supply.</div>
-          <div><strong>Responsible service</strong> — our team serves in line with UK licensing law; we may refuse service.</div>
-        </div>
-        <div style={{ marginTop: 10, fontSize: 10, color: 'var(--muted)', fontStyle: 'italic' }}>
-          Full terms &amp; conditions will be provided on booking confirmation. Paying the deposit confirms your acceptance.
-        </div>
-      </div>
-
-      {/* ── Footer ── */}
-      <div style={{ padding: '16px 44px', background: '#faf9f6', borderTop: '1px solid #e8e6e0', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: '#8a8880', textAlign: 'center' }}>
-        hello@orpi.events &nbsp;·&nbsp; @orpi.events &nbsp;·&nbsp; orpi.events
-      </div>
-    </div>
-  );
-}
 
 function DL({ label, value }) {
   return (<><div style={{ fontSize: 11, color: 'var(--muted)', padding: '3px 0' }}>{label}</div><div style={{ fontSize: 11, padding: '3px 0' }}>{value || '—'}</div></>);

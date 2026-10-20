@@ -38,6 +38,14 @@ export function createAdminClient() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { autoRefreshToken: false, persistSession: false } }
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: {
+        // Next.js patches global fetch and caches GETs by default. That must
+        // never apply to admin reads — e.g. an invoice's acceptance status has
+        // to come back live, not a stale "not yet accepted". Force no-store.
+        fetch: (input, init = {}) => fetch(input, { ...init, cache: 'no-store' }),
+      },
+    }
   );
 }

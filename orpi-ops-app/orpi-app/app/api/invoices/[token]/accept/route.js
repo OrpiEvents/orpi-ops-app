@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { recordAcceptance, publicView } from '@/lib/invoices';
 import { logActivity } from '@/lib/activityLog';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request, { params }) {
   let body;
   try { body = await request.json(); } catch { body = {}; }

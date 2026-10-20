@@ -3,6 +3,9 @@
 import { NextResponse } from 'next/server';
 import { getInvoice, publicView } from '@/lib/invoices';
 
+// Always live — never serve a cached acceptance status.
+export const dynamic = 'force-dynamic';
+
 export async function GET(request, { params }) {
   try {
     const record = await getInvoice(params.token);

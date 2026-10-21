@@ -1,13 +1,15 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AppShell from '../AppShell';
 import BookingPanel from './BookingPanel';
+import { bookingStageIndex, LIFECYCLE_STAGES } from '@/lib/gates';
 
 export default function BookingsClient({ userEmail }) {
   const [bookings, setBookings] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const didOpenRef = useRef(false);
 
   async function load() {
     setLoading(true);
@@ -15,7 +17,20 @@ export default function BookingsClient({ userEmail }) {
     try {
       const res = await fetch('/api/bookings').then(r => r.json());
       if (res.error) throw new Error(res.error);
-      setBookings(res.bookings || []);
+      const list = res.bookings || [];
+      setBookings(list);
+      // Deep-link: /bookings?open=<id> opens that booking's panel (used by the
+      // run sheet's back-to-booking link). Runs once.
+      if (!didOpenRef.current) {
+        didOpenRef.current = true;
+        try {
+          const openId = new URLSearchParams(window.location.search).get('open');
+          if (openId) {
+            const b = list.find(x => x.id === openId);
+            if (b) setSelected(b);
+          }
+        } catch { /* no-op */ }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -58,14 +73,14 @@ export default function BookingsClient({ userEmail }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--off)' }}>
-                {['Event', 'Client', 'Date', 'Venue', 'Guests', 'Service', 'Quote', 'Deposit', 'Balance', 'Cocktails', 'Staff'].map(h => (
+                {['Event', 'Client', 'Date', 'Venue', 'Guests', 'Service', 'Quote', 'Deposit', 'Balance', 'Stage'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '9px 14px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', borderBottom: '1px solid var(--border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {bookings.length === 0 ? (
-                <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No confirmed bookings in Notion yet</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No confirmed bookings in Notion yet</td></tr>
               ) : bookings.map(b => (
                 <tr key={b.id} onClick={() => setSelected(b)} style={{ cursor: 'pointer' }}>
                   <Td><strong>{b.name}</strong></Td>
@@ -77,8 +92,7 @@ export default function BookingsClient({ userEmail }) {
                   <Td>{gbp(b.finalQuoteAmount ?? b.quoteAmount)}</Td>
                   <Td>{check(b.depositReceived)}</Td>
                   <Td>{check(b.balanceReceived)}</Td>
-                  <Td>{check(b.cocktailsConfirmed)}</Td>
-                  <Td>{check(b.staffConfirmed)}</Td>
+                  <Td><StageBadge booking={b} /></Td>
                 </tr>
               ))}
             </tbody>
@@ -97,5 +111,15 @@ function Td({ children, muted }) {
   return <td style={{ padding: '10px 14px', fontSize: 13, borderBottom: '1px solid var(--off)', color: muted ? 'var(--muted)' : 'inherit' }}>{children}</td>;
 }
 function check(v) { return v ? <span style={{ color: 'var(--success)' }}>✓</span> : <span style={{ color: 'var(--mid)' }}>—</span>; }
+const STAGE_COLORS = ['#8a8a8a', '#3b6ea5', '#b8953a', '#2f8f83', '#4a9d5f'];
+function StageBadge({ booking }) {
+  const idx = bookingStageIndex(booking);
+  const c = STAGE_COLORS[idx] || '#8a8a8a';
+  return (
+    <span style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 600, color: c, background: `${c}1a`, border: `1px solid ${c}55`, padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap' }}>
+      {LIFECYCLE_STAGES[idx].label}
+    </span>
+  );
+}
 function fmtDate(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } }
 function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }

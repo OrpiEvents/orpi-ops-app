@@ -597,6 +597,7 @@ export default function Runsheet(){
     <div className="h-20"/></div></div>}
 
   <header className="px-5 pt-4 pb-3 border-b" style={{borderColor:LINE}}>
+   {autoBooking&&<a href={`/bookings?open=${autoBooking}`} className="inline-block text-xs mb-2" style={{color:GOLD,textDecoration:"none"}}>← Back to booking</a>}
    <div className="flex items-center gap-2 mb-3 overflow-x-auto">
     {events.map(x=>(<button key={x.id} onClick={()=>setCur(x.id)} className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap shrink-0 border"
       style={{background:x.id===E.id?INK:"#fff",color:x.id===E.id?"#fff":"#6B6459",borderColor:x.id===E.id?INK:"#DDD8CE"}}>{x.ev.client||"Untitled"}</button>))}

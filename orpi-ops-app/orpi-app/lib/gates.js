@@ -139,3 +139,33 @@ export function eventCompletionGates(booking, costs, { drinksLibrary = [] } = {}
 
   return gates;
 }
+
+// ── Booking lifecycle ────────────────────────────────────────────────
+// One linear journey from a confirmed booking through running the event to
+// closing it out. The stage is derived from fields already tracked, so the
+// bookings list and the booking panel read the same single source of truth.
+export const LIFECYCLE_STAGES = [
+  { key: 'confirmed', label: 'Confirmed' },
+  { key: 'planning', label: 'Planning' },
+  { key: 'ready', label: 'Ready for event' },
+  { key: 'runsheet', label: 'Run sheet closed' },
+  { key: 'completed', label: 'Completed' },
+];
+
+/** All pre-event confirmations done — menus signed off, staff and venue locked. */
+export function bookingReadyForEvent(booking) {
+  if (!booking) return false;
+  const okCocktails = !booking.cocktailMenu || booking.cocktailsConfirmed;
+  const okMocktails = !booking.mocktailMenu || booking.mocktailsConfirmed;
+  return okCocktails && okMocktails && !!booking.staffConfirmed && !!booking.venueAccessConfirmed;
+}
+
+/** Index into LIFECYCLE_STAGES for where this booking currently sits. */
+export function bookingStageIndex(booking) {
+  if (!booking) return 0;
+  if (booking.status === 'Completed') return 4;
+  if (booking.returnLoggedAt) return 3;        // run sheet closed — stock/costs in
+  if (bookingReadyForEvent(booking)) return 2; // everything locked, ready to run
+  if (booking.depositReceived) return 1;       // deposit in, actively planning
+  return 0;                                     // confirmed, nothing else yet
+}

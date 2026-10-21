@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { drinksConfirmationGates, eventCompletionGates } from '@/lib/gates';
+import { drinksConfirmationGates, eventCompletionGates, bookingStageIndex, LIFECYCLE_STAGES } from '@/lib/gates';
 
 const COST_TYPES = ['Alcohol', 'Mixers', 'Ice', 'Staff', 'Glassware', 'Logistics/Travel', 'Equipment', 'Bar Hire/Decor', 'Marketing', 'Printing/Branding', 'Contingency', 'Estimation', 'Other/Misc'];
 
@@ -232,21 +232,26 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     notes: 'none',
   };
 
-  // The single "what's next" hint at the bottom. Pick the most obviously
-  // next thing, roughly ordered by lifecycle stage.
-  let nextHint = null;
-  if (booking.status === 'Completed') {
-    nextHint = null;
-  } else if (providesAlcohol && quotedSelections && !form.spiritsSelection && !reviewBannerDismissed && tab !== 'planning') {
-    nextHint = { label: 'Review quoted brands from the enquiry', tab: 'planning' };
-  } else if (planningAttention && tab !== 'planning') {
-    nextHint = { label: 'A few planning items still need attention', tab: 'planning' };
-  } else if (providesAlcohol && !booking.outboundLoggedAt) {
-    nextHint = { label: 'Load the van on the run sheet', tab: null, href: `/runsheet?booking=${booking.id}` };
-  } else if (providesAlcohol && booking.outboundLoggedAt && !booking.returnLoggedAt) {
-    nextHint = { label: 'Close the event on the run sheet to record what was used', tab: null, href: `/runsheet?booking=${booking.id}` };
-  } else if (completionGates.length > 0 && tab !== 'overview') {
-    nextHint = { label: 'Ready to close? See outstanding items on Overview', tab: 'overview' };
+  // Lifecycle stage (Confirmed → Planning → Ready → Run sheet closed → Completed)
+  // plus the outstanding items to advance to the next stage, each with where to
+  // fix it. This drives the progress strip and the "Where this event is" panel.
+  const stageIdx = bookingStageIndex(bookingForGates);
+  let advance = { title: '', items: [] };
+  if (stageIdx === 0) {
+    advance = { title: 'To move into planning', items: [{ label: 'Mark the deposit received', tab: 'planning' }] };
+  } else if (stageIdx === 1) {
+    const items = [];
+    if (form.cocktailMenu && !form.cocktailsConfirmed) items.push({ label: 'Confirm cocktails with the client', tab: 'planning' });
+    if (form.mocktailMenu && !form.mocktailsConfirmed) items.push({ label: 'Confirm mocktails with the client', tab: 'planning' });
+    if (!form.staffConfirmed) items.push({ label: 'Confirm staff', tab: 'planning' });
+    if (!form.venueAccessConfirmed) items.push({ label: 'Confirm venue access', tab: 'planning' });
+    cocktailGates.forEach(g => items.push({ label: g.label, tab: 'planning' }));
+    mocktailGates.forEach(g => items.push({ label: g.label, tab: 'planning' }));
+    advance = { title: 'To be event-ready', items };
+  } else if (stageIdx === 2) {
+    advance = { title: 'After the event', items: [{ label: providesAlcohol ? 'Record stock used and close the run sheet' : 'Record costs and close the run sheet', href: `/runsheet?booking=${booking.id}` }] };
+  } else if (stageIdx === 3) {
+    advance = { title: 'To complete the event', items: completionGates.map(g => ({ label: g.label, tab: 'overview' })) };
   }
 
   return (
@@ -263,6 +268,18 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
               Run sheet
             </a>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 20, lineHeight: 1 }}>✕</button>
+          </div>
+        </div>
+
+        <div style={{ padding: '12px 22px 14px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {LIFECYCLE_STAGES.map((s, i) => (
+              <div key={s.key} title={s.label} style={{ flex: 1, height: 5, borderRadius: 3, background: i <= stageIdx ? 'var(--gold)' : 'var(--off)' }} />
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: 11 }}>
+            <span style={{ fontWeight: 600 }}>{LIFECYCLE_STAGES[stageIdx].label}</span>
+            <span style={{ color: 'var(--muted)' }}>Step {stageIdx + 1} of 5</span>
           </div>
         </div>
 
@@ -288,6 +305,28 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px' }}>
           {tab === 'overview' && (
             <>
+              <Section title="Where this event is">
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{LIFECYCLE_STAGES[stageIdx].label}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>Step {stageIdx + 1} of 5 · Confirmed → Planning → Ready → Run sheet → Completed</div>
+                {stageIdx === 4 ? (
+                  <div style={{ background: 'var(--success-bg)', color: 'var(--success)', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>✓ This event is complete.</div>
+                ) : advance.items.length > 0 ? (
+                  <div style={{ background: '#fff8e0', borderRadius: 6, padding: '10px 14px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#8a6a00', marginBottom: 6 }}>{advance.title}</div>
+                    {advance.items.map((it, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12.5, borderBottom: i < advance.items.length - 1 ? '1px solid #f0e4c0' : 'none' }}>
+                        <span style={{ flex: 1, color: '#6a5200' }}>{it.label}</span>
+                        {it.tab && <button onClick={() => setTab(it.tab)} style={goBtnStyle}>Go</button>}
+                        {it.href && <a href={it.href} target="_blank" rel="noopener noreferrer" style={{ ...goBtnStyle, textDecoration: 'none', display: 'inline-block' }}>Open</a>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ background: 'var(--success-bg)', color: 'var(--success)', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}>
+                    {stageIdx === 3 ? 'Everything’s in — ready to mark completed below.' : 'Ready for the next step.'}
+                  </div>
+                )}
+              </Section>
               <Section title="Event details">
                 <Row label="Event date" value={fmtDate(booking.eventDate)} />
                 <Row label="Venue" value={booking.venue} />
@@ -578,24 +617,6 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
             </button>
             {saveMsg && <span style={{ fontSize: 12, color: 'var(--success)' }}>{saveMsg}</span>}
           </div>
-          {nextHint && (
-            <div style={{ marginTop: 10, background: 'var(--off)', borderRadius: 6, padding: '8px 12px', fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase' }}>Next</span>
-              <span style={{ flex: 1 }}>{nextHint.label}</span>
-              {nextHint.tab && (
-                <button onClick={() => setTab(nextHint.tab)}
-                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>
-                  Go
-                </button>
-              )}
-              {nextHint.href && (
-                <a href={nextHint.href} target="_blank" rel="noopener noreferrer"
-                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px', fontSize: 11, textDecoration: 'none', color: 'var(--text)' }}>
-                  Open
-                </a>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -625,5 +646,6 @@ function Check({ label, checked, onChange, disabled }) {
   );
 }
 const inputStyle = { width: '100%', padding: '8px 11px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' };
+const goBtnStyle = { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: 'var(--text)', whiteSpace: 'nowrap' };
 function fmtDate(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } }
 function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }

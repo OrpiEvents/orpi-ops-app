@@ -29,7 +29,7 @@ export default function DashboardClient({ userEmail }) {
     });
   }, []);
 
-  const { enquiries, bookings, costs } = data;
+  const { enquiries, bookings, costs, fixedCosts = [], fixedCostsError } = data;
 
   if (loading) {
     return (
@@ -95,6 +95,38 @@ export default function DashboardClient({ userEmail }) {
   });
   const typeEntries = Object.entries(byType).sort((a, b) => b[1].revenue - a[1].revenue);
 
+  // ─── Overheads & true profit ──────────────────────────────────
+  // Fixed costs are spread as a % of revenue on an annualised basis, so a
+  // quiet month doesn't dump the whole overhead onto a couple of events.
+  const activeOverheads = (fixedCosts || []).filter(f => f.active);
+  const monthlyOverhead = activeOverheads.reduce((s, f) => s + (f.monthlyCost || 0), 0);
+  const annualOverhead = monthlyOverhead * 12;
+  const overheadBlanks = activeOverheads.filter(f => !(f.amount > 0)).length;
+  const hasOverhead = monthlyOverhead > 0;
+
+  // Revenue run-rate + gross margin from completed events.
+  let totRev = 0, totDirect = 0;
+  completed.forEach(b => {
+    const cb = costByBooking.get(b.id) || { alcohol: 0, ops: 0 };
+    totRev += b.finalQuoteAmount ?? b.quoteAmount ?? 0;
+    totDirect += cb.alcohol + cb.ops;
+  });
+  const grossMargin = totRev - totDirect;
+  const grossMarginPct = totRev > 0 ? grossMargin / totRev : null;
+
+  const datedCompleted = completed.map(b => new Date(b.eventDate).getTime()).filter(t => !isNaN(t));
+  let monthlyRevRun = null;
+  if (datedCompleted.length && totRev > 0) {
+    const spanMonths = Math.max(1, Math.round((Math.max(...datedCompleted) - Math.min(...datedCompleted)) / (30.44 * 86400000)) + 1);
+    monthlyRevRun = totRev / spanMonths;
+  }
+  const overheadPct = (hasOverhead && monthlyRevRun) ? monthlyOverhead / monthlyRevRun : null;
+  const trueMarginPct = (grossMarginPct != null && overheadPct != null) ? grossMarginPct - overheadPct : null;
+  const breakevenRev = (hasOverhead && grossMarginPct && grossMarginPct > 0) ? monthlyOverhead / grossMarginPct : null;
+  const bookedForAvg = [...confirmed, ...completed];
+  const avgBookingSize = bookedForAvg.length ? bookedForAvg.reduce((s, b) => s + (b.finalQuoteAmount ?? b.quoteAmount ?? 0), 0) / bookedForAvg.length : null;
+  const breakevenEvents = (breakevenRev && avgBookingSize) ? breakevenRev / avgBookingSize : null;
+
   // ─── Top row headline stats ───────────────────────────────────
   return (
     <AppShell active="/dashboard" userEmail={userEmail}>
@@ -112,6 +144,31 @@ export default function DashboardClient({ userEmail }) {
         <Stat label="Forward revenue" value={gbp(forwardRevenue)} sub="from confirmed events" />
         <Stat label="Pipeline" value={newEnq + contactedEnq + quotedEnq} sub={`${newEnq} new · ${quotedEnq} quoted`} />
       </div>
+
+      {/* Overheads & true profit */}
+      <SectionHead>Overheads &amp; true profit</SectionHead>
+      {fixedCostsError ? (
+        <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
+          The Fixed Costs database isn't connected to the integration yet, so overhead can't be read. In Notion, open the <strong>Fixed Costs (Overheads)</strong> database → ••• menu → <strong>Connections</strong> → add the same integration that's on your Event Costing database.
+        </div>
+      ) : !hasOverhead ? (
+        <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
+          Add amounts to the <strong>Fixed Costs (Overheads)</strong> database in Notion to see overhead and true margin here.
+        </div>
+      ) : (
+        <>
+          <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+            Overhead spread as a % of revenue (annualised), so quiet months don't distort it.
+            {overheadBlanks > 0 && ` ${overheadBlanks} cost${overheadBlanks === 1 ? '' : 's'} still blank — the real figure is higher.`}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+            <Stat label="Monthly overhead" value={gbp0(monthlyOverhead)} sub={`${gbp0(annualOverhead)}/yr`} />
+            <Stat label="Overhead / revenue" value={overheadPct != null ? pct(overheadPct) : '—'} sub={monthlyRevRun ? `of ~${gbp0(monthlyRevRun)}/mo revenue` : 'need completed events'} />
+            <Stat label="True net margin" value={trueMarginPct != null ? pct(trueMarginPct) : '—'} sub={grossMarginPct != null ? `gross ${pct(grossMarginPct)} − overhead` : 'after overhead'} />
+            <Stat label="Breakeven" value={breakevenRev != null ? `${gbp0(breakevenRev)}/mo` : '—'} sub={breakevenEvents != null ? `~${breakevenEvents.toFixed(1)} events/mo` : 'to cover overhead'} />
+          </div>
+        </>
+      )}
 
       {/* Historical performance */}
       <SectionHead>Historical performance</SectionHead>
@@ -264,3 +321,5 @@ function computeCph(events, costByBooking) {
 }
 
 function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function gbp0(n) { return '£' + Math.round(n || 0).toLocaleString('en-GB'); }
+function pct(frac) { return (frac * 100).toFixed(1) + '%'; }

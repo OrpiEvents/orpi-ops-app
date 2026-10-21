@@ -82,6 +82,40 @@ function pageToEnquiry(page) {
   };
 }
 
+// ---- Fixed Costs (company overheads) --------------------------------------
+// Company-level recurring overheads, separate from per-event Event Costing.
+// Each row is normalised to a monthly figure here so the dashboard can show
+// true margin after overhead. Lives in its own Notion database; connect it to
+// the same integration as the other ORPI databases for this to read.
+export async function listFixedCosts() {
+  const dbId = process.env.NOTION_DB_FIXED_COSTS || '362c6ac8e35943919c126a3248ea1b7b';
+  const data = await notionFetch(`/databases/${dbId}/query`, {
+    method: 'POST',
+    body: JSON.stringify({ page_size: 100 }),
+  });
+  return data.results.map(pageToFixedCost);
+}
+
+function pageToFixedCost(page) {
+  const p = page.properties;
+  const amount = num(p['Amount']) || 0;
+  const frequency = sel(p['Frequency']) || 'Monthly';
+  // Normalise to a monthly figure. One-off costs don't recur, so they add £0/mo.
+  const monthlyCost = frequency === 'Annual' ? amount / 12
+    : frequency === 'Quarterly' ? amount / 3
+    : frequency === 'One-off' ? 0
+    : amount;
+  return {
+    id: page.id,
+    name: text(p['Name']),
+    category: sel(p['Category']) || 'Other',
+    amount,
+    frequency,
+    monthlyCost,
+    active: checkbox(p['Active']),
+  };
+}
+
 export async function createEnquiry(data) {
   const dbId = process.env.NOTION_DB_SALES;
   const page = await notionFetch('/pages', {

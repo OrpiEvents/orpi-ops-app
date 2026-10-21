@@ -241,10 +241,8 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     nextHint = { label: 'Review quoted brands from the enquiry', tab: 'planning' };
   } else if (planningAttention && tab !== 'planning') {
     nextHint = { label: 'A few planning items still need attention', tab: 'planning' };
-  } else if (providesAlcohol && !booking.outboundLoggedAt) {
-    nextHint = { label: 'Load the van on the van run sheet', tab: null, href: '/runsheet' };
-  } else if (providesAlcohol && booking.outboundLoggedAt && !booking.returnLoggedAt) {
-    nextHint = { label: 'Close the event on the van run sheet to record what was used', tab: null, href: '/runsheet' };
+  } else if (providesAlcohol && costs.length === 0 && form.depositReceived) {
+    nextHint = { label: 'Log stock & costs on the Event run sheet', tab: null, href: `/bookings/${booking.id}/checklist` };
   } else if (completionGates.length > 0 && tab !== 'overview') {
     nextHint = { label: 'Ready to close? See outstanding items on Overview', tab: 'overview' };
   }
@@ -260,7 +258,7 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <a href={`/bookings/${booking.id}/checklist`} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 12, background: 'var(--gold)', color: '#fff', padding: '7px 12px', borderRadius: 8, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              Event sheet →
+              Event run sheet →
             </a>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 20, lineHeight: 1 }}>✕</button>
           </div>
@@ -307,26 +305,26 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Row label="Balance" value={booking.balanceReceived ? '✓ Received' : 'Pending'} />
               </Section>
 
-              <Section title="Event sheet">
+              <Section title="Event run sheet">
                 {booking.depositReceived ? (
                   <div style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold)', borderRadius: 8, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>✓ Deposit received — the event sheet is ready</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>✓ Deposit received — the event run sheet is ready</div>
                     <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-                      Auto-built from the quote and booking: drinks menu &amp; recipes, this event&rsquo;s selections, the pre-event checklist and the stock run sheet. Anything you change here shows up on it when you reload.
+                      Auto-built from the quote and booking: drinks menu &amp; recipes, this event&rsquo;s selections, the checklist and stock &amp; costs — all in one place. Anything you change here shows up on it when you reload.
                     </p>
                     <a href={`/bookings/${booking.id}/checklist`} target="_blank" rel="noopener noreferrer"
                       style={{ display: 'inline-block', background: 'var(--gold)', color: '#fff', padding: '9px 18px', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
-                      Open event sheet →
+                      Open event run sheet →
                     </a>
                   </div>
                 ) : (
                   <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px' }}>
                     <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-                      The event sheet pulls the drinks menu, recipes, selections and checklist together for the team. You can open it now; once the deposit&rsquo;s in it becomes the hub for running the event.
+                      The event run sheet pulls the drinks menu, recipes, selections, checklist and stock &amp; costs together in one place. You can open it now; once the deposit&rsquo;s in it becomes the hub for running the event.
                     </p>
                     <a href={`/bookings/${booking.id}/checklist`} target="_blank" rel="noopener noreferrer"
                       style={{ display: 'inline-block', background: 'transparent', color: 'var(--text)', border: '1px solid var(--border)', padding: '9px 18px', borderRadius: 8, fontSize: 13, textDecoration: 'none' }}>
-                      Preview event sheet →
+                      Preview event run sheet →
                     </a>
                   </div>
                 )}

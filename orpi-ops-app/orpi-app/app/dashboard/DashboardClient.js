@@ -155,6 +155,7 @@ export default function DashboardClient({ userEmail }) {
       ) : !hasOverhead ? (
         <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
           Add amounts to the <strong>Fixed Costs (Overheads)</strong> database in Notion to see overhead and true margin here.
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>Diagnostic — rows read: {fixedCosts.length}, active: {activeOverheads.length}, monthly total: £{Math.round(monthlyOverhead)}.</div>
         </div>
       ) : (
         <>

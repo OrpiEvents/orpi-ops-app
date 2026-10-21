@@ -144,7 +144,6 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <a href={`/bookings`} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13, textDecoration: 'none', color: 'var(--text)' }}>← Back</a>
-          <a href={`/bookings?open=${booking.id}`} title="Change the menu, selections, guests or dates — updates show here on reload" style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13, textDecoration: 'none', color: 'var(--text)' }}>✎ Edit booking</a>
           <button onClick={() => window.print()} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>🖨 Print checklist</button>
         </div>
       </div>

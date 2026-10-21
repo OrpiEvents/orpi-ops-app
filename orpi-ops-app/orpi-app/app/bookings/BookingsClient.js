@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppShell from '../AppShell';
 import BookingPanel from './BookingPanel';
 
@@ -8,7 +8,6 @@ export default function BookingsClient({ userEmail }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const didOpenRef = useRef(false);
 
   async function load() {
     setLoading(true);
@@ -16,20 +15,7 @@ export default function BookingsClient({ userEmail }) {
     try {
       const res = await fetch('/api/bookings').then(r => r.json());
       if (res.error) throw new Error(res.error);
-      const list = res.bookings || [];
-      setBookings(list);
-      // Deep-link: /bookings?open=<id> opens that booking's panel straight away
-      // (the event sheet's "Edit booking" button uses this). Runs once.
-      if (!didOpenRef.current) {
-        didOpenRef.current = true;
-        try {
-          const openId = new URLSearchParams(window.location.search).get('open');
-          if (openId) {
-            const b = list.find(x => x.id === openId);
-            if (b) setSelected(b);
-          }
-        } catch { /* no-op */ }
-      }
+      setBookings(res.bookings || []);
     } catch (err) {
       setError(err.message);
     } finally {

@@ -8,18 +8,19 @@ import { matchScore, SAME_AT } from './matching';
 const NOTION_VERSION = '2022-06-28';
 const BASE = 'https://api.notion.com/v1';
 
-function headers() {
+function headers(version) {
   const token = process.env.NOTION_TOKEN;
   if (!token) throw new Error('NOTION_TOKEN is not set in environment variables.');
   return {
     Authorization: `Bearer ${token}`,
-    'Notion-Version': NOTION_VERSION,
+    'Notion-Version': version || NOTION_VERSION,
     'Content-Type': 'application/json',
   };
 }
 
 async function notionFetch(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, { ...options, headers: headers() });
+  const { notionVersion, ...rest } = options;
+  const res = await fetch(`${BASE}${path}`, { ...rest, headers: headers(notionVersion) });
   const data = await res.json();
   if (!res.ok) {
     const msg = data?.message || `Notion API error (${res.status})`;
@@ -88,9 +89,13 @@ function pageToEnquiry(page) {
 // true margin after overhead. Lives in its own Notion database; connect it to
 // the same integration as the other ORPI databases for this to read.
 export async function listFixedCosts() {
-  const dbId = process.env.NOTION_DB_FIXED_COSTS || '362c6ac8e35943919c126a3248ea1b7b';
-  const data = await notionFetch(`/databases/${dbId}/query`, {
+  // This database was created via the newer Notion API, so its rows live under a
+  // data source. The classic /databases/{id}/query (2022-06-28) returns no rows
+  // for it, so query the data source directly with the 2025-09-03 API instead.
+  const dsId = process.env.NOTION_DS_FIXED_COSTS || '9dd3f738-ae28-4bc3-b5b4-142d96ff5cb9';
+  const data = await notionFetch(`/data_sources/${dsId}/query`, {
     method: 'POST',
+    notionVersion: '2025-09-03',
     body: JSON.stringify({ page_size: 100 }),
   });
   return data.results.map(pageToFixedCost);

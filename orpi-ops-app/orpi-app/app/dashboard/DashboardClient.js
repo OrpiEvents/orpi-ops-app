@@ -149,7 +149,8 @@ export default function DashboardClient({ userEmail }) {
       <SectionHead>Overheads &amp; true profit</SectionHead>
       {fixedCostsError ? (
         <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
-          The Fixed Costs database isn't connected to the integration yet, so overhead can't be read. In Notion, open the <strong>Fixed Costs (Overheads)</strong> database → ••• menu → <strong>Connections</strong> → add the same integration that's on your Event Costing database.
+          Couldn't read the Fixed Costs database. Notion said: <strong style={{ color: 'var(--danger)' }}>{fixedCostsError}</strong>
+          <div style={{ marginTop: 6 }}>If that's an access error, open the <strong>Fixed Costs (Overheads)</strong> database → ••• → <strong>Connections</strong> → add the same integration that's on your Event Costing database.</div>
         </div>
       ) : !hasOverhead ? (
         <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>

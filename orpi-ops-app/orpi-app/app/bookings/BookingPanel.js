@@ -242,9 +242,9 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
   } else if (planningAttention && tab !== 'planning') {
     nextHint = { label: 'A few planning items still need attention', tab: 'planning' };
   } else if (providesAlcohol && !booking.outboundLoggedAt) {
-    nextHint = { label: 'Load the van on the run sheet', tab: null, href: '/runsheet' };
+    nextHint = { label: 'Load the van on the run sheet', tab: null, href: `/runsheet?booking=${booking.id}` };
   } else if (providesAlcohol && booking.outboundLoggedAt && !booking.returnLoggedAt) {
-    nextHint = { label: 'Close the event on the run sheet to record what was used', tab: null, href: '/runsheet' };
+    nextHint = { label: 'Close the event on the run sheet to record what was used', tab: null, href: `/runsheet?booking=${booking.id}` };
   } else if (completionGates.length > 0 && tab !== 'overview') {
     nextHint = { label: 'Ready to close? See outstanding items on Overview', tab: 'overview' };
   }
@@ -258,7 +258,7 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
             <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{fmtDate(booking.eventDate)} · {booking.venue}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <a href="/runsheet" target="_blank" rel="noopener noreferrer"
+            <a href={`/runsheet?booking=${booking.id}`} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 12, background: 'var(--gold)', color: '#fff', padding: '7px 12px', borderRadius: 8, textDecoration: 'none', whiteSpace: 'nowrap' }}>
               Run sheet
             </a>

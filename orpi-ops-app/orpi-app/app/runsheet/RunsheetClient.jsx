@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabaseBrowser";
 import DRINKS_DATA from "./drinks-data.json";
 import { costTypeFor, CATEGORIES, sectionFor, GARNISH_SECTION } from "@/lib/taxonomy";
@@ -115,6 +115,10 @@ function Sec({k,title,sub,open,setOpen,children}){
 export default function Runsheet(){
  const [events,setEvents]=useState(null),[cur,setCur]=useState(null),[ready,setReady]=useState(false);
  const [tab,setTab]=useState("setup"),[saved,setSaved]=useState("");
+ // Deep-link: /runsheet?booking=<id> opens that confirmed booking auto-loaded.
+ const [autoBooking]=useState(()=>{try{return new URLSearchParams(window.location.search).get("booking");}catch{return null;}});
+ const autoHandledRef=useRef(false);
+ const [pendingPull,setPendingPull]=useState(null);
  const [online,setOnline]=useState(true);
  const [newProd,setNewProd]=useState(null);   // {apply} while the sheet is open
  const [pushing,setPushing]=useState("");
@@ -164,6 +168,26 @@ export default function Runsheet(){
    const ok=await saveEvents(events);setOnline(ok);
    setSaved(new Date().toLocaleTimeString().slice(0,5));},600);
   return()=>clearTimeout(t);},[events,ready]);
+
+ // Opened as /runsheet?booking=<id>: jump straight to that booking's run sheet —
+ // reuse its linked event if one exists, otherwise fill a fresh one from it.
+ useEffect(()=>{
+  if(!ready||autoHandledRef.current||!autoBooking||!bookings.length)return;
+  autoHandledRef.current=true;
+  const existing=(events||[]).find(e=>e.bookingId===autoBooking);
+  if(existing){setCur(existing.id);setTab("setup");return;}
+  const pristine=(events||[]).find(e=>!e.bookingId&&!(e.ev&&e.ev.client)&&Object.keys(e.sel||{}).length===0&&(e.extra||[]).length===0);
+  if(pristine){setCur(pristine.id);}
+  else{const n=blank();setEvents(es=>[...(es||[]),n]);setCur(n.id);}
+  setTab("setup");setPendingPull(autoBooking);
+ },[ready,bookings,autoBooking,events]);
+
+ // Do the pull once the target event is the current one.
+ useEffect(()=>{
+  if(!pendingPull||!bookings.length)return;
+  pullBooking(pendingPull);
+  setPendingPull(null);
+ },[pendingPull,cur,bookings]);
 
  // Adds the product to this event and hands the name back to whichever picker
  // asked for it. Cost is optional — a bottle with no price still loads out,

@@ -12,6 +12,7 @@ const NAV = [
   { href: '/stock', label: 'Stock tracker' },
   { href: '/stocktake', label: 'Stock take' },
   { href: '/purchases', label: 'Purchases' },
+  { href: '/overheads', label: 'Overheads' },
   { href: '/activity', label: 'Activity log' },
 ];
 

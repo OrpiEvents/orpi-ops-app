@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabaseServer';
-import { listEnquiries, listAllBookings, listAllCosts, listFixedCosts } from '@/lib/notion';
+import { listEnquiries, listAllBookings, listAllCosts } from '@/lib/notion';
 
 // Single endpoint powering the KPI dashboard so the client only makes one
 // round-trip. Fetches enquiries (for pipeline stats), every booking (for
@@ -17,13 +17,14 @@ export async function GET() {
       listAllBookings(),
       listAllCosts(),
     ]);
-    // Fixed costs live in a separate database that may not be connected to the
-    // integration yet — never let that break the rest of the dashboard.
+    // Overheads live in the app's own store now (edited on the Overheads page),
+    // read from app_state — reliable and not dependent on a Notion integration.
     let fixedCosts = [];
-    let fixedCostsError = null;
-    try { fixedCosts = await listFixedCosts(); }
-    catch (e) { fixedCostsError = e.message; }
-    return NextResponse.json({ enquiries, bookings, costs, fixedCosts, fixedCostsError });
+    try {
+      const { data: fc } = await supabase.from('app_state').select('value').eq('key', 'fixed_costs').maybeSingle();
+      if (Array.isArray(fc?.value)) fixedCosts = fc.value;
+    } catch { /* leave empty */ }
+    return NextResponse.json({ enquiries, bookings, costs, fixedCosts });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 502 });
   }

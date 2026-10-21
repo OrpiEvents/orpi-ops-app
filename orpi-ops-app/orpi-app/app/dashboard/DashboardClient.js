@@ -29,7 +29,7 @@ export default function DashboardClient({ userEmail }) {
     });
   }, []);
 
-  const { enquiries, bookings, costs, fixedCosts = [], fixedCostsError } = data;
+  const { enquiries, bookings, costs, fixedCosts = [] } = data;
 
   if (loading) {
     return (
@@ -99,7 +99,7 @@ export default function DashboardClient({ userEmail }) {
   // Fixed costs are spread as a % of revenue on an annualised basis, so a
   // quiet month doesn't dump the whole overhead onto a couple of events.
   const activeOverheads = (fixedCosts || []).filter(f => f.active);
-  const monthlyOverhead = activeOverheads.reduce((s, f) => s + (f.monthlyCost || 0), 0);
+  const monthlyOverhead = activeOverheads.reduce((s, f) => s + monthlyOf(f), 0);
   const annualOverhead = monthlyOverhead * 12;
   const overheadBlanks = activeOverheads.filter(f => !(f.amount > 0)).length;
   const hasOverhead = monthlyOverhead > 0;
@@ -147,21 +147,16 @@ export default function DashboardClient({ userEmail }) {
 
       {/* Overheads & true profit */}
       <SectionHead>Overheads &amp; true profit</SectionHead>
-      {fixedCostsError ? (
+      {!hasOverhead ? (
         <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
-          Couldn't read the Fixed Costs database. Notion said: <strong style={{ color: 'var(--danger)' }}>{fixedCostsError}</strong>
-          <div style={{ marginTop: 6 }}>If that's an access error, open the <strong>Fixed Costs (Overheads)</strong> database → ••• → <strong>Connections</strong> → add the same integration that's on your Event Costing database.</div>
-        </div>
-      ) : !hasOverhead ? (
-        <div style={{ background: 'var(--off)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
-          Add amounts to the <strong>Fixed Costs (Overheads)</strong> database in Notion to see overhead and true margin here.
-          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>Diagnostic — rows read: {fixedCosts.length}, active: {activeOverheads.length}, monthly total: £{Math.round(monthlyOverhead)}.</div>
+          No overheads with amounts yet. <a href="/overheads" style={{ color: 'var(--gold)', textDecoration: 'none' }}>Add your fixed costs →</a> to see overhead and true margin here.
         </div>
       ) : (
         <>
           <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
             Overhead spread as a % of revenue (annualised), so quiet months don't distort it.
-            {overheadBlanks > 0 && ` ${overheadBlanks} cost${overheadBlanks === 1 ? '' : 's'} still blank — the real figure is higher.`}
+            {overheadBlanks > 0 && ` ${overheadBlanks} active cost${overheadBlanks === 1 ? '' : 's'} still blank — the real figure is higher.`}
+            {' '}<a href="/overheads" style={{ color: 'var(--gold)', textDecoration: 'none' }}>Edit overheads →</a>
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
             <Stat label="Monthly overhead" value={gbp0(monthlyOverhead)} sub={`${gbp0(annualOverhead)}/yr`} />
@@ -325,3 +320,10 @@ function computeCph(events, costByBooking) {
 function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function gbp0(n) { return '£' + Math.round(n || 0).toLocaleString('en-GB'); }
 function pct(frac) { return (frac * 100).toFixed(1) + '%'; }
+function monthlyOf(f) {
+  const amt = Number(f.amount) || 0;
+  return f.frequency === 'Annual' ? amt / 12
+    : f.frequency === 'Quarterly' ? amt / 3
+    : f.frequency === 'One-off' ? 0
+    : amt;
+}

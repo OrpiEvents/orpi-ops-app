@@ -4,21 +4,25 @@ import AppShell from '../../../AppShell';
 import { createClient } from '@/lib/supabaseBrowser';
 
 const STANDARD_CHECKLIST = {
-  'Before the day': [
-    'Deposit & balance received', 'Final guest count confirmed',
-    'Cocktail & mocktail selection signed off by client',
-    'Drinks tasting completed', 'Venue access & setup time confirmed',
+  'Admin & Booking': [
+    'Deposit received', 'Balance received', 'Final guest count confirmed',
+    'Cocktail & mocktail selection signed off by client', 'Drinks tasting scheduled & completed',
+    'Venue contact and access time confirmed', 'Internal notes reviewed by whole team',
   ],
-  'Staff & kit': [
-    'Staff confirmed, briefed & arrival time set', 'Uniform / dress code confirmed',
-    'Bar kit packed (shakers, strainers, jiggers, mats, waste)',
-    'Glassware confirmed (venue or ORPI)', 'Ice supply confirmed',
-    'Soft drinks, mixers & garnishes packed',
+  'Staffing & Logistics': [
+    'Staff count confirmed', 'Lead bartender assigned', 'Staff briefed on run of show & drink specs',
+    'Staff travel / arrival time confirmed', 'Uniform / dress code confirmed', 'Transport to venue booked',
   ],
-  'On the day': [
-    'Bar set up, dressed & menus displayed', 'Mid-event stock check',
-    'Bar closed on time, venue left clean', 'Leftover stock counted',
-    'Client / planner sign-off',
+  'Bar Kit & Stock': [
+    'Soft drinks & mixers packed', 'Garnishes packed',
+    'Ice supply confirmed', 'Glassware confirmed (venue or ORPI backup)', 'Boston shakers, strainers, jiggers packed',
+    'Bar mats, spill trays, waste bags packed', 'Dry ice / smoke gun / extras tested if included',
+  ],
+  'Event Day': [
+    'Arrived on time, venue access confirmed', 'Bar set up and dressed', 'Glassware checked and racked',
+    'Back bar laid out', 'Soft drinks chilled and stocked', 'Bar menus displayed', 'Mid-event stock check',
+    'Bar closed on time', 'All equipment packed and venue left clean', 'Leftover stock counted',
+    'Client / planner sign-off obtained', 'Post-event debrief notes filed',
   ],
 };
 // Only relevant when ORPI is supplying the alcohol — spliced into
@@ -135,21 +139,15 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
     <AppShell active="/bookings" userEmail={userEmail}>
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Event run sheet</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Event checklist</h1>
           <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 3 }}>{booking.name}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <a href={`/bookings`} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13, textDecoration: 'none', color: 'var(--text)' }}>← Back</a>
           <a href={`/bookings?open=${booking.id}`} title="Change the menu, selections, guests or dates — updates show here on reload" style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13, textDecoration: 'none', color: 'var(--text)' }}>✎ Edit booking</a>
-          <button onClick={() => window.print()} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>🖨 Print</button>
+          <button onClick={() => window.print()} style={{ background: 'var(--black)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>🖨 Print checklist</button>
         </div>
       </div>
-
-      <nav className="no-print" style={{ position: 'sticky', top: 0, zIndex: 10, background: '#faf9f6', display: 'flex', gap: 6, padding: '8px 0', marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['overview', 'Overview'], ['menu', 'Menu & recipes'], ['checklist', 'Checklist'], ['stock', 'Stock & costs']].map(([id, label]) => (
-          <a key={id} href={`#${id}`} style={{ fontSize: 12, padding: '6px 13px', border: '1px solid var(--border)', borderRadius: 999, textDecoration: 'none', color: 'var(--text)', background: '#fff' }}>{label}</a>
-        ))}
-      </nav>
 
       <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', maxWidth: 820 }}>
         {/* Header */}
@@ -163,22 +161,17 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
         <div style={{ height: 3, background: 'var(--gold)' }} />
 
         <div style={{ padding: '20px 32px' }}>
-          {/* Readiness summary */}
-          {flags.length > 0 ? (
-            <div style={{ marginBottom: 20, background: '#fff8e0', border: '1px solid #f0c674', borderRadius: 8, padding: '12px 16px' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#8a6a00', marginBottom: 6 }}>{flags.length} thing{flags.length !== 1 ? 's' : ''} to sort before this event&rsquo;s ready</div>
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#7a5a00', lineHeight: 1.6 }}>
-                {flags.map((f, i) => <li key={i}>{f}</li>)}
-              </ul>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 20, background: 'var(--success-bg)', border: '1px solid var(--success)', borderRadius: 8, padding: '10px 16px', fontSize: 13, color: 'var(--success)', fontWeight: 500 }}>
-              ✓ Everything&rsquo;s in place for this event
+          {/* Flags */}
+          {flags.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              {flags.map((f, i) => (
+                <div key={i} style={{ background: 'var(--gold-bg)', borderLeft: '3px solid var(--gold)', padding: '8px 14px', fontSize: 13, marginBottom: 6, borderRadius: '0 4px 4px 0' }}>⚠️ {f}</div>
+              ))}
             </div>
           )}
 
           {/* Event overview */}
-          <SectionHead icon="📋" id="overview">Event overview</SectionHead>
+          <SectionHead icon="📋">Event overview</SectionHead>
           <Grid>
             <GridRow label="Venue" value={booking.venue} />
             <GridRow label="Event date" value={fmtDateLong(booking.eventDate)} />
@@ -216,7 +209,7 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
           {/* Drinks menu */}
           {(cocktails.length > 0 || mocktails.length > 0) && (
             <>
-              <SectionHead icon="🍹" id="menu">Drinks menu &amp; recipes</SectionHead>
+              <SectionHead icon="🍹">Drinks menu &amp; recipes</SectionHead>
               {cocktails.length > 0 && <DrinkGroup title={`Cocktails (${cocktails.length})`} drinks={cocktails} />}
               {mocktails.length > 0 && <DrinkGroup title={`Mocktails (${mocktails.length})`} drinks={mocktails} />}
             </>
@@ -264,9 +257,9 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
           )}
 
           {/* Standard checklist */}
-          <SectionHead icon="✅" id="checklist">Pre-event &amp; day-of checklist</SectionHead>
+          <SectionHead icon="✅">Pre-event &amp; day-of checklist</SectionHead>
           {Object.entries(STANDARD_CHECKLIST).map(([section, checkItems]) => {
-            const items = section === 'Staff & kit' && providesAlcohol
+            const items = section === 'Bar Kit & Stock' && providesAlcohol
               ? [ALCOHOL_ONLY_ITEM, ...checkItems]
               : checkItems;
             return (
@@ -286,7 +279,7 @@ export default function ChecklistClient({ userEmail, booking, costs, cocktails, 
               Saving costs the event for what was used, returns leftover stock
               to inventory, logs the buys, and writes the cost lines. */}
           <div className="no-print" style={{ marginTop: 20 }}>
-            <SectionHead icon="🚐" id="stock">Run sheet — stock &amp; costs</SectionHead>
+            <SectionHead icon="🚐">Run sheet — stock &amp; costs</SectionHead>
             <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.55 }}>
               Log what you <strong>loaded</strong> from stock, anything you <strong>bought</strong> for the event, and the <strong>garnish</strong> spend. The event is charged only for what's used; leftover bottles go back into stock. Autosaves as you go.
             </p>
@@ -416,9 +409,9 @@ function buildFlags(booking, cocktails, mocktails) {
   return flags;
 }
 
-function SectionHead({ icon, id, children }) {
+function SectionHead({ icon, children }) {
   return (
-    <div id={id} style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, margin: '18px 0 10px', paddingBottom: 6, borderBottom: '1px solid var(--border)', scrollMarginTop: 64 }}>
+    <div style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, margin: '18px 0 10px', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
       <span>{icon}</span>{children}
     </div>
   );

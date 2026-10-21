@@ -8,6 +8,7 @@ const NAV = [
   { href: '/enquiries', label: 'Enquiries' },
   { href: '/quotes', label: 'Quote builder' },
   { href: '/bookings', label: 'Confirmed bookings' },
+  { href: '/runsheet', label: 'Event run sheet' },
   { href: '/stock', label: 'Stock tracker' },
   { href: '/stocktake', label: 'Stock take' },
   { href: '/purchases', label: 'Purchases' },

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabaseServer';
 import MIG from './migration-data.json';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB = process.env.NOTION_DB_INVENTORY || '2e16ca9d054980cf978edf55d1d40efb';
@@ -13,6 +14,15 @@ const MIGRATE_SECRET = 'orpi-inv-mig-k7Qf2pX9mLvR3tZ8nD4w'; // one-off; route re
 const H = () => ({ Authorization: `Bearer ${TOKEN}`, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' });
 const pause = ms => new Promise(r => setTimeout(r, ms));
 const titleOf = p => (p?.properties?.['Item Name']?.title || []).map(t => t.plain_text).join('').trim();
+
+async function patch(id, bodyObj) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`https://api.notion.com/v1/pages/${id}`, { method: 'PATCH', headers: H(), body: JSON.stringify(bodyObj) });
+    if (res.status === 429) { const ra = Number(res.headers.get('retry-after')) || 2; await pause(ra * 1000); continue; }
+    return res;
+  }
+  return { ok: false, status: 429, text: async () => 'rate limited after retries' };
+}
 
 async function queryAll() {
   const rows = [];
@@ -52,10 +62,7 @@ export async function POST(request) {
     if (!p) { out.skipped.push({ op: 'rename', item: cur, reason: 'not found' }); continue; }
     if (titleOf(p) === nw) continue; // already applied
     if (!dryRun) {
-      const res = await fetch(`https://api.notion.com/v1/pages/${p.id}`, {
-        method: 'PATCH', headers: H(),
-        body: JSON.stringify({ properties: { 'Item Name': { title: [{ text: { content: nw } }] } } }),
-      });
+      const res = await patch(p.id, { properties: { 'Item Name': { title: [{ text: { content: nw } }] } } });
       if (!res.ok) { out.errors.push({ op: 'rename', item: cur, status: res.status, msg: (await res.text()).slice(0, 160) }); await pause(360); continue; }
       await pause(360);
     }
@@ -66,10 +73,7 @@ export async function POST(request) {
     const p = byName[name.toLowerCase()];
     if (!p) { out.skipped.push({ op: 'recat', item: name, reason: 'not found' }); continue; }
     if (!dryRun) {
-      const res = await fetch(`https://api.notion.com/v1/pages/${p.id}`, {
-        method: 'PATCH', headers: H(),
-        body: JSON.stringify({ properties: { Catagory: { select: { name: cat } } } }),
-      });
+      const res = await patch(p.id, { properties: { Catagory: { select: { name: cat } } } });
       if (!res.ok) { out.errors.push({ op: 'recat', item: name, status: res.status, msg: (await res.text()).slice(0, 160) }); await pause(360); continue; }
       await pause(360);
     }
@@ -80,9 +84,7 @@ export async function POST(request) {
     const p = byName[name.toLowerCase()];
     if (!p) { out.skipped.push({ op: 'archive', item: name, reason: 'not found' }); continue; }
     if (!dryRun) {
-      const res = await fetch(`https://api.notion.com/v1/pages/${p.id}`, {
-        method: 'PATCH', headers: H(), body: JSON.stringify({ archived: true }),
-      });
+      const res = await patch(p.id, { archived: true });
       if (!res.ok) { out.errors.push({ op: 'archive', item: name, status: res.status, msg: (await res.text()).slice(0, 160) }); await pause(360); continue; }
       await pause(360);
     }

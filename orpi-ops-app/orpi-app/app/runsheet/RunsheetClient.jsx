@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabaseBrowser";
 import DRINKS_DATA from "./drinks-data.json";
 import { costTypeFor, CATEGORIES, sectionFor, GARNISH_SECTION } from "@/lib/taxonomy";
 import { matchScore } from "@/lib/matching";
+import { MIXER_LEVELS, levelSwaps, levelAffects } from "@/lib/mixers";
+import { parseSelection } from "@/lib/selections";
 
 // Run sheet — Setup, Brief, Out, In.
 //
@@ -60,6 +62,8 @@ const cpmOf=(cost,ml)=>(Number(ml)>0?Number(cost)/Number(ml):0);
 const SEC=["Cocktail spirits","Back bar","Chilled — critical","Mixers & juices"];
 const GSEC=GARNISH_SECTION;
 const DISPOSABLE=["Plastic Shot"];
+// Normalised key for matching a product name to a per-event supplier choice.
+const NK=s=>(s||"").toLowerCase().replace(/\s+/g," ").trim();
 
 // Costs that never come out of the van, so nothing else would ever prompt for
 // them. Left unentered, they're what turns into a lump-sum guess later.
@@ -86,6 +90,11 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  // across every recipe on this run sheet so the van carries one vodka, not two.
  // Nothing here touches the drinks library.
  swap:{},
+ // Mixer brand level for this event (fevertree | schweppes) and who supplies
+ // each bottle ({normalised name: 'client'}). Both feed the run sheet: the
+ // level resolves carbonates to a brand, client-supplied bottles drop off the
+ // shopping list and the costs but stay listed so staff see what's poured.
+ mixerLevel:"fevertree",supplier:{},
  // Things the van needs that the store didn't have. buy is keyed by item name
  // with the quantity to get; buyExtra is anything off-list — blue roll, ice,
  // a bag of limes.
@@ -337,23 +346,30 @@ export default function Runsheet(){
    }
   }
 
-  // Spirits, beer and softs → the back bar.
-  const bar=[...splitList(b.spiritsSelection),...splitList(b.beerSelection),...splitList(b.softDrinksSelection)];
-  if(bar.length){
+  // Spirits, beer and softs → the back bar, carrying who supplies each line
+  // ("Grey Goose (client)" → client-supplied).
+  const barLines=[...parseSelection(b.spiritsSelection),...parseSelection(b.beerSelection),...parseSelection(b.softDrinksSelection)];
+  if(barLines.length){
    if(extra.some(e=>e.n)){
     notes.push("back bar already set up, left as it was");
    } else {
-    const rows=[];
-    bar.forEach((name,i)=>{
+    const rows=[];const sup={};
+    barLines.forEach(({name,by},i)=>{
      const hit=bestMatch(name,INVX,x=>x.n,0.88);
      // Unmatched lines still go on the bar — the client was promised it, and a
      // name we don't stock is exactly what you need to see before loading.
-     rows.push({id:Date.now()+i,n:hit?hit.n:name});
+     const nm=hit?hit.n:name;
+     rows.push({id:Date.now()+i,n:nm});
      if(!hit)missed.push(name);
+     if(by==="client")sup[NK(nm)]="client";
     });
     if(rows.length){up("extra",()=>rows);notes.push(`${rows.length} back bar line${rows.length===1?"":"s"}`);}
+    if(Object.keys(sup).length){up("supplier",p=>({...(p||{}),...sup}));notes.push(`${Object.keys(sup).length} client-supplied`);}
    }
   }
+  // Mixer level, if the booking carries one (forward-compatible — older
+  // bookings won't, and the run sheet keeps its default).
+  if(b.mixerLevel){up("mixerLevel",()=>b.mixerLevel);}
 
   setPullMsg(
    notes.length
@@ -375,7 +391,15 @@ export default function Runsheet(){
 
  const picked=LIB.filter(d=>sel[d.name]);
  // Declared here, ahead of baseProducts and pOf, both of which read it.
- const swap=E.swap||{};
+ // Effective swap = the mixer level's carbonate swaps, with any explicit
+ // per-event swap layered on top so a deliberate choice always wins.
+ const userSwap=E.swap||{};
+ const mixerLevel=E.mixerLevel||"fevertree";
+ const swap={...levelSwaps(mixerLevel),...userSwap};
+ // Who supplies each bottle. Client-supplied lines cost nothing and never reach
+ // the shopping list or the close, but stay on the sheet so staff see them.
+ const supplier=E.supplier||{};
+ const isClient=n=>supplier[NK(n)]==="client";
 
  const buy=E.buy||{}, buyExtra=E.buyExtra||[];
  function toggleBuy(name){
@@ -407,7 +431,7 @@ export default function Runsheet(){
   }));
   return [...set].sort();
  })();
- const swapCount=baseProducts.filter(b=>swap[b]&&swap[b]!==b).length;
+ const swapCount=baseProducts.filter(b=>userSwap[b]&&userSwap[b]!==b).length;
 
  const glassRows=(()=>{
   const counts={};
@@ -441,18 +465,18 @@ export default function Runsheet(){
  };
  const edQ=(d,i)=>ovr[d.name]?.[i]!==undefined&&ovr[d.name][i]!==d.ing[i].q;
  const edP=(d,i)=>pOf(d,i)!==(d.ing[i].s||"");
- const lineCost=(d,i)=>{const it=BYX[pOf(d,i)];return it?qOf(d,i)*it.cpm:(d.ing[i].q?d.ing[i].c/d.ing[i].q*qOf(d,i):d.ing[i].c);};
+ const lineCost=(d,i)=>{const nm=pOf(d,i);if(isClient(nm))return 0;const it=BYX[nm];return it?qOf(d,i)*it.cpm:(d.ing[i].q?d.ing[i].c/d.ing[i].q*qOf(d,i):d.ing[i].c);};
  const secOf=n=>sectionFor(n,BYX[n]?.cat||"Other");
  const rws=d=>{const r=d.ing.map((ing,i)=>rm[d.name]?.[i]?null:({k:"b",i,u:ing.u,sec:ing.sec})).filter(Boolean);
   (add[d.name]||[]).forEach((a,j)=>r.push({k:"a",i:j,u:a.u,sec:a.s?secOf(a.s):"Mixers & juices"}));return r;};
  const aQ=(d,j)=>add[d.name][j].q,aP=(d,j)=>add[d.name][j].s;
- const aCost=(d,j)=>{const it=BYX[aP(d,j)];return it?aQ(d,j)*it.cpm:0;};
+ const aCost=(d,j)=>{const nm=aP(d,j);if(isClient(nm))return 0;const it=BYX[nm];return it?aQ(d,j)*it.cpm:0;};
  const cost=d=>rws(d).reduce((t,r)=>r.sec===GSEC?t:t+(r.k==="b"?lineCost(d,r.i):aCost(d,r.i)),0);
  const dirty=d=>Object.keys(prod[d.name]||{}).length>0||Object.keys(ovr[d.name]||{}).length>0||(add[d.name]||[]).length>0||Object.values(rm[d.name]||{}).some(Boolean);
 
  const map={};
  picked.forEach(d=>rws(d).forEach(r=>{const b=r.k==="b",k=b?(pOf(d,r.i)||d.ing[r.i].n):aP(d,r.i);if(!k)return;
-  if(!map[k])map[k]={n:k,sec:r.sec,uses:[]};
+  if(!map[k])map[k]={n:k,sec:r.sec,uses:[],by:isClient(k)?"client":"orpi"};
   map[k].uses.push(`${d.name} @ ${b?qOf(d,r.i):aQ(d,r.i)}${r.u}`);}));
  // Back bar items join the same map rather than getting rows of their own. A
  // bottle that's in a cocktail AND on the back bar — Fever-Tree Ginger Ale, say
@@ -464,12 +488,14 @@ export default function Runsheet(){
  extra.forEach(e=>{
   const raw=(e.n||"").trim(); if(!raw)return;
   const k=byKey[keyOf(raw)]||raw;
-  if(!map[k]){map[k]={n:k,sec:"Back bar",uses:[]};byKey[keyOf(k)]=k;}
+  if(!map[k]){map[k]={n:k,sec:"Back bar",uses:[],by:isClient(k)?"client":"orpi"};byKey[keyOf(k)]=k;}
   if(!map[k].uses.includes("Standard bar service"))map[k].uses.push("Standard bar service");
  });
  const all=Object.values(map);
  const grp=SEC.map(s=>({s,rows:all.filter(l=>l.sec===s)})).filter(g=>g.rows.length);
  const gRows=all.filter(l=>l.sec===GSEC);
+ // Alcohol lines (cocktail spirits + back bar) are the ones a client might bring.
+ const alcoholRows=all.filter(l=>l.sec==="Cocktail spirits"||l.sec==="Back bar");
 
  // Everything that left the van and didn't come back. This is what gets
  // written to Notion — one costing line each, and stock down by the same.
@@ -483,6 +509,7 @@ export default function Runsheet(){
   const seen=new Set();
   return rows.map(r=>({name:r.n,out:out[r.n]??0,in:back[r.n]??0}))
              .filter(l=>{
+              if(isClient(l.name))return false;
               if(l.out-l.in<=0)return false;
               const k=(l.name||"").toLowerCase().trim();
               if(seen.has(k))return false;
@@ -755,6 +782,22 @@ export default function Runsheet(){
       </>)}
     </Sec>
 
+    <Sec open={open} setOpen={setOpen} k="mixer" title="Mixer level"
+      sub={mixerLevel==="schweppes"?"Schweppes (standard)":"Fever-Tree (premium)"}>
+     <p className="text-xs text-neutral-400 mb-3">
+      Which brand the tonics, soda and ginger pour as across every recipe on this
+      sheet. Need an exception for one line? Set it in Brand swaps.
+     </p>
+     <div className="flex gap-2 mb-3">
+      {MIXER_LEVELS.map(lv=>{const on=mixerLevel===lv.key;return(
+       <button key={lv.key} onClick={()=>up("mixerLevel",()=>lv.key)} className="flex-1 py-3 rounded-xl border text-sm"
+         style={{borderColor:on?GOLD:"#DDD8CE",background:on?"#FFFDF7":"#fff",color:on?GOLD:"#6B6459"}}>
+        {lv.label}<span className="block text-xs text-neutral-400">{lv.note}</span></button>);})}
+     </div>
+     {levelAffects(mixerLevel).length>0&&(
+      <div className="text-xs text-neutral-500 leading-relaxed">On this level: {levelAffects(mixerLevel).join(" · ")}</div>)}
+    </Sec>
+
     <Sec open={open} setOpen={setOpen} k="glass" title="Glassware order"
       sub={glassRows.length?(glassTotal?`${glassTotal} glasses · ${glassRows.length} type${glassRows.length===1?"":"s"}`:`${glassRows.length} type${glassRows.length===1?"":"s"} — quantities to add`):"Choose drinks first"}>
      {!picked.length&&!(E.gExtra||[]).length
@@ -805,6 +848,35 @@ export default function Runsheet(){
        <button onClick={()=>up("extra",p=>p.filter((_,j)=>j!==i))} className="w-10 shrink-0 text-neutral-300 text-xl">×</button></div>))}
      <button onClick={()=>up("extra",x=>[...x,{id:Date.now(),n:""}])} className="w-full py-3 rounded-xl border text-sm" style={{borderColor:"#DDD8CE",color:GOLD}}>+ Add line</button></Sec>
 
+    <Sec open={open} setOpen={setOpen} k="supply" title="Alcohol supply"
+      sub={alcoholRows.length?(alcoholRows.every(l=>l.by==="client")?"All client-supplied":alcoholRows.some(l=>l.by==="client")?`${alcoholRows.filter(l=>l.by==="client").length} client-supplied`:"All supplied by ORPI"):"Pick drinks or add a back bar line"}>
+     {!alcoholRows.length
+      ? <p className="text-sm text-neutral-400 text-center py-4">Add your drinks and back bar first.</p>
+      : (<>
+       <p className="text-xs text-neutral-400 mb-3">
+        Mark anything the client is bringing. Client-supplied bottles stay on the
+        sheet so staff know what&rsquo;s poured, but drop off the shopping list and
+        out of the costs.
+       </p>
+       <div className="flex gap-2 mb-3">
+        <button onClick={()=>up("supplier",()=>{const m={};alcoholRows.forEach(l=>{m[NK(l.n)]="client";});return m;})}
+          className="text-xs px-3 py-1.5 rounded-full border" style={{borderColor:"#DDD8CE",color:GOLD}}>All client-supplied</button>
+        <button onClick={()=>up("supplier",()=>({}))}
+          className="text-xs px-3 py-1.5 rounded-full border" style={{borderColor:"#DDD8CE",color:"#6B6459"}}>All ORPI</button>
+       </div>
+       {alcoholRows.map(l=>{const client=l.by==="client";return(
+        <div key={l.n} className="flex items-center justify-between gap-2 py-2 border-b" style={{borderColor:"#F2F0EB"}}>
+         <span className="min-w-0 flex-1 text-sm">{l.n}<span className="block text-xs text-neutral-400">{l.sec}</span></span>
+         <div className="flex rounded-full border overflow-hidden shrink-0" style={{borderColor:"#DDD8CE"}}>
+          <button onClick={()=>up("supplier",p=>{const m={...(p||{})};delete m[NK(l.n)];return m;})}
+            className="px-3 py-1.5 text-xs" style={{background:client?"#fff":INK,color:client?"#6B6459":"#fff"}}>ORPI</button>
+          <button onClick={()=>up("supplier",p=>({...(p||{}),[NK(l.n)]:"client"}))}
+            className="px-3 py-1.5 text-xs" style={{background:client?GOLD:"#fff",color:client?"#fff":"#6B6459"}}>Client</button>
+         </div>
+        </div>);})}
+      </>)}
+    </Sec>
+
     <div className="px-5 py-6">
      <button onClick={()=>{if(events.length<2)return;const o=events.find(x=>x.id!==E.id);setEvents(es=>es.filter(x=>x.id!==E.id));setCur(o.id);}}
       className="text-xs underline underline-offset-4 text-neutral-400">Delete this event</button></div></div>}
@@ -818,12 +890,14 @@ export default function Runsheet(){
      <h2 className="px-5 py-2 text-xs font-medium uppercase tracking-wide sticky top-[45px] z-10" style={{background:"#F5F3EF",color:"#6B6459",borderTop:"1px solid "+LINE,borderBottom:"1px solid "+LINE}}>{g.s}</h2>
      {g.rows.filter(r=>tab==="out"||(out[r.n]??0)>0).map(r=>(
       <div key={r.n} className="px-5 py-3 border-b flex items-center justify-between gap-3" style={{borderColor:"#EFECE6"}}>
-       <div className="min-w-0 flex-1"><div className="text-base leading-tight">{r.n}</div>
+       <div className="min-w-0 flex-1"><div className="text-base leading-tight">{r.n}{r.by==="client"&&<span style={{color:"#9A9388",fontSize:11,marginLeft:6}}>· client</span>}</div>
         <div className="text-xs text-neutral-500 mt-0.5 truncate">{r.uses.join(" · ")}</div>
-        {tab==="back"&&<div className="text-xs mt-1" style={{color:GOLD}}>took {out[r.n]??0} · used {Math.max(0,(out[r.n]??0)-(back[r.n]??0))}</div>}
-        {tab==="out"&&<button onClick={()=>toggleBuy(r.n)} className="text-xs underline underline-offset-4 mt-1"
+        {tab==="back"&&r.by!=="client"&&<div className="text-xs mt-1" style={{color:GOLD}}>took {out[r.n]??0} · used {Math.max(0,(out[r.n]??0)-(back[r.n]??0))}</div>}
+        {tab==="out"&&(r.by==="client"
+          ? <span className="text-xs mt-1 inline-block" style={{color:"#9A9388"}}>client supplies — not costed</span>
+          : <button onClick={()=>toggleBuy(r.n)} className="text-xs underline underline-offset-4 mt-1"
           style={{color:buy[r.n]!==undefined?GOLD:"#B5AFA4"}}>
-          {buy[r.n]!==undefined?"on shopping list":"need to buy"}</button>}</div>
+          {buy[r.n]!==undefined?"on shopping list":"need to buy"}</button>)}</div>
        <input inputMode="numeric" placeholder="0" value={tab==="out"?(out[r.n]??""):(back[r.n]??"")}
         onChange={e=>{const v=e.target.value.replace(/[^0-9]/g,""),n=v===""?0:parseInt(v,10);
          if(tab==="out")up("out",p=>({...p,[r.n]:n}));else up("back",p=>({...p,[r.n]:Math.min(n,out[r.n]??0)}));}}

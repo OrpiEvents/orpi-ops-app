@@ -10,7 +10,6 @@ export const maxDuration = 300;
 
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB = process.env.NOTION_DB_INVENTORY || '2e16ca9d054980cf978edf55d1d40efb';
-const MIGRATE_SECRET = 'orpi-inv-mig-k7Qf2pX9mLvR3tZ8nD4w'; // one-off; route removed after use
 const H = () => ({ Authorization: `Bearer ${TOKEN}`, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' });
 const pause = ms => new Promise(r => setTimeout(r, ms));
 const titleOf = p => (p?.properties?.['Item Name']?.title || []).map(t => t.plain_text).join('').trim();
@@ -46,9 +45,7 @@ export async function POST(request) {
 
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user && body.secret !== MIGRATE_SECRET) {
-    return NextResponse.json({ error: 'Not authorised' }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   if (!TOKEN) return NextResponse.json({ error: 'NOTION_TOKEN missing' }, { status: 500 });
 
   const pages = await queryAll();

@@ -36,9 +36,7 @@ export async function middleware(request) {
   const isPublicInvoice =
     pathname.startsWith('/i/') ||
     /^\/api\/invoices\/[^/]+(?:\/accept)?\/?$/.test(pathname);
-  // Temporary one-off inventory migration endpoint — gated by its own secret.
-  const isAdminMigrate = pathname.startsWith('/api/admin/inventory-migrate');
-  const isPublic = isLoginPage || isPublicInvoice || isAdminMigrate;
+  const isPublic = isLoginPage || isPublicInvoice;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

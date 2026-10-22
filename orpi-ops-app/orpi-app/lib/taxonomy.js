@@ -25,6 +25,7 @@ export const ALCOHOL_CATEGORIES = [
   ...SPIRIT_CATEGORIES,
   LEGACY_SPIRIT,
   'Liqueur',
+  'Shots/Shooters',
   'Wine',
   'Prosecco',
   'Champagne',
@@ -36,18 +37,24 @@ export const NON_ALCOHOLIC = 'Non-Alcoholic';
 // Everything, in the order it should appear in a dropdown: spirits together,
 // then the rest of the bar, then the non-drinks.
 export const CATEGORIES = [
+  // Bar — alcohol first
   ...SPIRIT_CATEGORIES,
   'Liqueur',
+  'Shots/Shooters',
+  'Beer',
   'Wine',
   'Prosecco',
   'Champagne',
-  'Beer',
+  // Soft drinks
   NON_ALCOHOLIC,
   'Mixer',
-  'Soft Drink',
-  'Garnish',
-  'Ice',
-  'Other',
+  // Cocktail-making
+  'Syrups & Cordials',
+  'Bitters',
+  'Purées',
+  'Prep & Kit',
+  // Internal
+  'Quote Options',
 ];
 
 export const isSpirit = cat => SPIRIT_CATEGORIES.includes(cat) || cat === LEGACY_SPIRIT;
@@ -59,10 +66,10 @@ export const isAlcohol = cat => cat !== NON_ALCOHOLIC && ALCOHOL_CATEGORIES.incl
 export function costTypeFor(cat) {
   if (cat === NON_ALCOHOLIC) return 'Mixers';
   if (isAlcohol(cat)) return 'Alcohol';
-  if (cat === 'Mixer' || cat === 'Soft Drink') return 'Mixers';
+  if (['Mixer', 'Soft Drink', 'Syrups & Cordials', 'Bitters', 'Purées'].includes(cat)) return 'Mixers';
   if (cat === 'Ice') return 'Ice';
   if (cat === 'Garnish') return 'Garnish';
-  return 'Other/Misc';
+  return 'Other/Misc'; // Prep & Kit, Quote Options
 }
 
 export const GARNISH_SECTION = 'Garnish & consumables';

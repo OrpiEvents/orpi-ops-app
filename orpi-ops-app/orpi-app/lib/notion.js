@@ -4,6 +4,7 @@
 // place this gets called from.
 
 import { matchScore, SAME_AT } from './matching';
+import { CATEGORIES } from './taxonomy';
 
 const NOTION_VERSION = '2022-06-28';
 const BASE = 'https://api.notion.com/v1';
@@ -514,11 +515,12 @@ export async function listInventoryItems() {
     method: 'POST',
     body: JSON.stringify({ sorts: [{ property: 'Item Name', direction: 'ascending' }] }),
   });
-  // Group alphabetically by category, then alphabetically by name within each.
-  // Sorted in code because Notion orders a select property by its schema
-  // option order, not alphabetically.
+  // Group by category in the canonical order (bar/alcohol first, then soft
+  // drinks, then cocktail-making), alphabetically by name within each. Sorted
+  // in code because Notion orders a select property by its schema option order.
+  const catRank = c => { const i = CATEGORIES.indexOf(c); return i === -1 ? CATEGORIES.length : i; };
   return data.results.map(pageToInventoryItem).sort((a, b) =>
-    (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
+    catRank(a.category) - catRank(b.category) || a.name.localeCompare(b.name));
 }
 
 function pageToInventoryItem(page) {

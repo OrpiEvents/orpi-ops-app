@@ -1,8 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import AppShell from '../AppShell';
+import { CATEGORIES, isAlcohol, NON_ALCOHOLIC } from '@/lib/taxonomy';
 
-const CATEGORIES = ['all', 'Spirit', 'Soft Drink', 'Mixer', 'Beer', 'Wine', 'Prosecco', 'Champagne', 'Liqueur', 'Garnish', 'Ice', 'Other'];
+// Quick splits first (the alcohol vs mixers view), then each category in order.
+const FILTERS = [['all', 'All'], ['bar', 'Bar (alcohol)'], ['soft', 'Mixers & softs'], ...CATEGORIES.map(c => [c, c])];
 
 export default function StockClient({ userEmail }) {
   const [items, setItems] = useState([]);
@@ -11,6 +13,7 @@ export default function StockClient({ userEmail }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [adjustInputs, setAdjustInputs] = useState({});
+  const [search, setSearch] = useState('');
 
   async function load() {
     setLoading(true);
@@ -44,7 +47,15 @@ export default function StockClient({ userEmail }) {
     });
   });
 
-  const filtered = filter === 'all' ? items : items.filter(i => i.category === filter);
+  const q = search.trim().toLowerCase();
+  const filtered = items.filter(i => {
+    const catOk = filter === 'all' ? true
+      : filter === 'bar' ? isAlcohol(i.category)
+      : filter === 'soft' ? (i.category === 'Mixer' || i.category === NON_ALCOHOLIC)
+      : i.category === filter;
+    const nameOk = !q || (i.name || '').toLowerCase().includes(q) || (i.category || '').toLowerCase().includes(q);
+    return catOk && nameOk;
+  });
   const lowItems = filtered.filter(i => (i.currentStock || 0) < (i.parLevel || 0));
   const forecastItems = Object.keys(neededCounts).filter(id => {
     const item = items.find(i => i.id === id);
@@ -93,13 +104,17 @@ export default function StockClient({ userEmail }) {
         </div>
       )}
 
+      <input
+        value={search} onChange={e => setSearch(e.target.value)} placeholder="Search stock…"
+        style={{ width: '100%', maxWidth: 320, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}
+      />
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16, overflowX: 'auto' }}>
-        {CATEGORIES.map(c => (
+        {FILTERS.map(([c, label]) => (
           <div key={c} onClick={() => setFilter(c)} style={{
             padding: '8px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
             color: filter === c ? 'var(--text)' : 'var(--muted)',
             borderBottom: filter === c ? '2px solid var(--gold)' : '2px solid transparent', marginBottom: -1,
-          }}>{c === 'all' ? 'All' : c}</div>
+          }}>{label}</div>
         ))}
       </div>
 
@@ -118,13 +133,16 @@ export default function StockClient({ userEmail }) {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>No items in this category</td></tr>
-              ) : filtered.map(i => {
+              ) : filtered.map((i, idx) => {
                 const low = (i.currentStock || 0) < (i.parLevel || 0);
                 const pct = i.parLevel ? Math.min(100, Math.round((i.currentStock / i.parLevel) * 100)) : 100;
                 const fillColor = low ? 'var(--danger)' : pct < 150 ? 'var(--gold)' : 'var(--success)';
                 const needed = neededCounts[i.id] || 0;
+                const showCat = idx === 0 || filtered[idx - 1].category !== i.category;
                 return (
-                  <tr key={i.id} style={{ background: low ? 'var(--danger-bg)' : 'transparent' }}>
+                  <Fragment key={i.id}>
+                  {showCat && <tr><td colSpan={9} style={{ background: 'var(--off)', padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--gold)' }}>{i.category}</td></tr>}
+                  <tr style={{ background: low ? 'var(--danger-bg)' : 'transparent' }}>
                     <Td><strong>{i.name}</strong></Td>
                     <Td muted>{i.category}</Td>
                     <Td muted>{i.size || '—'}</Td>
@@ -155,6 +173,7 @@ export default function StockClient({ userEmail }) {
                       </div>
                     </Td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

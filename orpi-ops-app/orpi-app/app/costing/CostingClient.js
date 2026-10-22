@@ -25,23 +25,28 @@ export default function CostingClient({ userEmail }) {
     }).catch(e => { setError(String(e)); setLoading(false); });
   }, []);
 
-  // A "gap" is a non-garnish ingredient that costs £0 — either not linked to a
-  // stock item (no `s`), or linked to one with no price / no volume (c === 0).
+  // A "gap" is a non-garnish ingredient that costs £0 and is a real core
+  // ingredient. A finish/garnish line — no quantity set, or named as a finish/
+  // float/rim/dust/top — is priced per event, not in the recipe, so it's never
+  // a cost gap and is excluded here.
+  const isFinish = i => !(Number(i.q) > 0) || /\b(finish|garnish|rim|dust|float|top)\b/i.test(i.n || '');
   const rows = drinks.map(d => {
     const liquid = (d.ing || []).filter(i => i.sec !== GARNISH_SECTION);
-    const gaps = liquid.filter(i => !(i.c > 0)).map(i => ({
+    const unpriced = liquid.filter(i => !(i.c > 0));
+    const gaps = unpriced.filter(i => !isFinish(i)).map(i => ({
       name: i.n,
-      stock: i.s || '',
-      reason: i.s ? 'linked to “' + i.s + '” but it has no price/volume' : 'not linked to a stock item',
+      reason: (!i.s || i.s === 'Untitled') ? 'not linked to a stock item' : 'linked to “' + i.s + '” but it has no price/volume',
     }));
+    const finishes = unpriced.filter(isFinish).length;
     const costSoFar = liquid.reduce((s, i) => s + (Number(i.c) || 0), 0);
-    return { name: d.name, type: d.type, tier: d.tier, gaps, costSoFar, complete: gaps.length === 0 };
+    return { name: d.name, type: d.type, tier: d.tier, gaps, finishes, costSoFar, complete: gaps.length === 0 };
   });
 
   const total = rows.length;
   const complete = rows.filter(r => r.complete).length;
   const gapsCount = total - complete;
   const ingredientGaps = rows.reduce((s, r) => s + r.gaps.length, 0);
+  const finishesTotal = rows.reduce((s, r) => s + r.finishes, 0);
 
   const ql = q.trim().toLowerCase();
   const shown = rows
@@ -54,9 +59,10 @@ export default function CostingClient({ userEmail }) {
       <div style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600 }}>Drinks costing</h1>
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 3, lineHeight: 1.5, maxWidth: 680 }}>
-          Every drink whose per-serve cost is understated because an ingredient isn&rsquo;t priced.
+          Every drink whose per-serve cost is understated because a <em>core</em> ingredient isn&rsquo;t priced.
           Fix each by linking the ingredient to a stock item in the Notion recipe, or logging a purchase
-          (and a bottle volume) for the item it points to.
+          (and a bottle volume) for the item it points to. Finish &amp; garnish lines are left out &mdash;
+          you price those per event.
         </p>
       </div>
 
@@ -68,6 +74,7 @@ export default function CostingClient({ userEmail }) {
           <Stat label="Fully costed" value={complete} tone="var(--success)" />
           <Stat label="With gaps" value={gapsCount} tone={gapsCount ? '#b8720a' : 'var(--muted)'} />
           <Stat label="Ingredients to price" value={ingredientGaps} tone={ingredientGaps ? 'var(--danger)' : 'var(--muted)'} />
+          {finishesTotal > 0 && <Stat label="Finish lines (per event)" value={finishesTotal} tone="var(--muted)" />}
         </div>
       )}
 

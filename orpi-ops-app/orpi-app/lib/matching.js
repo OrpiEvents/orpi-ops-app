@@ -13,6 +13,7 @@
 function normName(s) {
   return (s || '')
     .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents: kahl\u00faa\u2192kahlua, mo\u00ebt\u2192moet, c\u00eeroc\u2192ciroc
     .replace(/[\u2018\u2019'`.,()\-]/g, ' ')
     .replace(/\b\d+(\.\d+)?\s*(cl|ml|l|ltr|litre|litres)\b/g, ' ')
     .replace(/\b(vodka|gin|rum|whisky|whiskey|bourbon|tequila|cognac|brandy|liqueur|beer|lager|cider|wine|prosecco|champagne|bottles?|cans?|premium|original|dry|the|and)\b/g, ' ')

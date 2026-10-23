@@ -279,7 +279,14 @@ export function reengagementQueue({ enquiries, bookings = [], touches = [], toda
 
   const items = [];
   for (const e of enquiries) {
-    if (isWon(e) || e.marketing === 'Opted out') continue;
+    // Two kinds of no. Marketing = Opted out set by hand means they asked not
+    // to be contacted: nothing goes. The enquiry form's tick ("don't send me
+    // planning tips and offers") only rules out the date-clock nudges, which
+    // are marketing; replying to their enquiry and following up their quote
+    // are not, so those still come up.
+    const tickedOptOut = !!e.marketingOptOut;
+    if (isWon(e) || (e.marketing === 'Opted out' && !tickedOptOut)) continue;
+    const noMarketing = tickedOptOut || e.marketing === 'Opted out';
     const eventDay = dayOf(e.eventDate);
     if (eventDay && eventDay <= today) continue;          // date has passed
     if (isLost(e) && !REVIVABLE_LOSS.has(e.lostReason || '')) continue;
@@ -301,7 +308,7 @@ export function reengagementQueue({ enquiries, bookings = [], touches = [], toda
         const d = addDays(e.dateQuoted, t.after);
         if (d <= today) { if (open(e, t.key)) { touch = t; due = d; } break; }
       }
-    } else if (eventDay) {
+    } else if (eventDay && !noMarketing) {
       // Dormant: on the wedding-date clock. Only milestones that fell after
       // they enquired, only one at a time, and never within three weeks of
       // the enquiry or the quote — a fresh lead isn't a dormant one.

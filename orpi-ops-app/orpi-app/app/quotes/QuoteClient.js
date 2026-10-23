@@ -332,6 +332,37 @@ async function saveDraft(enquiryId, state) {
   } catch { return false; }
 }
 
+const QUOTE_EVENT_TYPES = ['Wedding Reception', 'Mendhi/Sangeet', 'Jago', 'Engagement', 'Birthday Party', 'Corporate', 'House Party', 'Other'];
+
+// What the client asked for, above the builder while quoting: every service
+// they ticked (the package is only set from the first), how they found us,
+// and their own words. Read live from the enquiry, so it's current even on a
+// saved draft; falls back to the note copied in when the enquiry was loaded.
+function EnquiryBrief({ s, enquiries }) {
+  const e = s.enquiryId ? enquiries.find(x => x.id === s.enquiryId) : null;
+  const notes = String((e ? e.internalNotes : s.enquiryNotes) || '').trim();
+  const services = e?.serviceTypes || [];
+  const heard = e ? [
+    e.source && `Heard via ${e.source}`,
+    e.referredBy && `recommended by ${e.referredBy}`,
+    (e.marketingOptOut || e.marketing === 'Opted out') && 'opted out of tips & offers',
+  ].filter(Boolean) : [];
+  if (!services.length && !heard.length && !notes) return null;
+  return (
+    <div className="no-print" style={{ background: 'var(--off)', border: '1px solid var(--border)', borderLeft: '3px solid var(--gold)', padding: '10px 14px', borderRadius: 6, fontSize: 12, marginBottom: 14, color: 'var(--text)', lineHeight: 1.6 }}>
+      <strong style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)' }}>From the enquiry · not shown to the client</strong>
+      {services.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <span style={{ color: 'var(--muted)' }}>Asked for: </span>
+          <strong>{services.join(' · ')}</strong>
+        </div>
+      )}
+      {heard.length > 0 && <div style={{ color: 'var(--muted)' }}>{heard.join(' · ')}</div>}
+      {notes && <div style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{notes}</div>}
+    </div>
+  );
+}
+
 // Map a Sales Pipeline "Service Type" to a quote package. Keyword-based so it
 // survives wording changes in Notion; returns null when nothing matches, so the
 // builder keeps its current (template/default) package.
@@ -693,12 +724,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
         💡 In the print dialog, expand <strong>More settings</strong> → untick <strong>Headers and footers</strong> for a clean PDF (removes the URL &amp; timestamp).
       </div>
 
-      {s.enquiryNotes && s.enquiryNotes.trim() && (
-        <div className="no-print" style={{ background: 'var(--off)', border: '1px solid var(--border)', borderLeft: '3px solid var(--muted)', padding: '10px 14px', borderRadius: 6, fontSize: 12, marginBottom: 14, color: 'var(--text)' }}>
-          <strong style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)' }}>Internal note from enquiry · not shown to the client</strong>
-          <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.enquiryNotes}</div>
-        </div>
-      )}
+      <EnquiryBrief s={s} enquiries={enquiries} />
 
       <div className="print-grid-collapse" style={{ display: 'grid', gridTemplateColumns: '340px 340px 1fr', gap: 20, alignItems: 'start' }}>
         <div className="no-print" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 20, position: 'sticky', top: 24, maxHeight: 'calc(100vh - 60px)', overflowY: 'auto' }}>
@@ -728,7 +754,10 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             <Field label="Client name"><input style={inputStyle} value={s.client} onChange={e => set({ client: e.target.value })} /></Field>
             <Field label="Event type">
               <select style={selStyle} value={s.etype} onChange={e => set({ etype: e.target.value })}>
-                {['Wedding Reception', 'Mendhi/Sangeet', 'Jago', 'Engagement', 'Birthday Party', 'Corporate', 'House Party', 'Other'].map(o => <option key={o}>{o}</option>)}
+                {QUOTE_EVENT_TYPES.map(o => <option key={o}>{o}</option>)}
+                {/* An enquiry's own type ("Birthday") shows as itself rather
+                    than the list silently reading "Wedding Reception". */}
+                {s.etype && !QUOTE_EVENT_TYPES.includes(s.etype) && <option value={s.etype}>{s.etype}</option>}
               </select>
             </Field>
           </TwoCol>

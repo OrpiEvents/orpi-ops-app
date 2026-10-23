@@ -88,6 +88,10 @@ function pageToEnquiry(page) {
     campaign: text(p['Campaign']),
     adPost: text(p['Ad / Post']),
     marketing: sel(p['Marketing']),
+    // The Notion form's "Please don't send me occasional planning tips and
+    // offers" tick. The 9am job copies it into Marketing; until then this is
+    // the only place it shows.
+    marketingOptOut: checkbox(p['Marketing opt-out']),
     leadTimeMonths: formulaNum(p['Lead Time (months)']),
     planningStage: p['Planning Stage']?.formula?.string || '',
     acknowledgedAt: dateStart(p['Acknowledged At']),
@@ -223,7 +227,9 @@ function enquiryToProperties(d) {
   if (d.dateDecided !== undefined) props['Date Decided'] = d.dateDecided ? { date: { start: d.dateDecided } } : { date: null };
   if (d.referredBy !== undefined) props['Referred By'] = { rich_text: [{ text: { content: d.referredBy || '' } }] };
   if (d.status !== undefined) props['Status'] = { select: { name: d.status } };
-  if (d.internalNotes !== undefined) props['Internal Notes'] = { rich_text: [{ text: { content: d.internalNotes || '' } }] };
+  // Notes hold the client's "Anything else?" answer, which can run past the
+  // 2,000 characters Notion allows in one piece of text.
+  if (d.internalNotes !== undefined) props['Internal Notes'] = { rich_text: longText(d.internalNotes) };
   if (d.eventDate) props['Event Date'] = { date: { start: d.eventDate } };
   if (d.followUpDate) props['Follow Up Date'] = { date: { start: d.followUpDate } };
   if (d.quoteSent !== undefined) props['Quote Sent'] = { number: Number(d.quoteSent) || 0 };
@@ -237,8 +243,30 @@ function enquiryToProperties(d) {
   if (d.campaign !== undefined) props['Campaign'] = { rich_text: [{ text: { content: (d.campaign || '').slice(0, 200) } }] };
   if (d.adPost !== undefined) props['Ad / Post'] = { rich_text: [{ text: { content: (d.adPost || '').slice(0, 200) } }] };
   if (d.marketing !== undefined) props['Marketing'] = d.marketing ? { select: { name: d.marketing } } : { select: null };
+  if (d.marketingOptOut !== undefined) props['Marketing opt-out'] = { checkbox: !!d.marketingOptOut };
   if (d.acknowledgedAt) props['Acknowledged At'] = { date: { start: d.acknowledgedAt } };
   return props;
+}
+
+// Notion takes at most 2,000 characters per piece of rich text (and 100
+// pieces), so long text is split rather than rejected. Pieces are capped by
+// string length (an emoji counts as two), and filled a whole character at a
+// time so an emoji is never cut in half.
+function longText(value) {
+  const str = String(value || '');
+  if (!str) return [{ text: { content: '' } }];
+  const parts = [];
+  let cur = '';
+  for (const ch of str) {
+    if (cur.length + ch.length > 1990) {
+      parts.push(cur);
+      cur = '';
+      if (parts.length === 100) break;
+    }
+    cur += ch;
+  }
+  if (cur && parts.length < 100) parts.push(cur);
+  return parts.map(content => ({ text: { content } }));
 }
 
 // ---- Content Calendar (Growth) --------------------------------------------

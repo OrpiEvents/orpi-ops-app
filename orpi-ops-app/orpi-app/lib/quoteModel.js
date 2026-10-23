@@ -362,3 +362,16 @@ export function fmtDate(d) { if (!d) return '—'; try { return new Date(d + 'T1
 export function fmtDatePretty(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch { return d; } }
 export function fmtDateLong(d) { if (!d) return '—'; try { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); } catch { return d; } }
 export function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+// ── Extras ───────────────────────────────────────────────────
+// An extra can be booked more than once (2 rounds of shots, 3 extra staff,
+// 2 extra hours). The price typed in the builder is for one; the quote names
+// the extra with its count ("2× Shots package") and the total multiplies.
+// Extras saved before quantities existed have no qty, which counts as 1.
+export function addonQty(a) { return Math.max(1, parseInt(a && a.qty, 10) || 1); }
+export function addonName(a) { const q = addonQty(a); return q > 1 ? `${q}× ${a.label}` : a.label; }
+export function addonsTotal(addons) {
+  return (addons || [])
+    .filter(a => a.on && parseFloat(a.price) > 0)
+    .reduce((sum, a) => sum + parseFloat(a.price) * addonQty(a), 0);
+}

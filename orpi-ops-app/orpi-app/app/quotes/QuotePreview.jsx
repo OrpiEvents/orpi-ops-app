@@ -6,7 +6,7 @@
 // quote state, so what the client signs is exactly what the builder showed.
 // Pure presentation — all the numbers come in as props or from quoteModel.
 
-import { buildInclusions, pkgShows, fmtDatePretty, fmtDateLong, gbp } from '@/lib/quoteModel';
+import { buildInclusions, pkgShows, fmtDatePretty, fmtDateLong, gbp, addonName } from '@/lib/quoteModel';
 
 // The "(client supplied)" tag shown next to a client-provided item on the quote.
 function clientMark(item) {
@@ -159,7 +159,7 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
                 <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '2px 0' }}>
                   <span style={{ color: 'var(--gold)', fontSize: 11, lineHeight: 1.45, flexShrink: 0 }}>✓</span>
                   <span style={{ fontSize: 11.5, color: '#333', lineHeight: 1.45 }}>
-                    <span style={{ fontWeight: 500 }}>{a.label}</span>
+                    <span style={{ fontWeight: 500 }}>{addonName(a)}</span>
                     {a.desc ? <span style={{ color: '#8a8880' }}> — {a.desc}</span> : null}
                   </span>
                 </div>
@@ -236,7 +236,10 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
         )}
       </div>
 
-      {/* ── Pricing block (light, legible, with bank details) ── */}
+      {/* ── Pricing block ──
+          No bank details and no terms on the quote itself: the client gets both
+          on their booking link (/i/[token]), where the payment details only show
+          once they've read and accepted the full T&Cs. */}
       <div className="print-avoid-break" style={{ background: '#faf9f6', color: '#1c1b18', padding: '26px 44px', borderTop: '1px solid #e8e6e0' }}>
         {parseFloat(s.disc) > 0 && (
           <>
@@ -266,25 +269,6 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
             </div>
           </>
         )}
-
-        {/* ── Bank details, right beside the amount that needs paying ── */}
-        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #d9d5c8', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Payee</div>
-            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500 }}>ORPI Events LTD</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Sort code</div>
-            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500, letterSpacing: '.06em' }}>04-06-05</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: '.22em', textTransform: 'uppercase', color: '#8a8880', marginBottom: 4 }}>Account no.</div>
-            <div style={{ fontSize: 12, color: '#0a0a0a', fontWeight: 500, letterSpacing: '.06em' }}>27534338</div>
-          </div>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 10.5, color: '#8a8880', fontStyle: 'italic' }}>
-          Reference &nbsp;·&nbsp; {s.client || 'Your surname'} &nbsp;+&nbsp; {s.edate ? fmtDatePretty(s.edate) : 'event date'}
-        </div>
       </div>
 
       {/* ── Enhancements you might like (unselected add-ons) ── */}
@@ -310,24 +294,6 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
           </div>
         );
       })()}
-
-      {/* ── Key terms ── */}
-      <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff' }}>
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 500, marginBottom: 10, letterSpacing: '.02em', fontStyle: 'italic' }}>Key terms &amp; conditions</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px', fontSize: 10.5, color: '#333', lineHeight: 1.55 }}>
-          <div><strong>Booking confirmation</strong> — 50% deposit secures your date; until received, the date remains open.</div>
-          <div><strong>Balance</strong> — remaining 50% due no later than 14 days before the event.</div>
-          <div><strong>Quote validity</strong> — this quote is valid for 14 days; pricing may change after.</div>
-          <div><strong>Guest numbers</strong> — final count required 7 days before; increases charged at agreed rate.</div>
-          <div><strong>Cancellation</strong> — {'>'}60 days: deposit retained · within 60: 50% · within 14: 100%.</div>
-          <div><strong>Substitutions</strong> — if a spirit brand is unavailable, we substitute for equal/higher quality.</div>
-          <div><strong>Access &amp; power</strong> — client provides venue access, parking &amp; power supply.</div>
-          <div><strong>Responsible service</strong> — our team serves in line with UK licensing law; we may refuse service.</div>
-        </div>
-        <div style={{ marginTop: 10, fontSize: 10, color: 'var(--muted)', fontStyle: 'italic' }}>
-          Full terms &amp; conditions will be provided on booking confirmation. Paying the deposit confirms your acceptance.
-        </div>
-      </div>
 
       {/* ── Footer ── */}
       <div style={{ padding: '16px 44px', background: '#faf9f6', borderTop: '1px solid #e8e6e0', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: '#8a8880', textAlign: 'center' }}>

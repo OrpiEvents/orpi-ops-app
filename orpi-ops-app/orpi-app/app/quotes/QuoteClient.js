@@ -10,6 +10,7 @@ import {
   DRINKWARE, COST_CHECKS, PPH, PKG_SHOWS, pkgShows, WELCOME_MATCH, defaultCrew, crewFor,
   alcoholParts, alcoholLine, alcoholPerHead, welcomeParts, welcomePerHead, tastingState,
   computeCosts, unresolvedChecks, buildInclusions, fmtDate, fmtDatePretty, fmtDateLong, gbp,
+  addonQty, addonName, addonsTotal,
 } from '@/lib/quoteModel';
 
 let idCounter = 0;
@@ -231,7 +232,7 @@ function buildClientMessage(s, total) {
   // Priced extras are named but never itemised — same rule as the PDF.
   const extras = s.addons
     .filter(a => a.on && parseFloat(a.price) > 0 && !(barAddon && a.id === barAddon.id))
-    .map(a => a.label);
+    .map(a => addonName(a));
   if (extras.length) L.push(`\u{1F38A} Plus ${joinList(extras)}`);
 
   if (c.tasting === 'included') L.push('\u{1F37E} Pre-event drinks tasting included');
@@ -467,7 +468,7 @@ export default function QuoteClient({ userEmail }) {
     });
   }
 
-  const addonTotal = s.addons.filter(a => a.on && parseFloat(a.price) > 0).reduce((sum, a) => sum + parseFloat(a.price), 0);
+  const addonTotal = addonsTotal(s.addons);
   const base = parseFloat(s.base) || 0;
   const disc = parseFloat(s.disc) || 0;
   const total = Math.max(0, base + addonTotal - disc);
@@ -1657,7 +1658,7 @@ function NewStockNote({ names, stock }) {
 function AddonEditor({ addons, onChange }) {
   function update(id, patch) { onChange(addons.map(a => a.id === id ? { ...a, ...patch } : a)); }
   function remove(id) { onChange(addons.filter(a => a.id !== id)); }
-  function add() { onChange([...addons, { id: uid(), label: 'Custom add-on', desc: '', price: '', on: true }]); }
+  function add() { onChange([...addons, { id: uid(), label: 'Custom add-on', desc: '', price: '', qty: 1, on: true }]); }
   return (
     <div>
       {addons.map(a => (
@@ -1667,7 +1668,12 @@ function AddonEditor({ addons, onChange }) {
             <div style={{ fontSize: 12, fontWeight: 500 }}>{a.label}</div>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.desc}</div>
           </div>
-          <input style={{ ...miniInput, width: 70, textAlign: 'right' }} value={a.price} onChange={e => update(a.id, { price: e.target.value })} placeholder="£" />
+          {/* How many: 2 rounds of shots, 3 extra staff. The quote reads "2× …" and the price is per one. */}
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>×</span>
+          <input type="number" min="1" step="1" inputMode="numeric" aria-label={`How many: ${a.label}`} title="How many"
+            style={{ ...miniInput, width: 46, textAlign: 'right' }} value={addonQty(a)}
+            onChange={e => update(a.id, { qty: Math.max(1, parseInt(e.target.value, 10) || 1) })} />
+          <input style={{ ...miniInput, width: 70, textAlign: 'right' }} value={a.price} onChange={e => update(a.id, { price: e.target.value })} placeholder="£ each" title="Price for one" />
           <button onClick={() => remove(a.id)} style={rmBtn}>✕</button>
         </div>
       ))}

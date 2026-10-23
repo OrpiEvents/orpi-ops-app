@@ -50,17 +50,38 @@ function formulaNum(prop) { return prop?.formula?.number ?? null; }
 // ---- Sales Pipeline (Enquiries) -------------------------------------------
 export async function listEnquiries() {
   const dbId = process.env.NOTION_DB_SALES;
-  const data = await notionFetch(`/databases/${dbId}/query`, {
-    method: 'POST',
-    body: JSON.stringify({ sorts: [{ timestamp: 'created_time', direction: 'descending' }] }),
-  });
-  return data.results.map(pageToEnquiry);
+  // Paged: a single query stops at 100 rows, which would silently drop the
+  // oldest enquiries from every KPI once the pipeline passes 100.
+  const results = [];
+  let cursor;
+  do {
+    const data = await notionFetch(`/databases/${dbId}/query`, {
+      method: 'POST',
+      body: JSON.stringify({
+        page_size: 100,
+        sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+        ...(cursor ? { start_cursor: cursor } : {}),
+      }),
+    });
+    results.push(...data.results.map(pageToEnquiry));
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+  return results;
 }
 
 function pageToEnquiry(page) {
   const p = page.properties;
   return {
     id: page.id,
+    url: page.url,
+    createdAt: page.created_time,
+    channel: sel(p['Enquiry Channel']),
+    campaign: text(p['Campaign']),
+    adPost: text(p['Ad / Post']),
+    marketing: sel(p['Marketing']),
+    leadTimeMonths: formulaNum(p['Lead Time (months)']),
+    planningStage: p['Planning Stage']?.formula?.string || '',
+    acknowledgedAt: dateStart(p['Acknowledged At']),
     name: text(p['Name']),
     email: text(p['Email']),
     phone: p['Phone Number']?.number ?? '',
@@ -173,6 +194,7 @@ function enquiryToProperties(d) {
   // enquiry with no event type yet is normal, so this can't be an error.
   if (d.eventType !== undefined) props['Event Type'] = d.eventType ? { select: { name: d.eventType } } : { select: null };
   if (d.serviceType !== undefined) props['Service Type'] = d.serviceType ? { multi_select: [{ name: d.serviceType }] } : { multi_select: [] };
+  if (d.serviceTypes !== undefined) props['Service Type'] = { multi_select: (d.serviceTypes || []).filter(Boolean).map(name => ({ name })) };
   if (d.source !== undefined) props['Source'] = d.source ? { select: { name: d.source } } : { select: null };
   if (d.lostReason !== undefined) props['Lost Reason'] = d.lostReason ? { select: { name: d.lostReason } } : { select: null };
   if (d.dateQuoted !== undefined) props['Date Quoted'] = d.dateQuoted ? { date: { start: d.dateQuoted } } : { date: null };
@@ -186,7 +208,94 @@ function enquiryToProperties(d) {
   if (d.quotedSpirits !== undefined) props['Quoted Spirits'] = { rich_text: [{ text: { content: d.quotedSpirits || '' } }] };
   if (d.quotedBeer !== undefined) props['Quoted Beer'] = { rich_text: [{ text: { content: d.quotedBeer || '' } }] };
   if (d.quotedSoftDrinks !== undefined) props['Quoted Soft Drinks'] = { rich_text: [{ text: { content: d.quotedSoftDrinks || '' } }] };
+  // Growth / attribution fields (written by the tracked enquiry form and the
+  // Meta lead-ads webhook).
+  if (d.channel !== undefined) props['Enquiry Channel'] = d.channel ? { select: { name: d.channel } } : { select: null };
+  if (d.campaign !== undefined) props['Campaign'] = { rich_text: [{ text: { content: (d.campaign || '').slice(0, 200) } }] };
+  if (d.adPost !== undefined) props['Ad / Post'] = { rich_text: [{ text: { content: (d.adPost || '').slice(0, 200) } }] };
+  if (d.marketing !== undefined) props['Marketing'] = d.marketing ? { select: { name: d.marketing } } : { select: null };
+  if (d.acknowledgedAt) props['Acknowledged At'] = { date: { start: d.acknowledgedAt } };
   return props;
+}
+
+// ---- Content Calendar (Growth) --------------------------------------------
+// Lives under the "ORPI Growth Agent" page. Created with the newer Notion API,
+// so — like Fixed Costs — it's queried as a data source (2025-09-03). The
+// integration must be added to it (database ... -> Connections) to read it.
+const CONTENT_DS = () => process.env.NOTION_DS_CONTENT || '02b7b0de-3935-4851-a691-dcc17b5fcfcd';
+
+export async function listContentCalendar() {
+  const results = [];
+  let cursor;
+  do {
+    const data = await notionFetch(`/data_sources/${CONTENT_DS()}/query`, {
+      method: 'POST',
+      notionVersion: '2025-09-03',
+      body: JSON.stringify({
+        page_size: 100,
+        sorts: [{ property: 'Date', direction: 'ascending' }],
+        ...(cursor ? { start_cursor: cursor } : {}),
+      }),
+    });
+    results.push(...data.results.map(pageToContent));
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+  return results;
+}
+
+function pageToContent(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    url: page.url,
+    post: text(p['Post']),
+    date: dateStart(p['Date']),
+    format: sel(p['Format']),
+    stage: sel(p['Stage']),
+    pillar: sel(p['Pillar']),
+    hook: text(p['Hook']),
+    caption: text(p['Caption draft']),
+    cta: sel(p['CTA']),
+    footage: text(p['Footage']),
+    status: p['Status']?.status?.name || '',
+    boost: checkbox(p['Boost candidate']),
+    trackedLink: text(p['UTM link']),
+    postUrl: text(p['Post URL']),
+    views: num(p['Views']),
+    reach: num(p['Reach']),
+    saves: num(p['Saves']),
+    shares: num(p['Shares']),
+    profileVisits: num(p['Profile visits']),
+    linkClicks: num(p['Link clicks']),
+    enquiries: num(p['Enquiries']),
+    notes: text(p['Notes']),
+  };
+}
+
+// Only the fields the app writes back: the tracked link, and the numbers the
+// daily sync fills in from Instagram and the link/enquiry tracking.
+export async function updateContentItem(id, d) {
+  const props = {};
+  if (d.trackedLink !== undefined) props['UTM link'] = { url: d.trackedLink || null };
+  for (const [key, prop] of [['views', 'Views'], ['reach', 'Reach'], ['saves', 'Saves'], ['shares', 'Shares'],
+    ['profileVisits', 'Profile visits'], ['linkClicks', 'Link clicks'], ['enquiries', 'Enquiries']]) {
+    if (d[key] !== undefined && d[key] !== null) props[prop] = { number: Number(d[key]) };
+  }
+  if (!Object.keys(props).length) return null;
+  return notionFetch(`/pages/${id}`, {
+    method: 'PATCH',
+    notionVersion: '2025-09-03',
+    body: JSON.stringify({ properties: props }),
+  });
+}
+
+// Adds a dated line to an enquiry's Internal Notes (newest last). Notion caps a
+// text block at 2000 characters, so the oldest lines give way first.
+export async function appendEnquiryNote(id, line) {
+  const current = pageToEnquiry(await notionFetch(`/pages/${id}`));
+  let notes = [current.internalNotes, line].filter(Boolean).join('\n');
+  if (notes.length > 1990) notes = `…${notes.slice(notes.length - 1980)}`;
+  return updateEnquiry(id, { internalNotes: notes });
 }
 
 // Matches a recipe ingredient line (e.g. "50ml Absolut Vodka") against the

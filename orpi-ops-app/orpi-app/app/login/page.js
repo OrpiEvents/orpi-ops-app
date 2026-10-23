@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabaseBrowser';
 
@@ -8,7 +8,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [noAccess, setNoAccess] = useState(false);
   const router = useRouter();
+
+  // Read ?e=noaccess without useSearchParams (which would need a Suspense
+  // boundary for this static page).
+  useEffect(() => {
+    setNoAccess(new URLSearchParams(window.location.search).get('e') === 'noaccess');
+  }, []);
+
+  async function signOut() {
+    await createClient().auth.signOut();
+    setNoAccess(false);
+    window.history.replaceState(null, '', '/login');
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -23,7 +36,9 @@ export default function LoginPage() {
         : error.message);
       return;
     }
-    router.push('/dashboard');
+    // "/" sends each role to its own home (directors → Dashboard,
+    // marketing → Growth).
+    router.push('/');
     router.refresh();
   }
 
@@ -42,6 +57,18 @@ export default function LoginPage() {
             Events — Internal Ops
           </div>
         </div>
+        {noAccess && (
+          <div style={{
+            background: '#2a1614', color: '#e0897d', padding: '12px 14px', borderRadius: 8,
+            fontSize: 12.5, marginBottom: 16, lineHeight: 1.5,
+          }}>
+            This login doesn’t have access to the ops app. Ask Ruds to set your role on the Team page.
+            <button onClick={signOut} style={{
+              display: 'block', marginTop: 10, background: 'none', border: '1px solid #553', color: '#e0b9ad',
+              fontSize: 12, padding: '5px 10px', borderRadius: 6,
+            }}>Sign out</button>
+          </div>
+        )}
         <form onSubmit={handleSubmit} style={{
           background: '#111', border: '1px solid #222', borderRadius: 12, padding: 28,
         }}>
@@ -84,7 +111,7 @@ export default function LoginPage() {
           </button>
         </form>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#444', marginTop: 16 }}>
-          Accounts are created by an admin in Supabase — contact Ruds if you need one.
+          New here, or forgotten your password? Ask Ruds to send you a link from the Team page.
         </div>
       </div>
     </div>

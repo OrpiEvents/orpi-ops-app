@@ -135,8 +135,12 @@ async function sendEmail(to, subject, body) {
 
 export async function GET(request) {
   // Vercel cron sends this header; without the check anyone could trigger a
-  // send by hitting the URL.
-  if (CRON_SECRET && request.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
+  // send by hitting the URL. Scheduled routes skip the login check (Vercel
+  // Cron has no session), so with no secret set the job refuses to run at all.
+  if (!CRON_SECRET) {
+    return Response.json({ error: 'CRON_SECRET is not set, so this job is switched off.' }, { status: 503 });
+  }
+  if (request.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
     return Response.json({ error: 'Unauthorised' }, { status: 401 });
   }
   if (!NOTION_TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });

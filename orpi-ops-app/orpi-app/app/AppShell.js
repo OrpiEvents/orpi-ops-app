@@ -3,18 +3,45 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabaseBrowser';
 
-const NAV = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/enquiries', label: 'Enquiries' },
-  { href: '/quotes', label: 'Quote builder' },
-  { href: '/bookings', label: 'Confirmed bookings' },
-  { href: '/runsheet', label: 'Event run sheet' },
-  { href: '/stock', label: 'Stock tracker' },
-  { href: '/stocktake', label: 'Stock take' },
-  { href: '/purchases', label: 'Purchases' },
-  { href: '/costing', label: 'Drinks costing' },
-  { href: '/overheads', label: 'Overheads' },
-  { href: '/activity', label: 'Activity log' },
+// Sections by role. Directors see everything; a marketing login (Reeya) sees
+// only the Growth workspace, minus the client-by-client re-engagement queue.
+// The middleware enforces the same split; this just keeps the menu honest.
+const SECTIONS = [
+  {
+    title: null,
+    roles: ['director'],
+    items: [
+      { href: '/dashboard', label: 'Dashboard' },
+      { href: '/enquiries', label: 'Enquiries' },
+      { href: '/quotes', label: 'Quote builder' },
+      { href: '/bookings', label: 'Confirmed bookings' },
+      { href: '/runsheet', label: 'Event run sheet' },
+      { href: '/stock', label: 'Stock tracker' },
+      { href: '/stocktake', label: 'Stock take' },
+      { href: '/purchases', label: 'Purchases' },
+      { href: '/costing', label: 'Drinks costing' },
+      { href: '/overheads', label: 'Overheads' },
+      { href: '/activity', label: 'Activity log' },
+    ],
+  },
+  {
+    title: 'Growth',
+    roles: ['director', 'marketing'],
+    items: [
+      { href: '/growth', label: 'Overview' },
+      { href: '/growth/brief', label: 'Weekly brief' },
+      { href: '/growth/content', label: 'Content plan' },
+      { href: '/growth/links', label: 'Tracked links' },
+      { href: '/growth/ads', label: 'Ads' },
+      { href: '/growth/reengage', label: 'Re-engage', roles: ['director'] },
+      { href: '/growth/setup', label: 'Connections' },
+    ],
+  },
+  {
+    title: 'Admin',
+    roles: ['director'],
+    items: [{ href: '/team', label: 'Team' }],
+  },
 ];
 
 // The run sheet gets used on a phone, in a van, at a venue. A 230px fixed
@@ -22,7 +49,9 @@ const NAV = [
 // sidebar becomes a top bar with a drawer. Desktop is unchanged.
 const MOBILE_AT = 900;
 
-export default function AppShell({ active, userEmail, children, bleed = false }) {
+// Pages outside Growth are director-only (the middleware sees to that), so a
+// page that doesn't pass a role is being viewed by a director.
+export default function AppShell({ active, userEmail, role = 'director', children, bleed = false }) {
   const router = useRouter();
   const [mobile, setMobile] = useState(false);
   const [drawer, setDrawer] = useState(false);
@@ -54,14 +83,26 @@ export default function AppShell({ active, userEmail, children, bleed = false })
     </>
   );
 
-  const navLinks = (big = false) => NAV.map(item => (
-    <a key={item.href} href={item.href} style={{
-      display: 'block', padding: big ? '13px 22px' : '9px 20px', fontSize: big ? 15 : 13, textDecoration: 'none',
-      color: active === item.href ? '#fff' : '#777',
-      borderLeft: active === item.href ? '2px solid var(--gold)' : '2px solid transparent',
-      background: active === item.href ? '#0f0f0f' : 'transparent',
-    }}>{item.label}</a>
-  ));
+  const navLinks = (big = false) => SECTIONS
+    .filter(s => s.roles.includes(role))
+    .map((section, i) => (
+      <div key={section.title || i} style={{ marginTop: section.title ? (big ? 14 : 12) : 0 }}>
+        {section.title && (
+          <div style={{
+            padding: big ? '8px 22px 6px' : '6px 20px 4px', fontSize: 10, letterSpacing: '.14em',
+            textTransform: 'uppercase', color: '#4d4d4d',
+          }}>{section.title}</div>
+        )}
+        {section.items.filter(item => !item.roles || item.roles.includes(role)).map(item => (
+          <a key={item.href} href={item.href} style={{
+            display: 'block', padding: big ? '13px 22px' : '8px 20px', fontSize: big ? 15 : 13, textDecoration: 'none',
+            color: active === item.href ? '#fff' : '#777',
+            borderLeft: active === item.href ? '2px solid var(--gold)' : '2px solid transparent',
+            background: active === item.href ? '#0f0f0f' : 'transparent',
+          }}>{item.label}</a>
+        ))}
+      </div>
+    ));
 
   const signOutBtn = (
     <button onClick={signOut} style={{

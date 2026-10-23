@@ -46,7 +46,11 @@ export async function middleware(request) {
     pathname.startsWith('/api/public/') ||
     pathname.startsWith('/api/cron/') ||
     pathname === '/api/meta/webhook';
-  const isPublic = isLoginPage || isPublicInvoice || isPublicGrowth;
+  // The team calendar feed: calendar apps fetch it with no login, so the token
+  // in the URL is the capability (checked in the route). /api/calendar itself,
+  // which hands out the link, stays directors-only.
+  const isPublicCalendar = /^\/api\/calendar\/[^/]+\.ics$/.test(pathname);
+  const isPublic = isLoginPage || isPublicInvoice || isPublicGrowth || isPublicCalendar;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

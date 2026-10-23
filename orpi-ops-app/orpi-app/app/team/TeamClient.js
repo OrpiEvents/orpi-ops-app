@@ -99,6 +99,70 @@ function Body({ d, myId, reload }) {
         rows={d.team.map(u => ({ ...u, key: u.id }))}
       />
       <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>Links work once and expire after about an hour. “Remove access” keeps the account but blocks it; you can restore it later.</p>
+
+      <CalendarFeed />
+    </>
+  );
+}
+
+// The team calendar: one subscription link for Apple Calendar (or Google or
+// Outlook). Holds for dated enquiries, bookings as booked, refreshed from
+// Notion about every hour.
+function CalendarFeed() {
+  const { data, error, loading, reload } = useJson('/api/calendar');
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  async function reset() {
+    if (!confirm('Make a new calendar link? Calendars subscribed with the current link stop updating, so everyone will need to subscribe again with the new one.')) return;
+    setBusy(true); setMsg(null);
+    const res = await fetch('/api/calendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset' }) });
+    const j = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok || j.error) { setMsg({ tone: 'warn', text: j.error || 'Couldn’t make a new link.' }); return; }
+    setMsg({ tone: 'good', text: 'New link made. The old one no longer works.' });
+    reload();
+  }
+
+  function copy() {
+    navigator.clipboard?.writeText(data.url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2200);
+  }
+
+  return (
+    <>
+      <SectionHead>Team calendar</SectionHead>
+      <Card>
+        <p style={{ fontSize: 13, margin: '0 0 6px' }}>
+          Every enquiry with a date shows as a <strong>hold</strong>, and every confirmed booking as <strong>booked</strong>, in one calendar the team subscribes to.
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 12px' }}>
+          It updates from Notion about every hour. When an enquiry is won its hold turns into the booking, and a lost enquiry drops off. Only names, dates, venues, guest numbers and the type of event are shown: no contact details or prices.
+        </p>
+        {loading && !data && <Loading what="the calendar link" />}
+        {error && <ErrorBox error={error} />}
+        {data && (
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              <a href={data.webcal} style={{ ...btn(true), textDecoration: 'none' }}>Subscribe on this device</a>
+              <button onClick={copy} style={btn()}>{copied ? '✓ Copied' : 'Copy link'}</button>
+            </div>
+            <div style={{ fontSize: 12, wordBreak: 'break-all', background: 'var(--off)', padding: '8px 10px', borderRadius: 6, marginBottom: 12 }}>{data.url}</div>
+            <ul style={{ fontSize: 12.5, margin: '0 0 12px', paddingLeft: 18, lineHeight: 1.6 }}>
+              <li><strong>iPhone or iPad:</strong> open this page on it, tap Subscribe on this device, then Subscribe.</li>
+              <li><strong>Mac:</strong> in Calendar choose File → New Calendar Subscription, paste the link, then set Location to iCloud and Auto-refresh to every hour. It then appears on your iPhone too.</li>
+              <li>Everyone in the team subscribes once with the same link.</li>
+            </ul>
+            <Note tone="action" text="Anyone with this link can see client names, dates and venues, so keep it inside the team. If it gets out, make a new link: the old one stops working straight away." />
+            <div style={{ marginTop: 10 }}>
+              <button disabled={busy} onClick={reset} style={{ ...btn(), fontSize: 12 }}>{busy ? 'Working…' : 'Make a new link'}</button>
+            </div>
+          </>
+        )}
+        {msg && <div style={{ marginTop: 10 }}><Note tone={msg.tone} text={msg.text} /></div>}
+      </Card>
     </>
   );
 }

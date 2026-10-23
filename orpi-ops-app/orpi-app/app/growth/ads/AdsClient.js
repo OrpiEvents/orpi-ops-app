@@ -78,7 +78,7 @@ function Live({ d, director }) {
         <Stat label="Link clicks" value={num(t.linkClicks)} sub={t.ctr !== null ? `${(t.ctr * 100).toFixed(2)}% of impressions` : ''} />
         <Stat label="Leads (Meta)" value={num(t.leads)} sub={t.costPerLead ? `${gbp(t.costPerLead)} each` : ''} />
         <Stat label="Enquiries in pipeline" value={num(d.last30.paidEnquiries)} sub="from paid links and lead forms" />
-        <Stat label="Affordable per enquiry" value={d.target ? gbp(d.target.value) : '—'} sub={director && d.target ? `${gbp(d.target.avgWon)} avg booking × ${Math.round(d.target.winRate * 100)}% won × ${Math.round(d.target.acquisitionShare * 100)}%` : 'ceiling for cost per enquiry'} />
+        {director && <Stat label="Affordable per enquiry" value={d.target ? gbp(d.target.value) : '—'} sub={d.target ? `${gbp(d.target.avgWon)} avg booking × ${Math.round(d.target.winRate * 100)}% won × ${Math.round(d.target.acquisitionShare * 100)}%` : 'ceiling for cost per enquiry'} />}
       </Grid>
 
       <SectionHead>Spend per day · 30 days</SectionHead>

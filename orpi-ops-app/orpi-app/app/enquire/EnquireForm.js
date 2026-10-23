@@ -190,7 +190,7 @@ export default function EnquireForm({ attribution, pixelId }) {
               ) : <div className="eq-spacer" />}
             </div>
 
-            <Field label="Anything else?"><textarea rows={4} value={f.notes} onChange={e => set('notes', e.target.value)} placeholder="Theme, drinks you love, how long you’d like the bar open, questions…" /></Field>
+            <Field label="Anything else?"><textarea rows={4} maxLength={1500} value={f.notes} onChange={e => set('notes', e.target.value)} placeholder="Theme, drinks you love, how long you’d like the bar open, questions…" /></Field>
 
             <label className="eq-check">
               <input type="checkbox" checked={f.optOut} onChange={e => set('optOut', e.target.checked)} />

@@ -1,3 +1,4 @@
+import { authorize } from '@/lib/apiAuth';
 // app/api/inventory/draft/route.js
 //
 // Creates placeholder Inventory Items for products typed into a quote that
@@ -56,6 +57,8 @@ async function existingNames() {
 }
 
 export async function POST(request) {
+  const { deny } = await authorize(['director']);
+  if (deny) return deny;
   if (!TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });
 
   try {

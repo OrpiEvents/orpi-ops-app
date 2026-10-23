@@ -1,3 +1,4 @@
+import { roleOf } from '@/lib/roles';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabaseServer';
 
@@ -5,6 +6,7 @@ export async function GET() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+  if (roleOf(user) !== 'director') return NextResponse.json({ error: 'Your login doesn’t have access to this.' }, { status: 403 });
 
   const { data, error } = await supabase
     .from('activity_log')

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { webhookVerifyToken, validSignature, fetchLead, leadToEnquiry, hasMeta } from '@/lib/meta';
-import { createEnquiry } from '@/lib/notion';
-import { recordLead, findLeadByMetaId, logSync } from '@/lib/growthStore';
+import { createEnquiry, updateEnquiry } from '@/lib/notion';
+import { recordLead, findLeadByMetaId, logSync, getSettings } from '@/lib/growthStore';
 import { sendEmail, canEmail, ALERT_TO } from '@/lib/mailer';
-import { alertEmail } from '@/lib/enquiryEmails';
+import { alertEmail, acknowledgementEmail } from '@/lib/enquiryEmails';
 import { addDays, todayIso, monthsBetween, stageForMonths } from '@/lib/growth';
 import { logActivity } from '@/lib/activityLog';
 
@@ -66,13 +66,24 @@ export async function POST(request) {
           event_date: f.eventDate || null, event_type: eventType, guest_count: f.guestCount || null,
           months_ahead: months !== null ? Math.round(months * 10) / 10 : null, consent_ads: false, capi_status: 'lead ad',
         });
+        // Same switch as the enquiry page: acknowledge automatically only if a
+        // director has turned it on.
+        let acknowledged = false;
+        const settings = await getSettings().catch(() => ({}));
+        if (settings.autoAcknowledge && canEmail() && f.email) {
+          try {
+            await sendEmail({ to: f.email, ...acknowledgementEmail({ name: f.name, eventType, eventDate: f.eventDate, guests: f.guestCount }) });
+            acknowledged = true;
+            await updateEnquiry(enquiry.id, { acknowledgedAt: today }).catch(() => {});
+          } catch { /* the alert below still goes */ }
+        }
         if (canEmail()) {
           await sendEmail({
             to: ALERT_TO(),
             ...alertEmail({
               name: f.name, eventType, eventDate: f.eventDate, venue: f.venue, guests: f.guestCount, email: f.email, phone: f.phone,
               channel: 'Meta lead form', source, campaign: lead.campaign_name, adPost: lead.ad_name,
-              stage: stageForMonths(months)?.label, acknowledged: false, url: enquiry.url,
+              stage: stageForMonths(months)?.label, acknowledged, url: enquiry.url,
             }),
           }).catch(() => {});
         }

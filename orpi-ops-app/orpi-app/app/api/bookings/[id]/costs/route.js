@@ -1,3 +1,4 @@
+import { roleOf } from '@/lib/roles';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabaseServer';
 import { listBookingCosts, createBookingCost } from '@/lib/notion';
@@ -7,6 +8,7 @@ export async function GET(request, { params }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+  if (roleOf(user) !== 'director') return NextResponse.json({ error: 'Your login doesn’t have access to this.' }, { status: 403 });
 
   try {
     const costs = await listBookingCosts(params.id);
@@ -20,6 +22,7 @@ export async function POST(request, { params }) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+  if (roleOf(user) !== 'director') return NextResponse.json({ error: 'Your login doesn’t have access to this.' }, { status: 403 });
 
   const body = await request.json();
   if (!body?.name) return NextResponse.json({ error: 'Cost description is required' }, { status: 400 });

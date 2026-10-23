@@ -1,3 +1,4 @@
+import { authorize } from '@/lib/apiAuth';
 // app/api/runsheet/close/route.js
 //
 // Closing the loop. The run sheet knows what went out and what came back;
@@ -86,6 +87,8 @@ async function getBooking(id) {
 }
 
 export async function POST(request) {
+  const { deny } = await authorize(['director']);
+  if (deny) return deny;
   if (!TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });
 
   try {

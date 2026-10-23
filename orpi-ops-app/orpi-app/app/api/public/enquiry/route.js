@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createEnquiry, updateEnquiry } from '@/lib/notion';
-import { recordLead, recordEvent, getSettings, getMetaConfig } from '@/lib/growthStore';
+import { recordLead, recordEvent, getSettings, getMetaConfig, recentSubmissions } from '@/lib/growthStore';
 import { sendLeadEvent, hasMeta } from '@/lib/meta';
 import { sendEmail, canEmail, ALERT_TO } from '@/lib/mailer';
 import { acknowledgementEmail, alertEmail } from '@/lib/enquiryEmails';
@@ -26,6 +26,11 @@ function tooMany(ip) {
 }
 const clip = (s, n) => String(s ?? '').trim().slice(0, n);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Keyed hashes, so limits work across server instances without storing a
+// readable IP or email.
+const HASH_KEY = () => process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'orpi';
+const keyed = (kind, v) => crypto.createHmac('sha256', HASH_KEY()).update(`${kind}:${v}`).digest('hex').slice(0, 32);
+const MAX_PER_HOUR = 5;
 
 export async function OPTIONS(request) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(request) });
@@ -51,6 +56,17 @@ export async function POST(request) {
   if (!EMAIL_RE.test(email)) return reply({ error: 'Please check your email address.' }, 400);
   if (phone.length < 7 || phone.length > 15) return reply({ error: 'Please check your phone number.' }, 400);
 
+  // Limits that hold across server instances: 5 forms an hour per
+  // connection; the same address twice within 10 minutes is a double-submit
+  // (thanked, not saved twice).
+  const ipHash = ip ? keyed('ip', ip) : null;
+  const emailHash = keyed('email', email);
+  const recentSubs = await recentSubmissions({ ipHash, emailHash }).catch(() => ({ ipLastHour: 0, emailRecent: [] }));
+  if (recentSubs.ipLastHour >= MAX_PER_HOUR) return reply({ error: 'Too many enquiries from this connection. Please email hello@orpi.events.' }, 429);
+  if (recentSubs.emailRecent.some(t => Date.now() - new Date(t).getTime() < 10 * 60 * 1000)) {
+    return reply({ ok: true, first: name.split(' ')[0] });
+  }
+
   const today = todayIso();
   const exactDate = /^\d{4}-\d{2}-\d{2}$/.test(b.eventDate || '') ? b.eventDate : '';
   const approxMonth = !exactDate && /^\d{4}-\d{2}$/.test(b.approxMonth || '') ? b.approxMonth : '';
@@ -66,7 +82,9 @@ export async function POST(request) {
   const heard = HEARD_OPTIONS.some(o => o.value === b.heard) ? b.heard : 'other';
   const source = heardToSource(heard);
   const referredBy = clip(b.referredBy, 120);
-  const notes = clip(b.notes, 2000);
+  // Notion caps a text block at 2,000 characters; leave room for the lines
+  // added around the client's notes.
+  const notes = clip(b.notes, 1500);
   const optedOut = !!b.marketingOptOut;
   const consentAds = !!b.consentAds;
   const channel = b.channel === 'website' ? 'Website form' : 'Enquiry page';
@@ -87,7 +105,7 @@ export async function POST(request) {
     approxMonth ? `Date not fixed yet: roughly ${new Date(`${approxMonth}-15T12:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}.` : null,
     notes ? `They said: ${notes}` : null,
     tooFast ? '⚠ Filled in unusually fast. Check it isn’t spam.' : null,
-  ].filter(Boolean).join('\n');
+  ].filter(Boolean).join('\n').slice(0, 1990);
 
   const fields = {
     name, email, phone, venue, eventType, serviceTypes: services, source,
@@ -165,16 +183,18 @@ export async function POST(request) {
     guest_count: guests,
     months_ahead: months !== null ? Math.round(months * 10) / 10 : null,
     capi_status: capiStatus,
+    email_hash: emailHash,
   }).catch(() => {});
-  await recordEvent({ kind: 'form_submit', page: channel, link_slug: linkSlug || null, utm_source: utm.source || null, utm_medium: utm.medium || null, utm_campaign: utm.campaign || null, utm_content: utm.content || null });
+  await recordEvent({ kind: 'form_submit', page: channel, link_slug: linkSlug || null, utm_source: utm.source || null, utm_medium: utm.medium || null, utm_campaign: utm.campaign || null, utm_content: utm.content || null, ip_hash: ipHash });
 
   // The client acknowledgement is off until a director switches it on
-  // (Connections page). The inbox alert always goes.
+  // (Connections page), and goes at most once a month to any one address.
+  // The inbox alert always goes.
   const settings = await getSettings().catch(() => ({}));
   let acknowledged = false;
-  if (settings.autoAcknowledge && canEmail()) {
+  if (settings.autoAcknowledge && canEmail() && !recentSubs.emailRecent.length) {
     try {
-      await sendEmail({ to: email, ...acknowledgementEmail({ name, eventType, eventDate: exactDate, venue, guests }) });
+      await sendEmail({ to: email, ...acknowledgementEmail({ name, eventType, eventDate: exactDate, guests }) });
       acknowledged = true;
       await updateEnquiry(enquiry.id, { acknowledgedAt: today }).catch(() => {});
     } catch { /* the alert below still goes */ }

@@ -1,3 +1,5 @@
+import { acknowledgementEmail } from '@/lib/enquiryEmails';
+import { getSettings } from '@/lib/growthStore';
 // app/api/cron/enquiries/route.js
 //
 // Replaces the Make.com scenario. Runs on a schedule, finds enquiries that came
@@ -145,6 +147,12 @@ export async function GET(request) {
   }
   if (!NOTION_TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });
 
+  // Client acknowledgements follow the one switch on Growth → Connections
+  // ("Email new enquiries an acknowledgement automatically"), so turning it
+  // off stops them from every channel. The internal alert still goes.
+  let autoAcknowledge = false;
+  try { autoAcknowledge = !!(await getSettings()).autoAcknowledge; } catch { /* stay off */ }
+
   const sent = [];
   const tidied = [];
   const failed = [];
@@ -169,20 +177,19 @@ export async function GET(request) {
       if (!dateOf(p['Follow Up Date'])) patch['Follow Up Date'] = { date: { start: addDays(2) } };
       if (!p['Source']?.select?.name) patch['Source'] = { select: { name: 'Instagram' } };
 
-      if (email && RESEND_KEY) {
+      if (email && RESEND_KEY && autoAcknowledge) {
         try {
           const eventType = p['Event Type']?.select?.name || '';
-          await sendEmail(
-            email,
-            `Your ${(eventType || 'event').toLowerCase()} — we\u2019ve got your enquiry`,
-            buildEmail({
-              name,
-              eventType,
-              eventDate: dateOf(p['Event Date']),
-              venue: text(p['Venue']),
-              guests: p['Guest Count']?.number,
-            })
-          );
+          // Shared wording: repeats back only a cleaned first name, the date
+          // and guest numbers, never free text a stranger could have typed
+          // into the public form (e.g. a link in the venue field).
+          const ack = acknowledgementEmail({
+            name,
+            eventType,
+            eventDate: dateOf(p['Event Date']),
+            guests: p['Guest Count']?.number,
+          });
+          await sendEmail(email, ack.subject, ack.text);
           patch['Acknowledged At'] = { date: { start: new Date().toISOString().split('T')[0] } };
           sent.push(name);
         } catch (err) {

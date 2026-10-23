@@ -1,3 +1,4 @@
+import { authorize } from '@/lib/apiAuth';
 // app/api/purchases/route.js
 //
 // One entry, three places. Buying something has always meant three separate
@@ -72,6 +73,8 @@ const keyMatching = (props, type, re) =>
   Object.keys(props).find(k => props[k]?.type === type && re.test(k));
 
 export async function GET() {
+  const { deny } = await authorize(['director']);
+  if (deny) return deny;
   if (!TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });
 
   try {
@@ -113,6 +116,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const { deny } = await authorize(['director']);
+  if (deny) return deny;
   if (!TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });
 
   try {

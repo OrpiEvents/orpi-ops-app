@@ -8,6 +8,18 @@ import { corsHeaders } from '@/lib/cors';
 export const dynamic = 'force-dynamic';
 const clip = (s, n) => (s ? String(s).trim().slice(0, n) : null);
 
+// A per-instance cap so nobody can flood the counts table from one connection.
+const seen = new Map();
+function tooMany(ip) {
+  if (!ip) return false;
+  const now = Date.now();
+  const list = (seen.get(ip) || []).filter(t => now - t < 10 * 60 * 1000);
+  list.push(now);
+  seen.set(ip, list);
+  if (seen.size > 5000) seen.clear();
+  return list.length > 40;
+}
+
 export async function OPTIONS(request) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(request) });
 }
@@ -17,7 +29,8 @@ export async function POST(request) {
   let b = {};
   try { b = JSON.parse(await request.text()); } catch { /* ignore */ }
   const ua = request.headers.get('user-agent') || '';
-  if (['form_view', 'form_start'].includes(b.kind) && !isBot(ua)) {
+  const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim();
+  if (['form_view', 'form_start'].includes(b.kind) && !isBot(ua) && !tooMany(ip)) {
     const a = b.attribution || {};
     await recordEvent({
       kind: b.kind,

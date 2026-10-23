@@ -84,5 +84,8 @@ export async function middleware(request) {
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // The image-extension skip above must never apply to the API: without
+    // this, /api/enquiries/<id>%23.png bypassed the login and role checks.
+    '/api/:path*',
   ],
 };

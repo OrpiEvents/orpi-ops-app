@@ -287,9 +287,13 @@ export function reengagementQueue({ enquiries, bookings = [], touches = [], toda
     let touch = null;
     let due = null;
 
-    if (e.status === 'New') {
-      const created = dayOf(e.createdAt);
-      if (created && daysBetween(today, created) >= 1 && open(e, 'r1')) { touch = TOUCHES[0]; due = addDays(created, 1); }
+    const created = dayOf(e.createdAt);
+    const age = created ? daysBetween(today, created) : null;
+    if (e.status === 'New' && age !== null && age <= 14) {
+      // A fresh enquiry waiting on a reply. After two weeks untouched it's
+      // treated as dormant (date clock below) rather than piling up as
+      // "300 days overdue".
+      if (age >= 1 && open(e, 'r1')) { touch = TOUCHES[0]; due = addDays(created, 1); }
     } else if (e.status === 'Quote Sent' && e.dateQuoted && daysBetween(today, e.dateQuoted) <= 21) {
       // The latest quote touch that's come due and not been done; an earlier
       // one that was missed is superseded rather than stacked.

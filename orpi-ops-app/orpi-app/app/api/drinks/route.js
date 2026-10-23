@@ -1,3 +1,4 @@
+import { authorize } from '@/lib/apiAuth';
 // app/api/drinks/route.js
 //
 // The drinks library, live from Notion. Joins three databases into the exact
@@ -170,6 +171,8 @@ async function build() {
 }
 
 export async function GET() {
+  const { deny } = await authorize(['director']);
+  if (deny) return deny;
   if (!TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });
 
   if (cache.data && Date.now() - cache.at < CACHE_MS) {

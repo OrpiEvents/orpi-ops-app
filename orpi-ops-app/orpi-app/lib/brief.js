@@ -97,11 +97,12 @@ export function buildBrief(input) {
       });
     }
   }
-  // Shoot list from booked events (no client names: date, type, venue only).
+  // Shoot list from booked events. No client names; the venue only for
+  // directors, because it's free text and can be a home address.
   const upcoming = bookings.filter(b => b.status === 'Confirmed Booking' && inRange(b.eventDate, today, addDays(today, 13)) && !b.marketingEvent)
     .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   for (const b of upcoming) {
-    contentItems.push({ tone: 'action', text: `Content to capture: ${b.eventType || 'event'} on ${prettyDate(b.eventDate, { today })}${b.venue ? ` at ${b.venue}` : ''}. Get the bar set-up, a signature serve being made, guests at the bar, and ask the couple for a review after.` });
+    contentItems.push({ tone: 'action', text: `Content to capture: ${b.eventType || 'event'} on ${prettyDate(b.eventDate, { today })}${director && b.venue ? ` at ${b.venue}` : ''}. Get the bar set-up, a signature serve being made, guests at the bar, and ask the couple for a review after.${director ? '' : ' Ruds has the venue and timings.'}` });
   }
   if (connected.instagram) {
     const ig = igSummary(igDaily, igMedia, wkFrom, today);

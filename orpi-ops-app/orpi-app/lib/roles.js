@@ -9,8 +9,12 @@
 //               and ads numbers. No costs, margins, quotes, invoices or client
 //               contact details.
 //
-// No role on the account: an @orpi.events address counts as a director so the
-// original login keeps working; anyone else gets nothing.
+// No role on the account: only the original director login(s), listed by exact
+// address, count as a director, so they keep working until their role is set
+// on the Team page. Anyone else without a role gets nothing. (Not the whole
+// @orpi.events domain: with self sign-up on, anyone could register one.)
+const LEGACY_DIRECTORS = () => (process.env.DIRECTOR_EMAILS || 'rudhra@orpi.events')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
 export const ROLES = {
   director: { label: 'Director', home: '/dashboard' },
@@ -21,7 +25,7 @@ export function roleOf(user) {
   if (!user) return 'none';
   const r = user.app_metadata?.role;
   if (r) return ROLES[r] ? r : 'none';      // 'disabled' or anything unknown → no access
-  return (user.email || '').toLowerCase().endsWith('@orpi.events') ? 'director' : 'none';
+  return LEGACY_DIRECTORS().includes((user.email || '').toLowerCase()) ? 'director' : 'none';
 }
 
 export const homeFor = role => ROLES[role]?.home || '/login';

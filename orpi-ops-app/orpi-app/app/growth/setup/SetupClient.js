@@ -226,7 +226,7 @@ function Settings({ d, saved }) {
       </Grid>
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16, fontSize: 13, lineHeight: 1.5 }}>
         <input type="checkbox" checked={f.autoAcknowledge} onChange={e => setF(p => ({ ...p, autoAcknowledge: e.target.checked }))} style={{ marginTop: 3 }} />
-        <span><strong style={{ fontWeight: 600 }}>Email new enquiries an acknowledgement automatically.</strong> Applies to the enquiry page (and the website form when it launches): a short “we’ve got your enquiry” email from hello@orpi.events, same wording as before. Off until you switch it on. The inbox alert to you always goes.</span>
+        <span><strong style={{ fontWeight: 600 }}>Email new enquiries an acknowledgement automatically.</strong> One switch for every channel: the enquiry page, the website form when it launches, Meta lead forms, and the Notion form (that one via the enquiry job, which needs Vercel Pro to run often). A short “we’ve got your enquiry” email from hello@orpi.events (the enquiry page sends at most one a month to any address, so it can’t be used to spam people). Off until you switch it on. The inbox alert to you always goes.</span>
       </label>
       <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
         <button onClick={save} style={btn(true)}>Save controls</button>

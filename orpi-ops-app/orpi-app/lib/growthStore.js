@@ -88,6 +88,24 @@ export async function recordEvent(row) {
   try { await db().from('growth_events').insert(row); } catch { /* counts only */ }
 }
 
+// ---- abuse limits for the public form ----------------------------------------------
+// Keyed hashes only (see the enquiry route): how many forms this connection has
+// sent in the last hour, and when this email address last enquired.
+export async function recentSubmissions({ ipHash, emailHash }) {
+  const c = db();
+  const hourAgo = new Date(Date.now() - 3600e3).toISOString();
+  const monthAgo = new Date(Date.now() - 30 * 86400e3).toISOString();
+  const [ip, email] = await Promise.all([
+    ipHash
+      ? c.from('growth_events').select('id', { count: 'exact', head: true }).eq('kind', 'form_submit').eq('ip_hash', ipHash).gte('at', hourAgo)
+      : Promise.resolve({ count: 0 }),
+    emailHash
+      ? c.from('growth_leads').select('created_at').eq('email_hash', emailHash).gte('created_at', monthAgo).order('created_at', { ascending: false }).limit(5)
+      : Promise.resolve({ data: [] }),
+  ]);
+  return { ipLastHour: ip.count || 0, emailRecent: (email.data || []).map(r => r.created_at) };
+}
+
 // ---- leads & touches ------------------------------------------------------------
 export async function recordLead(row) {
   const { error } = await db().from('growth_leads').insert(row);

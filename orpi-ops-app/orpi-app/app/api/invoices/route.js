@@ -1,3 +1,4 @@
+import { roleOf } from '@/lib/roles';
 // POST /api/invoices  — create a client signing link from an agreed quote.
 // Authed: only a signed-in ORPI user can mint a link. The snapshot is
 // sanitised inside createInvoice() before it is ever stored.
@@ -10,6 +11,7 @@ export async function POST(request) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+  if (roleOf(user) !== 'director') return NextResponse.json({ error: 'Your login doesn’t have access to this.' }, { status: 403 });
 
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }

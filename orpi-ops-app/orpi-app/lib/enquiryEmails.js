@@ -2,11 +2,19 @@
 // webhook. Same voice as the original acknowledgement in /api/cron/enquiries.
 import { prettyDate } from './growth';
 
-export function acknowledgementEmail({ name, eventType, eventDate, venue, guests }) {
-  const first = (name || '').trim().split(/\s+/)[0] || 'there';
+// The acknowledgement goes to whatever address was typed into a public form,
+// so it only repeats back things a stranger can't turn into a message: a
+// cleaned first name (letters only), the date and the guest count. No venue
+// or free text, which could otherwise carry a link to someone else's inbox.
+export const safeFirstName = name => {
+  const word = String(name || '').trim().split(/\s+/)[0] || '';
+  return word.replace(/[^\p{L}'’-]/gu, '').slice(0, 30) || 'there';
+};
+
+export function acknowledgementEmail({ name, eventType, eventDate, guests }) {
+  const first = safeFirstName(name);
   const detail = [
     eventDate && `📅 ${prettyDate(eventDate, { year: true })}`,
-    venue && `📍 ${venue}`,
     guests && `👥 ${guests} guests`,
   ].filter(Boolean);
   return {

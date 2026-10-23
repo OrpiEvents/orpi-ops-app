@@ -90,6 +90,7 @@ function pageToEnquiry(page) {
     guestCount: num(p['Guest Count']),
     eventType: sel(p['Event Type']),
     serviceType: multiSel(p['Service Type'])[0] || '',
+    serviceTypes: multiSel(p['Service Type']),
     source: sel(p['Source']),
     referredBy: text(p['Referred By']),
     status: sel(p['Status']),
@@ -193,8 +194,17 @@ function enquiryToProperties(d) {
   // Notion rejects { select: { name: '' } } — clearing a select needs null. An
   // enquiry with no event type yet is normal, so this can't be an error.
   if (d.eventType !== undefined) props['Event Type'] = d.eventType ? { select: { name: d.eventType } } : { select: null };
-  if (d.serviceType !== undefined) props['Service Type'] = d.serviceType ? { multi_select: [{ name: d.serviceType }] } : { multi_select: [] };
-  if (d.serviceTypes !== undefined) props['Service Type'] = { multi_select: (d.serviceTypes || []).filter(Boolean).map(name => ({ name })) };
+  // Service Type is multi-select. The edit form has a single dropdown and
+  // sends back the full list it read (serviceTypes) alongside its choice
+  // (serviceType): keep every service and put the chosen one first, so an
+  // edit never silently drops services. The enquiry form sends serviceTypes
+  // only; the "new enquiry" modal sends serviceType only.
+  if (d.serviceType !== undefined || d.serviceTypes !== undefined) {
+    const list = Array.isArray(d.serviceTypes) ? d.serviceTypes.filter(Boolean) : [];
+    const primary = d.serviceType || '';
+    const names = primary ? [primary, ...list.filter(s => s !== primary)] : list;
+    props['Service Type'] = { multi_select: names.map(name => ({ name })) };
+  }
   if (d.source !== undefined) props['Source'] = d.source ? { select: { name: d.source } } : { select: null };
   if (d.lostReason !== undefined) props['Lost Reason'] = d.lostReason ? { select: { name: d.lostReason } } : { select: null };
   if (d.dateQuoted !== undefined) props['Date Quoted'] = d.dateQuoted ? { date: { start: d.dateQuoted } } : { date: null };

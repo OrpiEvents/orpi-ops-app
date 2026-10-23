@@ -1,3 +1,4 @@
+import { authorize } from '@/lib/apiAuth';
 // app/api/stock/route.js
 //
 // The inventory list. Read by the stock take page, the quote builder's cost
@@ -51,6 +52,8 @@ const num = p => {
 };
 
 export async function GET() {
+  const { deny } = await authorize(['director']);
+  if (deny) return deny;
   if (!TOKEN) return Response.json({ error: 'NOTION_TOKEN not set' }, { status: 500 });
 
   try {

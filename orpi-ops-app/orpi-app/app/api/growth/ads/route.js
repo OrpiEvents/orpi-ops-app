@@ -31,7 +31,9 @@ export async function GET() {
       role, today, connected: d.connected,
       last30: strip(s30), last7: strip(s7), daily,
       budget: { monthly: d.settings.monthlyAdBudget ?? null, boostCeiling: d.settings.boostCeiling ?? null, monthSpend },
-      target: target ? (director ? target : { value: target.value }) : null,
+      // Directors only: with the win rate visible, the ceiling would reveal
+      // the average booking value.
+      target: director ? target : null,
       audiences: { warm: warmAudienceByStage(d.enquiries, today), dormant: dormantPool(d.enquiries, today).count },
       pixel: d.meta.pixelId ? { id: d.meta.pixelId, name: d.meta.pixelName || '' } : null,
     });

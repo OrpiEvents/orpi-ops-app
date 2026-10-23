@@ -6,6 +6,9 @@
 // generated inclusions and PKG_SHOWS. No React, no browser APIs, so it's safe
 // to import from a server component too.
 
+import { isSpirit } from './taxonomy';
+import { matchScore, SAME_AT } from './matching';
+
 // ── Cost model ───────────────────────────────────────────────
 // Per-head figures pulled from real Event Costing rows in Notion, weighted
 // across completed events (Jul 2025 – Aug 2026). Change them here, once.
@@ -105,6 +108,9 @@ export const PPH = {
   'Cocktail Experience': { glass: 24, plastic: 20 },
   'Welcome Drinks Only': { glass: 15, plastic: 12 },
   'Bar Only (client supplies alcohol)': { glass: 15, plastic: 12 },
+  // Guests pay per drink, so there's no per-head price: the client pays a
+  // setup fee, worked out from the pay bar projection.
+  'Pay Bar': { glass: 0, plastic: 0 },
   'Custom': { glass: 0, plastic: 0 },
 };
 
@@ -119,9 +125,188 @@ export const PKG_SHOWS = {
   'Cocktail Experience':                { alcohol: false, softs: true,  cocktails: true,  welcome: true },
   'Welcome Drinks Only':                { alcohol: false, softs: true,  cocktails: false, welcome: true },
   'Bar Only (client supplies alcohol)': { alcohol: false, softs: true,  cocktails: true,  welcome: true },
+  'Pay Bar':                            { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
   'Custom':                             { alcohol: true,  softs: true,  cocktails: true,  welcome: true },
 };
 export const pkgShows = pkg => PKG_SHOWS[pkg] || PKG_SHOWS['Custom'];
+
+// ── Pay bar ──────────────────────────────────────────────────
+// Charity and other events where guests buy their own drinks. The client pays
+// a setup fee, ORPI keeps the takings (less any share agreed with the client),
+// and the quote's job is to show whether the night pays.
+export const PAY_BAR = 'Pay Bar';
+export const isPayBar = s => !!s && s.pkg === PAY_BAR;
+
+// What the bar sells, as it prints on the price list. `share` is a first guess
+// at the mix of what gets bought, adjusted per event.
+export const PAY_DRINKS = [
+  { key: 'beer',     label: 'Beer or cider',     share: 20 },
+  { key: 'wine',     label: 'Glass of wine',     share: 10 },
+  { key: 'prosecco', label: 'Glass of prosecco', share: 10 },
+  { key: 'spirit',   label: 'Spirit & mixer',    share: 25 },
+  { key: 'cocktail', label: 'Cocktail',          share: 15 },
+  { key: 'mocktail', label: 'Mocktail',          share: 5 },
+  { key: 'soft',     label: 'Soft drink',        share: 10 },
+  { key: 'shot',     label: 'Shot',              share: 5 },
+];
+// What one serve pours.
+export const PAY_SERVE_ML = { wine: 175, prosecco: 125, mixer: 150, soft: 250, shot: 25 };
+
+// Starting assumptions, all editable per event: drinks a guest buys over the
+// night on a quiet, expected and busy evening; the card machine's cut; the
+// spirit measure; and the drinks margin "Suggest prices" aims for.
+export function freshPay() {
+  return {
+    drinks: PAY_DRINKS.map(d => ({ key: d.key, label: d.label, on: true, price: '', cost: '', share: d.share })),
+    quiet: 1.5, expected: 3, busy: 4.5,
+    cardPct: 1.75,
+    spiritMl: 25,
+    margin: 80,
+    shareMode: 'none',   // 'none' | 'pct' (of takings) | 'perDrink' (£ per drink sold)
+    shareValue: '',
+    payment: 'card',     // 'card' | 'card-cash'
+  };
+}
+export const payOf = s => ({ ...freshPay(), ...((s && s.pay) || {}) });
+
+// Our cost of one serve of each drink. Taken from the latest purchase prices
+// in stock for the drinks this quote lists, then from the rest of that kind of
+// stock, then from ORPI's costed serves. Each figure says where it came from,
+// so an estimate never passes for a real price.
+export function payDrinkCosts(s, stockItems = []) {
+  const stock = (stockItems || []).filter(i => Number(i.costPerMl) > 0);
+  const avg = arr => (arr.length ? arr.reduce((t, v) => t + v, 0) / arr.length : null);
+  const perMl = items => avg(items.map(i => Number(i.costPerMl)));
+  const label = items => items.slice(0, 3).map(i => i.brand || i.name).join(', ') + (items.length > 3 ? ` +${items.length - 3}` : '');
+  const onItems = re => (s.spiritRows || []).filter(r => r.on && re.test(r.cat))
+    .flatMap(r => r.items.filter(i => i.on && i.text.trim() && (i.by || 'orpi') !== 'client').map(i => i.text.trim()));
+  // The listed drinks found in this pool, else the whole pool.
+  const pick = (names, pool, kind) => {
+    const hits = [];
+    for (const n of names) {
+      let best = null, top = 0;
+      for (const it of pool) { const sc = matchScore(n, it.brand || it.name); if (sc > top) { top = sc; best = it; } }
+      if (best && top >= SAME_AT && !hits.includes(best)) hits.push(best);
+    }
+    if (hits.length) return { items: hits, from: `stock: ${label(hits)}` };
+    if (pool.length === 1) return { items: pool, from: `stock: ${label(pool)}` };
+    if (pool.length) return { items: pool, from: `average of ${pool.length} ${kind} in stock` };
+    return { items: [], from: null };
+  };
+  const byCat = (...cats) => stock.filter(i => cats.includes(i.category));
+  const out = {};
+
+  const spirits = pick(onItems(/^(?!.*(beer|lager|cider|\bwine\b|prosecco|champagne|sparkl|fizz)).*$/i), stock.filter(i => isSpirit(i.category)), 'spirits');
+  const softNames = (s.softItems || []).filter(i => i.on && i.text.trim()).map(i => i.text.trim());
+  const mixers = pick(softNames, byCat('Mixer', 'Soft Drink'), 'mixers');
+  const spiritMl = Number(payOf(s).spiritMl) || 25;
+  const sp = perMl(spirits.items), mx = perMl(mixers.items);
+
+  const beers = pick(onItems(/beer|lager|cider/i), byCat('Beer'), 'beers');
+  out.beer = beers.items.length
+    ? { cost: avg(beers.items.map(i => Number(i.costPerMl) * (Number(i.containerMl) || 330))), from: beers.from }
+    : { cost: WELCOME_MIX.find(m => m.key === 'beer').perServe, from: 'ORPI’s costed beer serve' };
+
+  const tableWine = byCat('Wine').filter(i => !/vermouth|sherry|fino|port\b/i.test(i.name));
+  const wines = pick(onItems(/\bwine\b/i), tableWine, 'wines');
+  out.wine = wines.items.length ? { cost: perMl(wines.items) * PAY_SERVE_ML.wine, from: wines.from } : { cost: null, from: null };
+
+  const fizz = pick(onItems(/prosecco|champagne|sparkl|fizz/i), byCat('Prosecco'), 'proseccos');
+  out.prosecco = fizz.items.length
+    ? { cost: perMl(fizz.items) * PAY_SERVE_ML.prosecco, from: fizz.from }
+    : { cost: WELCOME_MIX.find(m => m.key === 'prosecco').perServe, from: 'ORPI’s costed prosecco serve' };
+
+  out.spirit = sp != null
+    ? { cost: sp * spiritMl + (mx || 0) * PAY_SERVE_ML.mixer, from: `${spiritMl}ml ${spirits.from.replace(/^stock: /, '')}${mx ? ' + mixer' : ''}` }
+    : { cost: null, from: null };
+  out.cocktail = { cost: WELCOME_MIX.find(m => m.key === 'cocktail').perServe, from: 'ORPI’s costed cocktail serve' };
+  out.mocktail = { cost: WELCOME_MIX.find(m => m.key === 'mocktail').perServe, from: 'ORPI’s costed mocktail serve' };
+  out.soft = mx != null ? { cost: mx * PAY_SERVE_ML.soft, from: `${PAY_SERVE_ML.soft}ml, ${mixers.from}` } : { cost: null, from: null };
+  const shotPool = byCat('Shots/Shooters', 'Liqueur');
+  const shots = shotPool.length ? pick([], shotPool, 'liqueurs and shots') : spirits;
+  out.shot = perMl(shots.items) != null
+    ? { cost: perMl(shots.items) * PAY_SERVE_ML.shot, from: `25ml, ${shots.from.replace(/^stock: /, '')}` }
+    : { cost: null, from: null };
+  return out;
+}
+
+// The price "Suggest prices" proposes: cost at the chosen drinks margin,
+// rounded up to the next 50p, the way a bar price list reads.
+export function suggestPrice(cost, marginPct) {
+  const m = Number(marginPct) / 100;
+  if (!(cost > 0) || !(m > 0 && m < 1)) return null;
+  return Math.ceil((cost / (1 - m)) * 2) / 2;
+}
+
+// The projection. `fee` is what the client pays (setup fee plus any extras,
+// less discount). Event costs are everything except the drinks themselves:
+// staff, ice, garnish, drinkware, prep, tasting, welcome drinks and one-offs.
+// The drinks are costed per serve sold.
+export function payProjection(s, stockItems, fee) {
+  const p = payOf(s);
+  const costs = payDrinkCosts(s, stockItems);
+  const rows = (p.drinks || []).filter(d => d.on).map(d => {
+    const typed = d.cost !== '' && d.cost != null && !isNaN(parseFloat(d.cost));
+    const suggested = costs[d.key] || { cost: null, from: null };
+    const cost = typed ? parseFloat(d.cost) : suggested.cost;
+    const price = num(d.price);
+    return {
+      ...d, price, cost: cost == null ? null : cost, suggestedCost: suggested.cost,
+      costFrom: typed ? 'typed' : suggested.from, share: Math.max(0, num(d.share)),
+      margin: price > 0 && cost != null ? ((price - cost) / price) * 100 : null,
+    };
+  });
+  const shareTotal = rows.reduce((t, r) => t + r.share, 0);
+  const w = r => (shareTotal > 0 ? r.share / shareTotal : 0);   // the mix always counts as 100%
+  const avgPrice = rows.reduce((t, r) => t + w(r) * r.price, 0);
+  const avgCost = rows.reduce((t, r) => t + w(r) * (r.cost || 0), 0);
+  const missingCost = rows.filter(r => r.share > 0 && r.cost == null).map(r => r.label);
+  const missingPrice = rows.filter(r => r.share > 0 && !(r.price > 0)).map(r => r.label);
+
+  const c = computeCosts(s);
+  const eventCosts = c.internalCost;
+  const g = c.g;
+  const cardPct = Math.max(0, num(p.cardPct)) / 100;
+  const sharePct = p.shareMode === 'pct' ? Math.max(0, num(p.shareValue)) / 100 : 0;
+  const sharePer = p.shareMode === 'perDrink' ? Math.max(0, num(p.shareValue)) : 0;
+  const income = Math.max(0, num(fee));
+
+  const night = perGuest => {
+    const drinks = Math.round(g * Math.max(0, num(perGuest)));
+    const takings = drinks * avgPrice;
+    const cardFees = takings * cardPct;
+    const share = takings * sharePct + drinks * sharePer;
+    const drinkCost = drinks * avgCost;
+    const profit = income + takings - cardFees - share - drinkCost - eventCosts;
+    return { perGuest: num(perGuest), drinks, takings, cardFees, share, drinkCost, eventCosts, fee: income, profit, spendPerGuest: g ? takings / g : 0 };
+  };
+  const nights = { quiet: night(p.quiet), expected: night(p.expected), busy: night(p.busy) };
+
+  // What each drink sold leaves after the card fee, the client's share and the
+  // drink itself — the number that has to pay for the night.
+  const perDrink = avgPrice * (1 - cardPct - sharePct) - sharePer - avgCost;
+  const toCover = eventCosts - income;
+  const breakEvenDrinks = toCover <= 0 ? 0 : perDrink > 0 ? Math.ceil(toCover / perDrink) : null;
+  const q = nights.quiet;
+  const quietLeft = q.takings - q.cardFees - q.share - q.drinkCost;
+  const feeForQuiet = Math.max(0, eventCosts - quietLeft);
+
+  return {
+    p, rows, shareTotal, avgPrice, avgCost, missingCost, missingPrice, eventCosts, g, income,
+    cardPct, sharePct, sharePer, nights, perDrink, breakEvenDrinks,
+    breakEvenPerGuest: breakEvenDrinks != null && g ? breakEvenDrinks / g : null,
+    feeForQuiet,
+  };
+}
+
+// The client's share, in the words the proposal uses.
+export function payShareLine(s) {
+  const p = payOf(s);
+  const v = num(p.shareValue);
+  if (p.shareMode === 'pct' && v > 0) return `${v}% of everything the bar takes`;
+  if (p.shareMode === 'perDrink' && v > 0) return `${gbp(v).replace('.00', '')} from every drink sold`;
+  return null;
+}
 
 // Which of the four welcome components are actually on the tray, classified
 // most specific first.
@@ -192,7 +377,8 @@ export function alcoholLine(s) {
 export function alcoholPerHead(s) {
   // No ORPI-supplied drinking spirits to cost here: Bar Only uses the client's
   // own, and Welcome Drinks Only has only the arrival tray (costed separately).
-  if (s.pkg === 'Bar Only (client supplies alcohol)' || s.pkg === 'Welcome Drinks Only') return 0;
+  // A pay bar's drinks are costed per serve sold (payProjection), not per head.
+  if (s.pkg === 'Bar Only (client supplies alcohol)' || s.pkg === 'Welcome Drinks Only' || isPayBar(s)) return 0;
   const manual = parseFloat(s.alcoholOverride);
   if (!isNaN(manual) && manual >= 0) return manual;
   const parts = alcoholParts(s, true);
@@ -266,7 +452,8 @@ export function computeCosts(s) {
   const softsList = (s.softItems || []).filter(i => i.on && i.text.trim());
   const orpiSofts = softsList.filter(i => (i.by || 'orpi') !== 'client');
   const softFrac = softsList.length ? orpiSofts.length / softsList.length : 1;
-  const mixersCost = COST.mixersPerHead * g * softFrac;
+  // On a pay bar the mixers are part of each drink sold, costed there.
+  const mixersCost = isPayBar(s) ? 0 : COST.mixersPerHead * g * softFrac;
   const iceCost = COST.icePerHead * g;
   const garnishCost = COST.garnishPerHead * g;
 
@@ -297,6 +484,7 @@ export function computeCosts(s) {
     + drinkwareCost + staffCost + prepCost + tastingCost + oneOffs;
 
   return {
+    payBar: isPayBar(s),
     g, serviceHrs, setupHrs, packdownHrs, paidHrs, crew, headcount, crewCostPerHour,
     staffCost, prepHrs, prepCost, prepShadow, isClientAlcohol, alcPerHead, alcCost,
     alcParts, alcManual,
@@ -321,6 +509,7 @@ export function unresolvedChecks(s) {
 // The client-facing inclusions list, generated rather than typed, so it always
 // matches the quote it's printed on.
 export function buildInclusions(s) {
+  if (isPayBar(s)) return payBarInclusions(s);
   const c = computeCosts(s);
   const out = [];
 
@@ -353,6 +542,32 @@ export function buildInclusions(s) {
   if (c.tasting === 'included') out.push('Pre-event drinks tasting');
   if (s.wdOn) out.push(`${s.wdDur} of welcome drinks on arrival`);
 
+  (s.inclItems || []).filter(i => i.on && i.text.trim()).forEach(i => out.push(i.text.trim()));
+  return out;
+}
+
+// A pay bar's client pays for the bar, not the drinks, so the list says what
+// we bring and how guests buy, and never implies the drinks are included.
+function payBarInclusions(s) {
+  const c = computeCosts(s);
+  const p = payOf(s);
+  const out = ['A fully stocked bar, with drinks sold to your guests at the prices below'];
+  out.push(c.headcount
+    ? `Professional bar team: ${c.headcount} ORPI staff for your ${c.g} guests`
+    : 'Professional bar staff scaled to your guest count');
+  out.push(p.payment === 'card-cash' ? 'Card and cash payments at the bar' : 'Card payments at the bar');
+  if (pkgShows(s.pkg).cocktails && (s.nct > 0 || s.nmt > 0)) {
+    out.push(`${s.nct} cocktail${s.nct !== 1 ? 's' : ''} & ${s.nmt} mocktail${s.nmt !== 1 ? 's' : ''} on the menu`);
+  }
+  if (c.glassPerHead > 0 && c.plasticPerHead > 0) out.push('Standard glassware, with premium disposables late in the night');
+  else if (c.glassPerHead > 0) out.push('Standard glassware throughout');
+  else if (c.plasticPerHead > 0) out.push('Premium disposable barware throughout');
+  out.push('Cubed & crushed ice');
+  out.push('Garnishes, straws & napkins');
+  out.push('Bar caddies & bar-top styling');
+  out.push('Printed price list & menus');
+  out.push('Set-up, service & pack-down');
+  if (s.wdOn) out.push(`${s.wdDur} of welcome drinks on arrival, included in your fee`);
   (s.inclItems || []).filter(i => i.on && i.text.trim()).forEach(i => out.push(i.text.trim()));
   return out;
 }

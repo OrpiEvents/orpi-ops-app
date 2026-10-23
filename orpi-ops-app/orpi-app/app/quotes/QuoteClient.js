@@ -11,6 +11,7 @@ import {
   alcoholParts, alcoholLine, alcoholPerHead, welcomeParts, welcomePerHead, tastingState,
   computeCosts, unresolvedChecks, buildInclusions, fmtDate, fmtDatePretty, fmtDateLong, gbp,
   addonQty, addonName, addonsTotal, ACCESSORY_CHOICES, choicesFor, pickedItems, extrasLines,
+  isPayBar, freshPay, payOf, payDrinkCosts, payProjection, suggestPrice, payShareLine,
 } from '@/lib/quoteModel';
 
 let idCounter = 0;
@@ -99,8 +100,9 @@ const FORMAT_FIELDS = [
   'drinkware', 'glassPerHead', 'plasticPerHead', 'tastingMode', 'tastingGuests', 'spiritTier',
   'wdOn', 'wdDur', 'wdItems', 'wdPerHour', 'inclItems', 'spiritRows', 'softItems',
   'nct', 'nmt', 'addons', 'compItems', 'notes', 'marginPct', 'prepHrs', 'prepRate',
+  'pay',
 ];
-const PACKAGES = ['Premium', 'Ultimate', 'Full Bar', 'Cocktail Experience', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Custom'];
+const PACKAGES = ['Premium', 'Ultimate', 'Full Bar', 'Cocktail Experience', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Pay Bar', 'Custom'];
 const formatKey = pkg => `quote_format:${String(pkg).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
 // Before formats were shared, one default lived in each browser under this key.
 const legacyTemplateKey = email => `orpi-quote-template::${email || 'default'}`;
@@ -228,6 +230,7 @@ const ETYPE_SAID = {
   'Birthday Party': 'Birthday',
   'Corporate': 'Event',
   'House Party': 'Party',
+  'Charity': 'Charity Event',
   'Other': 'Event',
 };
 
@@ -238,6 +241,7 @@ const PKG_SAID = {
   'Cocktail Experience': 'Cocktail Experience',
   'Welcome Drinks Only': 'Welcome Drinks Service',
   'Bar Only (client supplies alcohol)': 'Bar Service',
+  'Pay Bar': 'Pay Bar Service',
   'Custom': 'Bar Service',
 };
 
@@ -255,6 +259,8 @@ const PKG_DEFAULTS = {
   'Cocktail Experience':                { duration: '3 hours', wdOn: false, nct: 3, nmt: 2 },
   'Welcome Drinks Only':                { duration: '1 hour',  wdOn: true,  nct: 0, nmt: 0 },
   'Bar Only (client supplies alcohol)': { duration: '5 hours', wdOn: false, nct: 3, nmt: 2 },
+  // Guests buy their own drinks; no tasting unless someone books one.
+  'Pay Bar':                            { duration: '5 hours', wdOn: false, nct: 3, nmt: 2, tastingMode: 'none' },
   'Custom':                             {},
 };
 
@@ -295,13 +301,15 @@ function buildClientMessage(s, total) {
   const etype = ETYPE_SAID[s.etype] || s.etype || 'event';
   L.push('Hiii! Hope you\'re keeping well!');
   L.push('');
-  L.push(`Here's the quote for ${need(s.client && s.client.trim(), 'client name')}'s ${etype} \u{1F389}`);
+  L.push(`Here's the ${isPayBar(s) ? 'proposal' : 'quote'} for ${need(s.client && s.client.trim(), 'client name')}'s ${etype} \u{1F389}`);
   L.push('');
   L.push(`\u{1F4CD} ${need(s.venue && s.venue.trim(), 'venue')}`);
   L.push(`\u{1F4C5} ${need(fmtOrdinal(s.edate), 'event date')}`);
   L.push(`\u{23F1}\u{FE0F} ${need(s.duration && s.duration.trim(), 'duration')}${s.etime && s.etime.trim() ? `, ${s.etime.trim()}` : ' (timings TBC)'}`);
   L.push(`\u{1F465} ${need(s.guests, 'guest count')} guests`);
   L.push('');
+
+  if (isPayBar(s)) return payBarMessage(s, total, L, need, gaps, c);
 
   L.push(`\u{1F379} ${PKG_SAID[s.pkg] || 'Bar Service'} including:`);
 
@@ -386,6 +394,39 @@ function buildClientMessage(s, total) {
   return { text: L.join('\n'), gaps: [...new Set(gaps)] };
 }
 
+// The pay bar version: the client pays a setup fee and their guests buy the
+// drinks, so nothing here may read as if the drinks are included.
+function payBarMessage(s, total, L, need, gaps, c) {
+  const p = payOf(s);
+  const parts = alcoholParts(s, true);
+  L.push(`\u{1F379} Pay Bar Service: your guests buy their drinks at the bar (${p.payment === 'card-cash' ? 'card or cash' : 'card payments'})`);
+  const onBar = joinList([
+    parts.spirits && 'spirits', parts.beer && 'beer', parts.wine && 'wine', parts.prosecco && 'prosecco',
+    pkgShows(s.pkg).cocktails && s.nct > 0 && 'cocktails',
+    pkgShows(s.pkg).cocktails && s.nmt > 0 && 'mocktails',
+    s.softItems.some(i => i.on && i.text.trim()) && 'soft drinks',
+  ]);
+  if (onBar) L.push(`\u{1F378} On the bar: ${onBar}`);
+  const priced = (p.drinks || []).filter(d => d.on && parseFloat(d.price) > 0);
+  if (priced.length) L.push(`\u{1F3F7}\u{FE0F} Prices: ${priced.map(d => `${d.label} £${parseFloat(d.price).toFixed(2)}`).join(' · ')}`);
+  else need(null, 'bar prices');
+  const drink = c.glassPerHead > 0 ? 'glassware' : 'premium disposable barware';
+  L.push(`\u{2728} ${joinList(['Our bar and team', drink, 'ice', 'garnishes', 'bar décor'])}`);
+  if (c.headcount) L.push(`\u{1F454} Minimum ${c.headcount} ORPI staff`);
+  const share = payShareLine(s);
+  if (share) L.push(`\u{1F49B} ${s.client && s.client.trim() ? s.client.trim() : 'You'} receive${s.client && s.client.trim() ? 's' : ''} ${share}`);
+  const extras = s.addons.filter(a => a.on && parseFloat(a.price) > 0).map(a => addonName(a));
+  if (extras.length) L.push(`\u{1F38A} Plus ${joinList(extras)}`);
+  L.push('');
+  L.push(`\u{1F4B7} Setup fee: ${total > 0 ? '£' + Math.round(total).toLocaleString('en-GB') : 'none'}`);
+  L.push('');
+  L.push('Let us know if anything needs tweaking - happy to help! \u{1F64C}');
+  L.push('');
+  L.push(s.salesPerson === 'Ruds' ? 'Rudhra' : s.salesPerson);
+  L.push('ORPI Events');
+  return { text: L.join('\n'), gaps: [...new Set(gaps)] };
+}
+
 // ── Quote drafts ───────────────────────────────────────────────
 // A quote is an hour of decisions — packages, crew, drinkware, the drinks list,
 // the margin. Saving to Notion records the headline figure; this keeps the
@@ -415,7 +456,7 @@ async function saveDraft(enquiryId, state) {
   } catch { return false; }
 }
 
-const QUOTE_EVENT_TYPES = ['Wedding Reception', 'Mendhi/Sangeet', 'Jago', 'Engagement', 'Birthday Party', 'Corporate', 'House Party', 'Other'];
+const QUOTE_EVENT_TYPES = ['Wedding Reception', 'Mendhi/Sangeet', 'Jago', 'Engagement', 'Birthday Party', 'Corporate', 'House Party', 'Charity', 'Other'];
 
 // What the client asked for, above the builder while quoting: every service
 // they ticked (the package is only set from the first), how they found us,
@@ -452,6 +493,7 @@ function EnquiryBrief({ s, enquiries }) {
 function serviceToPkg(serviceType) {
   const t = (serviceType || '').toLowerCase();
   if (!t) return null;
+  if (/pay bar|cash bar|pay at|guests pay/.test(t)) return 'Pay Bar';
   if (/ultimate|unlimited|all night|all evening/.test(t)) return 'Ultimate';
   if (/premium/.test(t)) return 'Premium';
   if (/cocktail/.test(t)) return 'Cocktail Experience';
@@ -495,6 +537,9 @@ function freshState() {
     // if we edit before saving. Free-text lines don't need it.
     costLines: [],
     marginPct: '60',
+    // Pay bar: the price list, the guess at what sells, and the projection's
+    // assumptions (see lib/quoteModel payProjection). Unused on other packages.
+    pay: freshPay(),
   };
 }
 
@@ -1028,6 +1073,8 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             </>
           )}
 
+          {isPayBar(s) && <PayBarPrices s={s} set={set} stockItems={stockItems} />}
+
           <SectionHead>Add-ons &amp; extras</SectionHead>
           <AddonEditor addons={s.addons} onChange={addons => set({ addons })} />
 
@@ -1038,14 +1085,20 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={s.notes} onChange={e => set({ notes: e.target.value })} placeholder="Any notes or conditions…" />
 
           <SectionHead>Pricing</SectionHead>
+          {isPayBar(s) ? (
+            <PayBarFee s={s} set={set} stockItems={stockItems} addonTotal={addonTotal} total={total} />
+          ) : (
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
             Crew, hours, drinkware and tasting all live in the cost panel to the right —
             change them there and both this quote and the margin update together.
           </div>
+          )}
+          {!isPayBar(s) && (
           <TwoCol>
             <Field label="Target margin %"><input type="number" style={inputStyle} value={s.marginPct} onChange={e => set({ marginPct: e.target.value })} step="5" /></Field>
             <Field label="Cost per head"><input style={{ ...inputStyle, background: 'var(--off)', color: 'var(--muted)' }} value={gbp(computeCosts(s).costPerHead)} disabled /></Field>
           </TwoCol>
+          )}
           {(() => {
             const g = Number(s.guests) || 0;
             const tier = s.drinkware === 'plastic' ? 'plastic' : 'glass';
@@ -1060,7 +1113,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
             );
           })()}
           <ThreeCol>
-            <Field label="Base price (£)"><input type="number" style={inputStyle} value={s.base} onChange={e => set({ base: e.target.value })} step="50" /></Field>
+            <Field label={isPayBar(s) ? 'Setup fee (£)' : 'Base price (£)'}><input type="number" style={inputStyle} value={s.base} onChange={e => set({ base: e.target.value })} step="50" /></Field>
             <Field label="Discount (£)"><input type="number" style={inputStyle} value={s.disc} onChange={e => set({ disc: e.target.value })} step="10" /></Field>
             <Field label="Total"><input style={{ ...inputStyle, background: 'var(--off)', color: 'var(--muted)' }} value={gbp(total)} disabled /></Field>
           </ThreeCol>
@@ -1370,7 +1423,7 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
           Upgrading the spirit list moves the spirits component only. Beer,
           wine and prosecco are flat, and switch off entirely when the package
           doesn't include them. */}
-      {!c.isClientAlcohol && (
+      {!c.isClientAlcohol && !c.payBar && (
         <>
           <div style={head}>Alcohol</div>
           <div style={{ display: 'flex', gap: 3, marginBottom: 7 }}>
@@ -1504,9 +1557,10 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
       {/* ── Cost lines ───────────────────────────────────────────────── */}
       <div style={head}>Costs</div>
       <div style={{ marginBottom: 6 }}>
-        {!c.isClientAlcohol && <div style={line}><span style={muted}>Alcohol · £{c.alcPerHead.toFixed(2)}/head</span><span>{gbp(c.alcCost)}</span></div>}
+        {!c.isClientAlcohol && !c.payBar && <div style={line}><span style={muted}>Alcohol · £{c.alcPerHead.toFixed(2)}/head</span><span>{gbp(c.alcCost)}</span></div>}
+        {c.payBar && <div style={{ ...line, fontStyle: 'italic' }}><span style={muted}>Drinks · costed per drink sold, in the projection below</span><span /></div>}
         {c.wdCost > 0 && <div style={line}><span style={muted}>Welcome drinks · £{c.wdPerHead.toFixed(2)}/head</span><span>{gbp(c.wdCost)}</span></div>}
-        <div style={line}><span style={muted}>Mixers · £{COST.mixersPerHead.toFixed(2)}/head</span><span>{gbp(c.mixersCost)}</span></div>
+        {!c.payBar && <div style={line}><span style={muted}>Mixers · £{COST.mixersPerHead.toFixed(2)}/head</span><span>{gbp(c.mixersCost)}</span></div>}
         <div style={line}><span style={muted}>Ice · £{COST.icePerHead.toFixed(2)}/head</span><span>{gbp(c.iceCost)}</span></div>
         <div style={line}><span style={muted}>Garnishes · £{COST.garnishPerHead.toFixed(2)}/head</span><span>{gbp(c.garnishCost)}</span></div>
         {c.glassPerHead > 0 && <div style={line}><span style={muted}>Glassware · {c.glassPerHead} × {Math.round(COST.glassRate * 100)}p</span><span>{gbp(c.glassCost)}</span></div>}
@@ -1570,11 +1624,12 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
       {/* ── Summary ──────────────────────────────────────────────────── */}
       <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: 12, opacity: pending.length ? 0.55 : 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8, fontWeight: 600 }}>
-          <span>Total cost</span><span>{gbp(c.internalCost)}</span>
+          <span>{c.payBar ? 'Event costs (before drinks)' : 'Total cost'}</span><span>{gbp(c.internalCost)}</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 10, color: 'var(--muted)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: c.payBar ? 0 : 10, color: 'var(--muted)' }}>
           <span>per head</span><span>{gbp(c.costPerHead)}</span>
         </div>
+        {!c.payBar && (<>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 8 }}>
           <span style={{ color: 'var(--muted)' }}>Target margin</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1604,13 +1659,257 @@ function InternalCostingPanel({ s, set, stockItems, total: clientTotal, addCostL
             )}
           </div>
         )}
+        </>)}
       </div>
       {pending.length > 0 && (
         <div style={{ fontSize: 10.5, color: '#b8720a', marginTop: 7, lineHeight: 1.5, fontStyle: 'italic' }}>
-          {pending.length} cost{pending.length === 1 ? '' : 's'} not yet accounted for — price {pending.length === 1 ? 'it' : 'them'} or mark n/a and this margin is trustworthy.
+          {pending.length} cost{pending.length === 1 ? '' : 's'} not yet accounted for — price {pending.length === 1 ? 'it' : 'them'} or mark n/a and this {c.payBar ? 'projection' : 'margin'} is trustworthy.
         </div>
       )}
+      {c.payBar && <PayBarProjection s={s} set={set} stockItems={stockItems} fee={actualQuote} head={head} />}
     </div>
+  );
+}
+
+// ── Pay bar: the client-facing price list (builder column) ─────────
+// What guests pay at the bar. Prints on the proposal. "Suggest prices" prices
+// each drink from our cost at the chosen drinks margin.
+function PayBarPrices({ s, set, stockItems }) {
+  const p = payOf(s);
+  const costs = payDrinkCosts(s, stockItems);
+  const setPay = patch => set({ pay: { ...p, ...patch } });
+  const setRow = (key, patch) => setPay({ drinks: p.drinks.map(d => (d.key === key ? { ...d, ...patch } : d)) });
+  const costOf = d => (d.cost !== '' && d.cost != null && !isNaN(parseFloat(d.cost)) ? parseFloat(d.cost) : costs[d.key]?.cost);
+  function suggestAll() {
+    setPay({ drinks: p.drinks.map(d => { const v = suggestPrice(costOf(d), p.margin); return v != null ? { ...d, price: v.toFixed(2) } : d; }) });
+  }
+  return (
+    <>
+      <SectionHead>Bar price list</SectionHead>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+        What guests pay at the bar. It prints on the proposal; untick anything the bar won’t sell.
+      </div>
+      {p.drinks.map(d => {
+        const hint = suggestPrice(costOf(d), p.margin);
+        return (
+          <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, opacity: d.on ? 1 : 0.5 }}>
+            <input type="checkbox" checked={d.on} onChange={e => setRow(d.key, { on: e.target.checked })} aria-label={`Sell ${d.label}`} />
+            <input style={{ ...inputStyle, flex: 1, minWidth: 0, padding: '6px 9px' }} value={d.label} onChange={e => setRow(d.key, { label: e.target.value })} />
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>£</span>
+            <input type="number" min="0" step="0.5" style={{ ...inputStyle, width: 74, padding: '6px 8px' }} value={d.price}
+              onChange={e => setRow(d.key, { price: e.target.value })} placeholder={hint != null ? hint.toFixed(2) : '—'} aria-label={`${d.label} price`} />
+          </div>
+        );
+      })}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 0 12px', flexWrap: 'wrap' }}>
+        <button type="button" onClick={suggestAll} style={{ ...btnOutline, padding: '6px 12px', fontSize: 12 }}>Suggest prices</button>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>at a</span>
+        <input type="number" min="1" max="95" step="5" style={{ ...inputStyle, width: 58, padding: '5px 7px' }} value={p.margin} onChange={e => setPay({ margin: e.target.value })} aria-label="Drinks margin %" />
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>% drinks margin, up to the next 50p</span>
+      </div>
+      <TwoCol>
+        <Field label="Guests pay by">
+          <select style={selStyle} value={p.payment} onChange={e => setPay({ payment: e.target.value })}>
+            <option value="card">Card only</option>
+            <option value="card-cash">Card or cash</option>
+          </select>
+        </Field>
+        <Field label="Client’s share">
+          <select style={selStyle} value={p.shareMode} onChange={e => setPay({ shareMode: e.target.value })}>
+            <option value="none">None</option>
+            <option value="pct">% of takings</option>
+            <option value="perDrink">£ per drink sold</option>
+          </select>
+        </Field>
+      </TwoCol>
+      {p.shareMode !== 'none' && (
+        <div style={{ marginBottom: 10 }}>
+          <Field label={p.shareMode === 'pct' ? 'Their share, % of takings' : 'Their share, £ per drink sold'}>
+            <input type="number" min="0" step={p.shareMode === 'pct' ? 1 : 0.25} style={inputStyle} value={p.shareValue} onChange={e => setPay({ shareValue: e.target.value })} />
+          </Field>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+            Prints on the proposal, so the client can tell their guests where the money goes.
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Pay bar: the setup fee (builder column, Pricing) ─────────────
+// What the client pays. The projection says what fee keeps a quiet night from
+// losing money; "Use" puts that in, rounded up to £50.
+function PayBarFee({ s, set, stockItems, addonTotal, total }) {
+  const pr = payProjection(s, stockItems, total);
+  const disc = parseFloat(s.disc) || 0;
+  const needed = Math.max(0, Math.ceil((pr.feeForQuiet - addonTotal + disc) / 50) * 50);
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+        Guests buy their own drinks, so the client pays a setup fee instead of a package price. The projection in the cost panel shows what the night makes.
+      </div>
+      {pr.g > 0 && (pr.feeForQuiet > 0 ? (
+        <div style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#7a6300', margin: '4px 0 10px', lineHeight: 1.5 }}>
+          A quiet night ({pr.p.quiet} drinks a guest) needs a fee of at least <strong>£{Math.ceil(pr.feeForQuiet).toLocaleString('en-GB')}</strong> to cover the event costs.
+          {needed > 0 && String(needed) !== String(s.base) && (
+            <button type="button" onClick={() => set({ base: String(needed) })} style={{ background: 'none', border: '1px solid var(--gold)', color: '#7a6300', borderRadius: 4, padding: '2px 8px', fontSize: 11, cursor: 'pointer', marginLeft: 6 }}>Use {gbp(needed).replace('.00', '')}</button>
+          )}
+        </div>
+      ) : (
+        <div style={{ background: '#f2f6f2', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: 'var(--success)', margin: '4px 0 10px', lineHeight: 1.5 }}>
+          Even a quiet night ({pr.p.quiet} drinks a guest) covers the event costs, so any setup fee is extra.
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Pay bar: the projection (cost panel, team only) ─────────────
+function PayBarProjection({ s, set, stockItems, fee, head }) {
+  const pr = payProjection(s, stockItems, fee);
+  const p = pr.p;
+  const setPay = patch => set({ pay: { ...p, ...patch } });
+  const setRow = (key, patch) => setPay({ drinks: p.drinks.map(d => (d.key === key ? { ...d, ...patch } : d)) });
+  const mini = { width: 52, padding: '3px 5px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, textAlign: 'right' };
+  const cell = { padding: '4px 3px', fontSize: 10.5, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
+  const lab = { ...cell, textAlign: 'left', color: 'var(--muted)', whiteSpace: 'normal' };
+  const money = v => '£' + Math.round(v).toLocaleString('en-GB');
+  const N = pr.nights;
+  const order = [['quiet', 'Quiet'], ['expected', 'Expected'], ['busy', 'Busy']];
+  const showShare = pr.sharePct > 0 || pr.sharePer > 0;
+  const lines = [
+    ['Drinks sold', k => N[k].drinks.toLocaleString('en-GB')],
+    ['Takings', k => money(N[k].takings)],
+    ['Card fees', k => '−' + money(N[k].cardFees)],
+    ...(showShare ? [['Client’s share', k => '−' + money(N[k].share)]] : []),
+    ['Cost of drinks', k => '−' + money(N[k].drinkCost)],
+    ['Event costs', k => '−' + money(N[k].eventCosts)],
+    ['Fee from client', k => money(N[k].fee)],
+  ];
+  return (
+    <>
+      <div style={head}>Pay bar projection</div>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 8 }}>
+        What the night makes depends on how much guests buy. The event costs are the ones above; every drink sold is costed here.
+      </div>
+
+      <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>Drinks a guest buys over the night</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {order.map(([k, name]) => (
+          <label key={k} style={{ flex: 1, fontSize: 10, color: 'var(--muted)' }}>
+            {name}
+            <input type="number" min="0" step="0.5" value={p[k]} onChange={e => setPay({ [k]: e.target.value })} style={{ ...mini, width: '100%', marginTop: 2 }} />
+          </label>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', marginBottom: 10 }}>
+        <label style={{ flex: 1, fontSize: 10, color: 'var(--muted)' }}>
+          Card fees %
+          <input type="number" min="0" step="0.05" value={p.cardPct} onChange={e => setPay({ cardPct: e.target.value })} style={{ ...mini, width: '100%', marginTop: 2 }} />
+        </label>
+        <label style={{ flex: 1, fontSize: 10, color: 'var(--muted)' }}>
+          Spirit measure
+          <select value={p.spiritMl} onChange={e => setPay({ spiritMl: Number(e.target.value) })} style={{ ...mini, width: '100%', marginTop: 2, textAlign: 'left', background: '#fff' }}>
+            <option value={25}>25ml single</option>
+            <option value={50}>50ml double</option>
+          </select>
+        </label>
+      </div>
+
+      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', marginBottom: 6 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ ...lab, fontWeight: 600 }}>Drink</th>
+              <th style={{ ...cell, fontWeight: 600, color: 'var(--muted)' }}>Our cost</th>
+              <th style={{ ...cell, fontWeight: 600, color: 'var(--muted)' }}>Mix %</th>
+              <th style={{ ...cell, fontWeight: 600, color: 'var(--muted)' }}>Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pr.rows.map(r => (
+              <tr key={r.key} style={{ borderTop: '1px solid var(--off)' }}>
+                <td style={{ ...lab, color: '#333' }} title={r.costFrom ? `Cost: ${r.costFrom === 'typed' ? 'typed in' : r.costFrom}` : 'No cost found: type one in'}>
+                  {r.label}{r.price > 0 ? <span style={{ color: 'var(--muted)' }}> · £{r.price.toFixed(2)}</span> : null}
+                </td>
+                <td style={cell}>
+                  <input type="number" min="0" step="0.05" value={p.drinks.find(d => d.key === r.key)?.cost ?? ''}
+                    onChange={e => setRow(r.key, { cost: e.target.value })}
+                    placeholder={r.suggestedCost != null ? r.suggestedCost.toFixed(2) : '?'}
+                    aria-label={`${r.label} cost`}
+                    style={{ ...mini, borderColor: r.cost == null ? 'var(--danger)' : 'var(--border)' }} />
+                </td>
+                <td style={cell}>
+                  <input type="number" min="0" step="5" value={p.drinks.find(d => d.key === r.key)?.share ?? ''}
+                    onChange={e => setRow(r.key, { share: e.target.value })} aria-label={`${r.label} share of drinks`} style={{ ...mini, width: 40 }} />
+                </td>
+                <td style={{ ...cell, color: r.margin == null ? 'var(--muted)' : r.margin < 60 ? '#b8720a' : '#2e7d32' }}>
+                  {r.margin == null ? '—' : `${Math.round(r.margin)}%`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, lineHeight: 1.45 }}>
+          Average drink £{pr.avgPrice.toFixed(2)}, costing us £{pr.avgCost.toFixed(2)}. Hover a drink to see where its cost came from.
+          {pr.shareTotal !== 100 && pr.shareTotal > 0 && ` The mix adds up to ${pr.shareTotal}%, so it’s scaled to 100%.`}
+        </div>
+      </div>
+      {pr.missingCost.length > 0 && (
+        <div style={{ background: '#fef6e4', color: '#b8720a', borderRadius: 5, padding: '6px 9px', fontSize: 10.5, marginBottom: 6, lineHeight: 1.45 }}>
+          No cost found in stock for {pr.missingCost.join(', ')}. Type one in, or the projection counts {pr.missingCost.length === 1 ? 'it' : 'them'} as free.
+        </div>
+      )}
+      {pr.missingPrice.length > 0 && (
+        <div style={{ background: '#fef6e4', color: '#b8720a', borderRadius: 5, padding: '6px 9px', fontSize: 10.5, marginBottom: 6, lineHeight: 1.45 }}>
+          No price yet for {pr.missingPrice.join(', ')}. Set {pr.missingPrice.length === 1 ? 'it' : 'them'} in the bar price list, or press Suggest prices.
+        </div>
+      )}
+
+      {pr.g > 0 ? (
+        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={lab} />
+                {order.map(([k, name]) => (
+                  <th key={k} style={{ ...cell, fontWeight: 600, color: k === 'expected' ? '#333' : 'var(--muted)' }}>{name}<div style={{ fontWeight: 400, fontSize: 9.5, color: 'var(--muted)' }}>{N[k].perGuest} a head</div></th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map(([name, fn]) => (
+                <tr key={name} style={{ borderTop: '1px solid var(--off)' }}>
+                  <td style={lab}>{name}</td>
+                  {order.map(([k]) => <td key={k} style={cell}>{fn(k)}</td>)}
+                </tr>
+              ))}
+              <tr style={{ borderTop: '1px solid var(--border)' }}>
+                <td style={{ ...lab, color: '#333', fontWeight: 600, fontSize: 11.5 }}>Profit</td>
+                {order.map(([k]) => (
+                  <td key={k} style={{ ...cell, fontSize: 12, fontWeight: 600, color: N[k].profit < 0 ? 'var(--danger)' : '#2e7d32' }}>
+                    {N[k].profit < 0 ? '−' : ''}{money(Math.abs(N[k].profit))}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td style={lab}>Spend a guest</td>
+                {order.map(([k]) => <td key={k} style={{ ...cell, color: 'var(--muted)' }}>£{N[k].spendPerGuest.toFixed(2)}</td>)}
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ fontSize: 10.5, color: '#444', marginTop: 6, lineHeight: 1.5 }}>
+            {pr.breakEvenDrinks === 0
+              ? 'The fee alone covers the event costs, so every drink sold is profit.'
+              : pr.breakEvenDrinks == null
+                ? 'Each drink loses money at these prices, so no number of sales breaks even. Raise the prices.'
+                : <>Breaks even at <strong>{pr.breakEvenDrinks.toLocaleString('en-GB')} drinks</strong> ({pr.breakEvenPerGuest.toFixed(1)} a guest). Each drink leaves £{pr.perDrink.toFixed(2)} after its cost{pr.cardPct > 0 ? ', card fee' : ''}{showShare ? ' and the client’s share' : ''}.</>}
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>Enter the guest count to see the projection.</div>
+      )}
+    </>
   );
 }
 

@@ -6,7 +6,7 @@
 // quote state, so what the client signs is exactly what the builder showed.
 // Pure presentation — all the numbers come in as props or from quoteModel.
 
-import { buildInclusions, pkgShows, fmtDatePretty, fmtDateLong, gbp, addonName, addonDetail } from '@/lib/quoteModel';
+import { buildInclusions, pkgShows, fmtDatePretty, fmtDateLong, gbp, addonName, addonDetail, isPayBar, payOf, payShareLine } from '@/lib/quoteModel';
 
 // The "(client supplied)" tag shown next to a client-provided item on the quote.
 function clientMark(item) {
@@ -16,7 +16,13 @@ function clientMark(item) {
 }
 
 export default function QuotePreview({ s, addonTotal, total, dep }) {
-  const docLabels = { quote: 'Quotation', deposit: 'Deposit Invoice', balance: 'Balance Invoice' };
+  // A pay bar's client is buying the bar, not the drinks: a proposal with the
+  // price list their guests will pay, and a setup fee rather than a total.
+  const payBar = isPayBar(s);
+  const pay = payBar ? payOf(s) : null;
+  const priceList = payBar ? (pay.drinks || []).filter(d => d.on && parseFloat(d.price) > 0) : [];
+  const shareLine = payBar ? payShareLine(s) : null;
+  const docLabels = { quote: payBar ? 'Proposal' : 'Quotation', deposit: 'Deposit Invoice', balance: 'Balance Invoice' };
   const wdActive = s.wdItems.filter(i => i.on && i.text.trim());
   const inclusions = buildInclusions(s);
   const shows = pkgShows(s.pkg);
@@ -107,7 +113,7 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
               The <em style={{ color: 'var(--gold)' }}>{s.pkg}</em> Package
             </div>
             <div style={{ fontSize: 12, color: '#333', lineHeight: 1.6 }}>
-              {shows.cocktails && (s.nct > 0 || s.nmt > 0) && (
+              {shows.cocktails && !payBar && (s.nct > 0 || s.nmt > 0) && (
                 <div><strong>{s.nct} cocktail{s.nct!==1?'s':''} &amp; {s.nmt} mocktail{s.nmt!==1?'s':''}</strong> — chosen from our menu at your tasting</div>
               )}
               {s.pkg === 'Premium' && (
@@ -128,6 +134,12 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
               {s.pkg === 'Bar Only (client supplies alcohol)' && (
                 <div><strong>Professional bar service</strong> — our team, bar and expertise; you supply the alcohol</div>
               )}
+              {payBar && (
+                <>
+                  <div><strong>Your guests buy their own drinks</strong> from a fully stocked bar run by our team, at the prices below. {pay.payment === 'card-cash' ? 'They can pay by card or cash.' : 'They pay by card at the bar.'}</div>
+                  {shareLine && <div style={{ marginTop: 6 }}><strong>{s.client || 'You'} receive{s.client ? 's' : ''} {shareLine}.</strong></div>}
+                </>
+              )}
             </div>
           </div>
         )}
@@ -135,7 +147,7 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
         {inclusions.length > 0 && (
           <div className="print-avoid-break" style={{ background: '#faf9f6', border: '1px solid #e8e6e0', borderRadius: 8, padding: '18px 22px', marginTop: 24 }}>
             <div style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 600, marginBottom: 12 }}>
-              Included in your package
+              {payBar ? 'What we bring' : 'Included in your package'}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2px 22px' }}>
               {inclusions.map((text, i) => (
@@ -176,10 +188,25 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
           </>
         )}
 
+        {/* Bar prices — what the guests pay, on a pay bar */}
+        {payBar && priceList.length > 0 && (
+          <>
+            <div style={sectionHead}>Bar prices</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 30px' }}>
+              {priceList.map(d => (
+                <div key={d.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '5px 0', borderBottom: '1px dotted #e0ddd4', fontSize: 12, color: '#333' }}>
+                  <span>{d.label}</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', color: '#0a0a0a' }}>£{parseFloat(d.price).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* Spirits & alcohol */}
         {shows.alcohol && activeSpirits.length > 0 && (
           <>
-            <div style={sectionHead}>Spirits &amp; alcohol</div>
+            <div style={sectionHead}>{payBar ? 'On the bar' : <>Spirits &amp; alcohol</>}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               {activeSpirits.map(row => (
                 <div key={row.cat}>
@@ -253,13 +280,18 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 14, marginTop: 10, borderTop: '1px solid #d9d5c8', alignItems: 'center' }}>
           <span style={{ fontFamily: 'var(--sans)', fontSize: 11, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--gold)', fontWeight: 500 }}>
-            {s.doctype === 'quote' ? 'Total' : s.doctype === 'deposit' ? 'Deposit due (50%)' : 'Balance due'}
+            {s.doctype === 'quote' ? (payBar ? 'Setup fee' : 'Total') : s.doctype === 'deposit' ? 'Deposit due (50%)' : 'Balance due'}
           </span>
           <span style={{ fontFamily: 'var(--serif)', fontSize: 32, color: '#0a0a0a', fontWeight: 500 }}>
-            {gbp(s.doctype === 'quote' ? total : dep)}
+            {payBar && s.doctype === 'quote' && !(total > 0) ? 'None' : gbp(s.doctype === 'quote' ? total : dep)}
           </span>
         </div>
-        {s.doctype === 'quote' && (
+        {payBar && s.doctype === 'quote' && (
+          <div style={{ fontSize: 11, color: '#555', marginTop: 8, lineHeight: 1.5 }}>
+            {total > 0 ? 'Covers our bar, team and set-up. ' : 'Our bar, team and set-up come at no charge. '}Your guests pay for their own drinks at the bar.
+          </div>
+        )}
+        {s.doctype === 'quote' && total > 0 && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 11, color: '#555', marginTop: 10 }}>
               <span>50% deposit on confirmation</span><span>{gbp(dep)}</span>

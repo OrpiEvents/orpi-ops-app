@@ -50,9 +50,9 @@ const DEF_ADDONS = [
   { label: 'Additional staff', desc: 'Extra bartenders, table service or waiting staff', price: '', on: false },
 ];
 
-// Saved quote templates (one per login, in the browser) keep their own copy of
-// the extras, so a change to the list above would never reach them. When a
-// template loads: retired extras that aren't ticked are dropped, wording that
+// Saved package formats (and the old browser-only template) keep their own
+// copy of the extras, so a change to the list above would never reach them.
+// When one loads: retired extras that aren't ticked are dropped, wording that
 // still matches an old default is updated (wording you've changed is kept),
 // and any new default extra is added.
 const RETIRED_ADDONS = ['cocktail masterclass'];
@@ -86,6 +86,89 @@ function refreshAddons(saved) {
   return [...kept, ...added];
 }
 const DEF_COMP = ['Dry ice', 'Bubble smoke gun'];
+
+// ── Package formats ──────────────────────────────────────────
+// Each package has a saved starting point: the drinks lists, inclusions,
+// extras, welcome drinks, timings, notes and margin a new quote of that
+// package begins with. Shared by every director on every device (app_state,
+// one row per package, so two directors saving different packages can't
+// overwrite each other). Client and event details are never part of it, and
+// neither is the crew, which follows the guest count.
+const FORMAT_FIELDS = [
+  'duration', 'setup', 'startMin', 'endMin', 'setupHrs', 'packdownHrs',
+  'drinkware', 'glassPerHead', 'plasticPerHead', 'tastingMode', 'tastingGuests', 'spiritTier',
+  'wdOn', 'wdDur', 'wdItems', 'wdPerHour', 'inclItems', 'spiritRows', 'softItems',
+  'nct', 'nmt', 'addons', 'compItems', 'notes', 'marginPct', 'prepHrs', 'prepRate',
+];
+const PACKAGES = ['Premium', 'Ultimate', 'Full Bar', 'Cocktail Experience', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Custom'];
+const formatKey = pkg => `quote_format:${String(pkg).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+// Before formats were shared, one default lived in each browser under this key.
+const legacyTemplateKey = email => `orpi-quote-template::${email || 'default'}`;
+
+async function loadFormats() {
+  try {
+    const { data, error } = await createClient()
+      .from('app_state').select('key, value').like('key', 'quote_format:%');
+    if (error) return {};
+    const out = {};
+    for (const row of data || []) {
+      const v = row.value || {};
+      // Removing a format writes a "removed" marker (the table allows no deletes).
+      if (v.pkg && v.fields && !v.removed) out[v.pkg] = v;
+    }
+    return out;
+  } catch { return {}; }
+}
+
+async function storeFormat(pkg, value) {
+  try {
+    const { error } = await createClient().from('app_state').upsert({
+      key: formatKey(pkg), value, updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' });
+    return !error;
+  } catch { return false; }
+}
+
+// What a quote of this package starts from: its saved format, or the built-in
+// package defaults when none is saved. A format sets every one of its fields:
+// anything it doesn't hold (a format saved before notes were kept, say) comes
+// from the built-in defaults, never from whichever quote was on screen.
+// Deep-copied, so editing the quote never edits the saved format.
+function packageStart(pkg, formats) {
+  const f = formats && formats[pkg];
+  if (!f) return { pkg, ...(PKG_DEFAULTS[pkg] || {}) };
+  const fields = JSON.parse(JSON.stringify(f.fields || {}));
+  const base = { ...freshState(), ...(PKG_DEFAULTS[pkg] || {}) };
+  const patch = { pkg };
+  for (const k of FORMAT_FIELDS) patch[k] = fields[k] !== undefined ? fields[k] : base[k];
+  patch.addons = refreshAddons(patch.addons);
+  return patch;
+}
+
+// Puts a package start onto a quote, keeping the cocktail and mocktail name
+// slots in step with the counts, and the bar print in step with the bar.
+function withPackage(state, patch) {
+  const next = { ...state, ...patch };
+  const pad = (names, n) => { const a = [...(names || [])]; while (a.length < (Number(n) || 0)) a.push(''); return a; };
+  next.cocktailNames = pad(next.cocktailNames, next.nct);
+  next.mocktailNames = pad(next.mocktailNames, next.nmt);
+  if (next.barUsed) {
+    const realBar = next.barUsed !== "Venue's own bar";
+    next.addons = (next.addons || []).map(a => (/custom bar print/i.test(a.label) ? { ...a, on: realBar } : a));
+  }
+  return next;
+}
+
+const SALES_PEOPLE = ['Ruds', 'Rahul', 'Punit', 'Snehal'];
+// A director's name from their login, e.g. for "saved by Rahul".
+function nameFor(email) {
+  const local = String(email || '').split('@')[0];
+  if (!local) return 'someone';
+  if (local.toLowerCase().startsWith('rud')) return 'Ruds';
+  return SALES_PEOPLE.find(p => local.toLowerCase().startsWith(p.toLowerCase())) || local;
+}
+// Whoever is signed in is the sales person on a new quote.
+const salesPersonFor = email => (SALES_PEOPLE.includes(nameFor(email)) ? nameFor(email) : 'Ruds');
 
 // Half-hour slots from late morning through to 4am, because bars close late.
 // Stored as minutes-from-midnight so a 1am finish is 25 hours, not "earlier
@@ -416,25 +499,17 @@ function freshState() {
 }
 
 export default function QuoteClient({ userEmail }) {
-  const [s, setS] = useState(freshState);
+  const [s, setS] = useState(() => ({ ...freshState(), salesPerson: salesPersonFor(userEmail) }));
   const [enquiries, setEnquiries] = useState([]);
   const [stockItems, setStockItems] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-  const [templateMsg, setTemplateMsg] = useState('');
-
-  // Fields that survive being "reset" back to default — client-specific
-  // things (name, date, guests, base price, invoice number) are always
-  // wiped when loading the template; brand structure carries over.
-  const TEMPLATE_FIELDS = [
-    'salesPerson', 'pkg', 'duration', 'setup', 'startMin', 'endMin',
-    'setupHrs', 'packdownHrs', 'drinkware', 'glassPerHead', 'plasticPerHead',
-    'tastingMode', 'tastingGuests', 'spiritTier',
-    'wdOn', 'wdDur', 'wdItems', 'wdPerHour',
-    'inclItems', 'spiritRows', 'softItems',
-    'nct', 'nmt', 'addons', 'compItems',
-  ];
-  const templateKey = `orpi-quote-template::${userEmail || 'default'}`;
+  // Saved package formats, by package. null until they've loaded.
+  const [formats, setFormats] = useState(null);
+  const [formatMsg, setFormatMsg] = useState('');
+  // A default saved the old way, in this browser only, waiting to be moved.
+  const [legacy, setLegacy] = useState(null);
+  const legacyKey = legacyTemplateKey(userEmail);
 
   useEffect(() => {
     fetch('/api/enquiries').then(r => r.json()).then(res => {
@@ -443,38 +518,81 @@ export default function QuoteClient({ userEmail }) {
     fetch('/api/stock').then(r => r.json()).then(res => {
       if (!res.error) setStockItems(res.items || []);
     });
-    // Auto-load the saved template on first render (if one exists) so a
-    // fresh quote starts from your saved structure, not the built-in default.
     try {
-      const raw = localStorage.getItem(templateKey);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (saved.addons) saved.addons = refreshAddons(saved.addons);
-        setS(prev => ({ ...prev, ...saved }));
-      }
-    } catch { /* ignore corrupt or missing */ }
+      const raw = localStorage.getItem(legacyKey);
+      if (raw) setLegacy(JSON.parse(raw));
+    } catch { /* none, or unreadable */ }
+    // A blank quote starts from its package's saved format. A deep link to an
+    // enquiry does its own start once the formats are in (see below).
+    let linked = false;
+    try { linked = !!new URLSearchParams(window.location.search).get('enquiry'); } catch { /* no window */ }
+    loadFormats().then(f => {
+      setFormats(f);
+      if (!linked) setS(prev => (prev.enquiryId || prev.client ? prev : withPackage(prev, packageStart(prev.pkg, f))));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function saveAsTemplate() {
-    try {
-      const toSave = {};
-      TEMPLATE_FIELDS.forEach(k => { toSave[k] = s[k]; });
-      localStorage.setItem(templateKey, JSON.stringify(toSave));
-      setTemplateMsg('✓ Saved as your default quote template');
-      setTimeout(() => setTemplateMsg(''), 3500);
-    } catch (err) {
-      alert('Could not save template: ' + err.message);
-    }
+  const flash = msg => { setFormatMsg(msg); setTimeout(() => setFormatMsg(m => (m === msg ? '' : m)), 6000); };
+
+  async function saveFormat() {
+    const pkg = s.pkg;
+    if (formats?.[pkg] && !confirm(`Replace the saved ${pkg} format for everyone?`)) return;
+    const fields = {};
+    FORMAT_FIELDS.forEach(k => { fields[k] = s[k]; });
+    const value = { pkg, fields, savedAt: new Date().toISOString(), savedBy: userEmail || '' };
+    if (!(await storeFormat(pkg, value))) { flash('Not saved: no connection. Try again.'); return; }
+    setFormats(prev => ({ ...(prev || {}), [pkg]: value }));
+    flash(`✓ Saved. New ${pkg} quotes start from this, for every director.`);
   }
 
-  function clearTemplate() {
-    if (!confirm('Reset your default quote template? Future quotes will start from the built-in default.')) return;
-    try {
-      localStorage.removeItem(templateKey);
-      setTemplateMsg('Default template cleared');
-      setTimeout(() => setTemplateMsg(''), 3500);
-    } catch {}
+  async function removeFormat() {
+    const pkg = s.pkg;
+    if (!confirm(`Remove the saved ${pkg} format? New ${pkg} quotes will start from the built-in defaults again. The quote on screen doesn't change.`)) return;
+    const marker = { pkg, removed: true, removedAt: new Date().toISOString(), removedBy: userEmail || '' };
+    if (!(await storeFormat(pkg, marker))) { flash('Not removed: no connection. Try again.'); return; }
+    setFormats(prev => { const next = { ...(prev || {}) }; delete next[pkg]; return next; });
+    flash(`${pkg} format removed.`);
+  }
+
+  // The old default lived in one browser; this makes it the shared format for
+  // the package it was saved with, then clears the browser copy.
+  async function moveLegacy() {
+    if (!legacy) return;
+    const pkg = PACKAGES.includes(legacy.pkg) ? legacy.pkg : 'Full Bar';
+    if (formats?.[pkg] && !confirm(`There's already a shared ${pkg} format. Replace it with the default saved in this browser?`)) return;
+    const fields = {};
+    FORMAT_FIELDS.forEach(k => { if (legacy[k] !== undefined) fields[k] = legacy[k]; });
+    if (fields.addons) fields.addons = refreshAddons(fields.addons);
+    const value = { pkg, fields, savedAt: new Date().toISOString(), savedBy: userEmail || '', movedFromBrowser: true };
+    if (!(await storeFormat(pkg, value))) { flash('Not moved: no connection. Try again.'); return; }
+    const next = { ...(formats || {}), [pkg]: value };
+    setFormats(next);
+    try { localStorage.removeItem(legacyKey); } catch { /* already gone */ }
+    setLegacy(null);
+    if (!s.client.trim() && !s.enquiryId) setS(prev => withPackage(prev, packageStart(pkg, next)));
+    flash(`✓ Your saved default is now the shared ${pkg} format.`);
+  }
+
+  function discardLegacy() {
+    if (!confirm('Delete the old default saved in this browser? The shared package formats aren’t affected.')) return;
+    try { localStorage.removeItem(legacyKey); } catch { /* already gone */ }
+    setLegacy(null);
+  }
+
+  // Changing package part-way through a quote: with a saved format, ask before
+  // it replaces the lists (a quote nobody has started just takes it). Without
+  // one, or if they'd rather keep what's there, only the package's usual
+  // timings and drink counts change, as before.
+  function switchPackage(pkg) {
+    const untouched = !s.client.trim() && !s.enquiryId;
+    if (formats?.[pkg] && (untouched || confirm(
+      `Load the ${pkg} format?\n\nThis replaces the drinks lists, inclusions, extras, welcome drinks, timings and notes with the saved ${pkg} format. Client and event details stay.`
+    ))) {
+      setS(prev => withPackage(prev, packageStart(pkg, formats)));
+      return;
+    }
+    setS(prev => withPackage(prev, { pkg, ...(PKG_DEFAULTS[pkg] || {}) }));
   }
 
   function set(patch) { setS(prev => ({ ...prev, ...patch })); }
@@ -504,16 +622,21 @@ export default function QuoteClient({ userEmail }) {
     let id = null;
     try { id = new URLSearchParams(window.location.search).get('enquiry'); } catch { /* no window */ }
     if (!id) { deepLinkDone.current = true; return; }
-    if (!enquiries.length) return;            // wait for the list to load
+    if (!enquiries.length || formats === null) return;   // wait for both to load
     deepLinkDone.current = true;
     loadFromEnquiry(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enquiries]);
+  }, [enquiries, formats]);
 
   async function loadFromEnquiry(id) {
     if (!id) return;
     const e = enquiries.find(x => x.id === id);
     if (!e) return;
+    // The quote on screen goes. Fine if it belongs to an enquiry (its draft is
+    // saved); a quote that isn't linked to one would be lost, so ask.
+    if (!s.enquiryId && (s.client.trim() || s.base) && !confirm(
+      `Start a quote for ${e.name || 'this enquiry'}? The quote on screen isn't linked to an enquiry, so it will be cleared.`
+    )) return;
 
     // If this enquiry was quoted before, pick up where it was left rather than
     // starting again. Asks first, because the current quote may be wanted.
@@ -531,14 +654,18 @@ export default function QuoteClient({ userEmail }) {
       }
     }
 
-    const mappedPkg = serviceToPkg(e.serviceType);
-    set({
+    // A fresh quote: the package's saved format (picked from the service they
+    // asked for), with the enquiry's details on top. Nothing carries over from
+    // whichever quote was on screen before (its price, discount, cost lines).
+    const pkg = serviceToPkg(e.serviceType) || s.pkg;
+    const start = withPackage({ ...freshState(), salesPerson: s.salesPerson }, packageStart(pkg, formats));
+    setS({
+      ...start,
       enquiryId: e.id, client: e.name || '', venue: e.venue || '',
       edate: e.eventDate || '', guests: e.guestCount ?? '',
-      etype: e.eventType || s.etype,
+      etype: e.eventType || start.etype,
       email: e.email || '', phone: String(e.phone || ''),
       enquiryNotes: e.internalNotes || '',
-      ...(mappedPkg ? { pkg: mappedPkg, ...(PKG_DEFAULTS[mappedPkg] || {}) } : {}),
     });
   }
 
@@ -626,17 +753,9 @@ export default function QuoteClient({ userEmail }) {
   }
 
   function resetAll() {
-    if (!confirm('Reset the quote builder? Client-specific fields will be cleared; your saved template (if any) will be restored.')) return;
-    const fresh = freshState();
-    try {
-      const raw = localStorage.getItem(templateKey);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        setS({ ...fresh, ...saved });
-        return;
-      }
-    } catch { /* fall through to blank */ }
-    setS(fresh);
+    const from = formats?.[s.pkg] ? `the saved ${s.pkg} format` : `the built-in ${s.pkg} defaults`;
+    if (!confirm(`Start a blank quote? Client details are cleared and it starts from ${from}.`)) return;
+    setS(withPackage({ ...freshState(), salesPerson: s.salesPerson }, packageStart(s.pkg, formats)));
   }
 
   // ── Cost line handlers ──────────────────────────────────────────────
@@ -681,7 +800,8 @@ export default function QuoteClient({ userEmail }) {
         addonTotal={addonTotal} total={total} dep={dep}
         saving={saving} saveMsg={saveMsg} saveToNotion={saveToNotion} resetAll={resetAll}
         draftMsg={draftMsg} draftDirty={draftDirty}
-        saveAsTemplate={saveAsTemplate} clearTemplate={clearTemplate} templateMsg={templateMsg}
+        formats={formats} formatMsg={formatMsg} saveFormat={saveFormat} removeFormat={removeFormat}
+        switchPackage={switchPackage} legacy={legacy} moveLegacy={moveLegacy} discardLegacy={discardLegacy}
         stockItems={stockItems}
         addCostLine={addCostLine} updateCostLine={updateCostLine} removeCostLine={removeCostLine}
         toggleCheck={toggleCheck}
@@ -690,7 +810,7 @@ export default function QuoteClient({ userEmail }) {
   );
 }
 
-function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, draftMsg, draftDirty, saveAsTemplate, clearTemplate, templateMsg, stockItems, addCostLine, updateCostLine, removeCostLine, toggleCheck }) {
+function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total, dep, saving, saveMsg, saveToNotion, resetAll, draftMsg, draftDirty, formats, formatMsg, saveFormat, removeFormat, switchPackage, legacy, moveLegacy, discardLegacy, stockItems, addCostLine, updateCostLine, removeCostLine, toggleCheck }) {
   // Open and close times drive both the client-facing range and the service
   // hours the cost model bills against — set once, used twice.
   function setTimes(startMin, endMin) {
@@ -712,7 +832,9 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 3 }}>Build, preview live, print as PDF — saves to Notion</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select onChange={e => loadFromEnquiry(e.target.value)} defaultValue="" style={selStyle}>
+          {/* An action, not a setting: it springs back to the prompt, so a
+              cancelled load doesn't leave a name showing that isn't loaded. */}
+          <select onChange={e => { const id = e.target.value; e.target.value = ''; loadFromEnquiry(id); }} defaultValue="" style={selStyle}>
             <option value="">Load from enquiry…</option>
             {enquiries.map(e => <option key={e.id} value={e.id}>{e.name} — {fmtDate(e.eventDate)}</option>)}
           </select>
@@ -723,6 +845,16 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
       <div className="no-print" style={{ background: '#fdf8ec', border: '1px solid var(--gold)', color: '#7a6300', padding: '8px 14px', borderRadius: 6, fontSize: 12, marginBottom: 14 }}>
         💡 In the print dialog, expand <strong>More settings</strong> → untick <strong>Headers and footers</strong> for a clean PDF (removes the URL &amp; timestamp).
       </div>
+
+      {legacy && (
+        <div className="no-print" style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold)', color: '#7a6300', padding: '10px 14px', borderRadius: 6, fontSize: 12.5, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', lineHeight: 1.5 }}>
+          <span style={{ flex: '1 1 340px' }}>
+            <strong>Your old default quote is saved in this browser only.</strong> Make it the shared {PACKAGES.includes(legacy.pkg) ? legacy.pkg : 'Full Bar'} format so it works on every device and for every director.
+          </span>
+          <button onClick={moveLegacy} style={btnBlack}>Make it the shared format</button>
+          <button onClick={discardLegacy} style={btnOutline}>Delete it</button>
+        </div>
+      )}
 
       <EnquiryBrief s={s} enquiries={enquiries} />
 
@@ -768,18 +900,12 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
           <ThreeCol>
             <Field label="Guests"><input type="number" style={inputStyle} value={s.guests} onChange={e => set({ guests: e.target.value })} /></Field>
             <Field label="Package">
-              <select style={selStyle} value={s.pkg} onChange={e => {
-                // Picking a package reshapes the form (spirits/cocktails show or
-                // hide, read live from PKG_SHOWS) and sets its usual starting
-                // points — duration, welcome on/off, drink counts.
-                const pkg = e.target.value;
-                const d = PKG_DEFAULTS[pkg] || {};
-                const patch = { pkg, ...d };
-                if (d.nct != null) { const names = [...s.cocktailNames]; while (names.length < d.nct) names.push(''); patch.cocktailNames = names; }
-                if (d.nmt != null) { const names = [...s.mocktailNames]; while (names.length < d.nmt) names.push(''); patch.mocktailNames = names; }
-                set(patch);
-              }}>
-                {['Premium', 'Ultimate', 'Full Bar', 'Cocktail Experience', 'Welcome Drinks Only', 'Bar Only (client supplies alcohol)', 'Custom'].map(o => <option key={o}>{o}</option>)}
+              {/* Picking a package reshapes the form (spirits/cocktails show or
+                  hide, read live from PKG_SHOWS) and offers its saved format
+                  (see switchPackage). "· saved" marks the ones that have one. */}
+              <select style={selStyle} value={s.pkg} onChange={e => switchPackage(e.target.value)}>
+                {PACKAGES.map(o => <option key={o} value={o}>{o}{formats?.[o] ? ' · saved' : ''}</option>)}
+                {s.pkg && !PACKAGES.includes(s.pkg) && <option value={s.pkg}>{s.pkg}</option>}
               </select>
             </Field>
             <Field label="Setup access">
@@ -960,17 +1086,7 @@ function QuoteBuilderUI({ s, set, enquiries, loadFromEnquiry, addonTotal, total,
 
           <SigningLink s={s} addonTotal={addonTotal} total={total} dep={dep} />
 
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 6 }}>Your default template</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
-              Save the current quote structure (welcome drinks, spirits, inclusions, add-ons) as your default. Every new quote will start from these settings — client details always start blank.
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={saveAsTemplate} style={btnOutline}>Save as default</button>
-              <button onClick={clearTemplate} style={btnOutline}>Clear default</button>
-            </div>
-            {templateMsg && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--success)' }}>{templateMsg}</div>}
-          </div>
+          <FormatBox s={s} formats={formats} formatMsg={formatMsg} saveFormat={saveFormat} removeFormat={removeFormat} />
         </div>
 
         <InternalCostingPanel
@@ -1830,7 +1946,7 @@ function AddonEditor({ addons, onChange }) {
                   <textarea rows={2} value={a.desc || ''} onChange={e => update(a.id, { desc: e.target.value })} placeholder="One line on what the client gets" style={{ ...addonField, resize: 'vertical' }} />
                 </label>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>For this quote. Save as template to keep it for next time.</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>For this quote. Save it as the package format to keep it for next time.</span>
                   <button type="button" onClick={() => remove(a.id)} style={{ ...addonEditBtn, color: '#b4553b' }}>Remove</button>
                 </div>
               </div>
@@ -1869,6 +1985,38 @@ function NameList({ label, names, onChange }) {
 }
 
 // ---- Small layout helpers ---------------------------------------------------
+// The package's saved starting point: whether there is one, who saved it, and
+// the buttons to save or remove it. Shared, so the wording says so.
+function FormatBox({ s, formats, formatMsg, saveFormat, removeFormat }) {
+  const pkg = s.pkg;
+  const f = formats?.[pkg];
+  const saved = formats ? PACKAGES.filter(p => formats[p]) : [];
+  const when = f?.savedAt ? new Date(f.savedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: 6 }}>{pkg} format · shared with all directors</div>
+      <div style={{ fontSize: 12, marginBottom: 6, lineHeight: 1.5 }}>
+        {formats === null ? 'Loading saved formats…'
+          : f ? <>New {pkg} quotes start from the format {nameFor(f.savedBy)} saved{when ? ` on ${when}` : ''}.</>
+          : <>No saved {pkg} format yet, so new {pkg} quotes start from the built-in defaults.</>}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+        Saving keeps this quote’s drinks lists, inclusions, extras, welcome drinks, timings, notes and margin as the starting point for every new {pkg} quote. Client and event details, prices and the crew are never saved.
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={saveFormat} disabled={formats === null} style={btnOutline}>Save as the {pkg} format</button>
+        {f && <button onClick={removeFormat} style={{ ...btnOutline, color: 'var(--muted)' }}>Remove</button>}
+      </div>
+      {formatMsg && <div style={{ marginTop: 6, fontSize: 11, color: /^Not /.test(formatMsg) ? 'var(--danger)' : 'var(--success)' }}>{formatMsg}</div>}
+      {formats !== null && (
+        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
+          {saved.length ? <>Saved formats: {saved.join(' · ')}</> : 'No package formats saved yet.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SectionHead({ children }) {
   return <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', padding: '12px 0 7px', borderBottom: '1px solid var(--border)', marginBottom: 10, marginTop: 16 }}>{children}</div>;
 }

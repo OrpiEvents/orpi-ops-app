@@ -10,7 +10,7 @@ import {
   DRINKWARE, COST_CHECKS, PPH, PKG_SHOWS, pkgShows, WELCOME_MATCH, defaultCrew, crewFor,
   alcoholParts, alcoholLine, alcoholPerHead, welcomeParts, welcomePerHead, tastingState,
   computeCosts, unresolvedChecks, buildInclusions, fmtDate, fmtDatePretty, fmtDateLong, gbp,
-  addonQty, addonName, addonsTotal,
+  addonQty, addonName, addonsTotal, ACCESSORY_CHOICES, choicesFor, pickedItems, extrasLines,
 } from '@/lib/quoteModel';
 
 let idCounter = 0;
@@ -30,19 +30,61 @@ const DEF_SPIRITS = [
   { cat: 'Beer / Lager', items: ['Corona', 'Budweiser'] },
 ];
 const DEF_SOFT = ['Coca-Cola', 'Coke Zero', 'Lemonade', 'Lemonade Zero', 'Tonic', 'Soda', 'Water', 'Cranberry Juice', 'Tropical Juice'];
+// Extras. Price is per one; qty multiplies (see addonQty). `unit` changes how a
+// count reads ("Table bottle service (12 tables)" rather than "12× …").
+// Personalised bar accessories are picked item by item (ACCESSORY_CHOICES), so
+// the run sheet knows exactly what to order.
 const DEF_ADDONS = [
-  { label: 'Toast package', desc: 'Chilled Prosecco poured for every guest during speeches for the toast', price: '', on: false },
-  { label: 'Personalised bar accessories', desc: 'Bar mats (keepsake), drinks coasters, cocktail napkins & cocktail toppers/stirrers printed with event name, logo or monogram', price: '', on: false },
-  { label: 'Flair bartending show', desc: 'Theatrical bar performance (subject to venue)', price: '', on: false },
+  { label: 'Toast package', desc: 'A glass of chilled Prosecco for every guest, ready for the speeches', price: '', on: false },
+  { label: 'Personalised bar accessories', desc: 'Bar mats, coasters, napkins, cocktail toppers, stirrers, and acrylic or fabric menus, personalised with your names, logo or monogram', price: '', on: false, choices: ACCESSORY_CHOICES, items: [] },
+  { label: 'Flair bartending show', desc: 'A bottle-flipping flair show from our bartenders (subject to venue)', price: '', on: false },
   { label: 'Bar van', desc: 'Fully equipped outdoor bar van', price: '', on: false },
-  { label: 'Custom bar print', desc: 'Branded bar front print', price: '', on: false },
-  { label: 'Ripple machine', desc: 'Prints images onto the surface of drinks', price: '', on: false },
-  { label: 'Champagne tower', desc: 'Tiered glass tower — filled and cascaded', price: '', on: false },
-  { label: 'Cocktail masterclass', desc: 'Interactive session hosted by ORPI staff', price: '', on: false },
+  { label: 'Custom bar print', desc: 'Your names, monogram or design printed on the bar front', price: '', on: false },
+  { label: 'Ripple machine', desc: 'Your photo, logo or message printed on the foam of drinks', price: '', on: false },
+  { label: 'Champagne tower', desc: 'A tiered tower of coupes, poured and cascaded as a showpiece moment', price: '', on: false },
+  { label: 'Prosecco wall', desc: 'Chilled glasses of Prosecco on a display wall, ready as guests arrive', price: '', on: false },
+  { label: 'Shots package', desc: 'Two types of shots from our menu, served from the bar', price: '', on: false },
+  { label: 'Table bottle service', desc: 'A bottle and mixers on each table, topped up by our team', price: '', on: false, unit: 'table' },
   { label: 'Neon signage', desc: 'Custom neon sign for the bar or event space', price: '', on: false },
-  { label: 'Extended bar hours', desc: 'Additional service time (per hour)', price: '', on: false },
-  { label: 'Additional staff', desc: 'Extra ORPI staff (per person)', price: '', on: false },
+  { label: 'Extended bar hours', desc: 'Bar service kept open past the planned finish', price: '', on: false, unit: 'hour' },
+  { label: 'Additional staff', desc: 'Extra bartenders, table service or waiting staff', price: '', on: false },
 ];
+
+// Saved quote templates (one per login, in the browser) keep their own copy of
+// the extras, so a change to the list above would never reach them. When a
+// template loads: retired extras that aren't ticked are dropped, wording that
+// still matches an old default is updated (wording you've changed is kept),
+// and any new default extra is added.
+const RETIRED_ADDONS = ['cocktail masterclass'];
+const OLD_ADDON_DESCS = {
+  'toast package': 'Chilled Prosecco poured for every guest during speeches for the toast',
+  'personalised bar accessories': 'Bar mats (keepsake), drinks coasters, cocktail napkins & cocktail toppers/stirrers printed with event name, logo or monogram',
+  'flair bartending show': 'Theatrical bar performance (subject to venue)',
+  'custom bar print': 'Branded bar front print',
+  'ripple machine': 'Prints images onto the surface of drinks',
+  'champagne tower': 'Tiered glass tower — filled and cascaded',
+  'extended bar hours': 'Additional service time (per hour)',
+  'additional staff': 'Extra ORPI staff (per person)',
+};
+function refreshAddons(saved) {
+  if (!Array.isArray(saved)) return saved;
+  const key = a => String(a.label || '').trim().toLowerCase();
+  const defs = new Map(DEF_ADDONS.map(d => [key(d), d]));
+  const kept = saved
+    .filter(a => a.on || !RETIRED_ADDONS.includes(key(a)))
+    .map(a => {
+      const d = defs.get(key(a));
+      if (!d) return a;
+      const next = { ...a };
+      if (OLD_ADDON_DESCS[key(a)] && a.desc === OLD_ADDON_DESCS[key(a)]) next.desc = d.desc;
+      if (d.choices && !next.choices) next.choices = d.choices;
+      if (d.unit && !next.unit) next.unit = d.unit;
+      return next;
+    });
+  const have = new Set(kept.map(key));
+  const added = DEF_ADDONS.filter(d => !have.has(key(d))).map(d => ({ id: uid(), ...d }));
+  return [...kept, ...added];
+}
 const DEF_COMP = ['Dry ice', 'Bubble smoke gun'];
 
 // Half-hour slots from late morning through to 4am, because bars close late.
@@ -232,7 +274,7 @@ function buildClientMessage(s, total) {
   // Priced extras are named but never itemised — same rule as the PDF.
   const extras = s.addons
     .filter(a => a.on && parseFloat(a.price) > 0 && !(barAddon && a.id === barAddon.id))
-    .map(a => addonName(a));
+    .map(a => { const p = pickedItems(a); return p.length ? `${addonName(a)} (${p.join(', ').toLowerCase()})` : addonName(a); });
   if (extras.length) L.push(`\u{1F38A} Plus ${joinList(extras)}`);
 
   if (c.tasting === 'included') L.push('\u{1F37E} Pre-event drinks tasting included');
@@ -376,6 +418,7 @@ export default function QuoteClient({ userEmail }) {
       const raw = localStorage.getItem(templateKey);
       if (raw) {
         const saved = JSON.parse(raw);
+        if (saved.addons) saved.addons = refreshAddons(saved.addons);
         setS(prev => ({ ...prev, ...saved }));
       }
     } catch { /* ignore corrupt or missing */ }
@@ -506,6 +549,9 @@ export default function QuoteClient({ userEmail }) {
         body: JSON.stringify({
           enquiryId: s.enquiryId, name: s.client, amount: total, doctype: s.doctype,
           quotedSpirits, quotedBeer, quotedSoftDrinks,
+          // Bar + extras, one per line, so the booking and run sheet know what
+          // to bring and what to order (personalised items are printed to order).
+          quotedExtras: extrasLines(s),
         }),
       }).then(r => r.json());
       if (res.error) throw new Error(res.error);
@@ -1659,24 +1705,59 @@ function AddonEditor({ addons, onChange }) {
   function update(id, patch) { onChange(addons.map(a => a.id === id ? { ...a, ...patch } : a)); }
   function remove(id) { onChange(addons.filter(a => a.id !== id)); }
   function add() { onChange([...addons, { id: uid(), label: 'Custom add-on', desc: '', price: '', qty: 1, on: true }]); }
+  // Ticking an item under an extra that has choices (personalised accessories)
+  // also ticks the extra itself, so the item can't be picked but left off the quote.
+  function toggleItem(a, item) {
+    const picked = pickedItems(a);
+    const items = picked.includes(item) ? picked.filter(x => x !== item) : [...picked, item];
+    update(a.id, { items, ...(items.length ? { on: true } : {}) });
+  }
+  const textInput = { border: '1px solid transparent', borderRadius: 4, background: 'transparent', width: '100%', padding: '1px 3px', margin: '0 -3px', font: 'inherit' };
   return (
     <div>
-      {addons.map(a => (
-        <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--off)' }}>
-          <input type="checkbox" checked={a.on} onChange={e => update(a.id, { on: e.target.checked })} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 500 }}>{a.label}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.desc}</div>
+      {addons.map(a => {
+        const choices = choicesFor(a);
+        const picked = pickedItems(a);
+        return (
+          <div key={a.id} style={{ padding: '5px 0', borderBottom: '1px solid var(--off)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={a.on} onChange={e => update(a.id, { on: e.target.checked })} />
+              {/* Name and wording are editable here for this quote only; the
+                  default list lives in DEF_ADDONS, and "Save as template" keeps your versions. */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <input aria-label="Extra name" value={a.label} onChange={e => update(a.id, { label: e.target.value })}
+                  style={{ ...textInput, fontSize: 12, fontWeight: 500 }}
+                  onFocus={e => { e.target.style.borderColor = 'var(--border)'; }} onBlur={e => { e.target.style.borderColor = 'transparent'; }} />
+                <input aria-label="Extra description" value={a.desc || ''} placeholder="Description on the quote" onChange={e => update(a.id, { desc: e.target.value })}
+                  style={{ ...textInput, fontSize: 11, color: 'var(--muted)' }}
+                  onFocus={e => { e.target.style.borderColor = 'var(--border)'; }} onBlur={e => { e.target.style.borderColor = 'transparent'; }} />
+              </div>
+              {/* How many: 2 shots packages, 3 extra staff, 12 tables. The price is per one. */}
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>×</span>
+              <input type="number" min="1" step="1" inputMode="numeric" aria-label={`How many: ${a.label}`} title={a.unit ? `How many ${a.unit}s` : 'How many'}
+                style={{ ...miniInput, width: 56, textAlign: 'right' }} value={addonQty(a)}
+                onChange={e => update(a.id, { qty: Math.max(1, parseInt(e.target.value, 10) || 1) })} />
+              <input style={{ ...miniInput, width: 70, textAlign: 'right' }} value={a.price} onChange={e => update(a.id, { price: e.target.value })} placeholder="£ each" title="Price for one" />
+              <button onClick={() => remove(a.id)} style={rmBtn} title="Remove from this quote">✕</button>
+            </div>
+            {choices && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0 2px 24px' }}>
+                {choices.map(item => {
+                  const on = picked.includes(item);
+                  return (
+                    <button key={item} type="button" onClick={() => toggleItem(a, item)} aria-pressed={on}
+                      style={{ fontSize: 11, padding: '3px 9px', borderRadius: 12, cursor: 'pointer',
+                        border: `1px solid ${on ? 'var(--gold)' : 'var(--border)'}`,
+                        background: on ? 'var(--gold-bg)' : '#fff', color: on ? '#7a6300' : 'var(--muted)' }}>
+                      {on ? '✓ ' : ''}{item}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          {/* How many: 2 rounds of shots, 3 extra staff. The quote reads "2× …" and the price is per one. */}
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>×</span>
-          <input type="number" min="1" step="1" inputMode="numeric" aria-label={`How many: ${a.label}`} title="How many"
-            style={{ ...miniInput, width: 46, textAlign: 'right' }} value={addonQty(a)}
-            onChange={e => update(a.id, { qty: Math.max(1, parseInt(e.target.value, 10) || 1) })} />
-          <input style={{ ...miniInput, width: 70, textAlign: 'right' }} value={a.price} onChange={e => update(a.id, { price: e.target.value })} placeholder="£ each" title="Price for one" />
-          <button onClick={() => remove(a.id)} style={rmBtn}>✕</button>
-        </div>
-      ))}
+        );
+      })}
       <button onClick={add} style={addLinkStyle}>+ Add custom extra</button>
     </div>
   );

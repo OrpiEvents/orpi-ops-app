@@ -5,6 +5,7 @@
 
 import { matchScore, SAME_AT } from './matching';
 import { CATEGORIES } from './taxonomy';
+import { personalisedFromExtras } from './quoteModel';
 
 const NOTION_VERSION = '2022-06-28';
 const BASE = 'https://api.notion.com/v1';
@@ -100,6 +101,9 @@ function pageToEnquiry(page) {
     quotedSpirits: text(p['Quoted Spirits']),
     quotedBeer: text(p['Quoted Beer']),
     quotedSoftDrinks: text(p['Quoted Soft Drinks']),
+    // One line per extra on the latest saved quote ("2× Shots package",
+    // "Personalised bar accessories: Cocktail toppers, Acrylic menus").
+    quotedExtras: text(p['Quoted Extras']),
     lostReason: sel(p['Lost Reason']),
     dateQuoted: dateStart(p['Date Quoted']),
     dateDecided: dateStart(p['Date Decided']),
@@ -218,6 +222,7 @@ function enquiryToProperties(d) {
   if (d.quotedSpirits !== undefined) props['Quoted Spirits'] = { rich_text: [{ text: { content: d.quotedSpirits || '' } }] };
   if (d.quotedBeer !== undefined) props['Quoted Beer'] = { rich_text: [{ text: { content: d.quotedBeer || '' } }] };
   if (d.quotedSoftDrinks !== undefined) props['Quoted Soft Drinks'] = { rich_text: [{ text: { content: d.quotedSoftDrinks || '' } }] };
+  if (d.quotedExtras !== undefined) props['Quoted Extras'] = { rich_text: [{ text: { content: (d.quotedExtras || '').slice(0, 2000) } }] };
   // Growth / attribution fields (written by the tracked enquiry form and the
   // Meta lead-ads webhook).
   if (d.channel !== undefined) props['Enquiry Channel'] = d.channel ? { select: { name: d.channel } } : { select: null };
@@ -740,11 +745,12 @@ export async function createPurchase({ inventoryItemId, itemName, quantity, unit
 }
 
 // ---- Quote saving (writes back to the matching Sales Pipeline enquiry) ----
-export async function saveQuoteResult({ enquiryId, name, amount, quotedSpirits, quotedBeer, quotedSoftDrinks }) {
+export async function saveQuoteResult({ enquiryId, name, amount, quotedSpirits, quotedBeer, quotedSoftDrinks, quotedExtras }) {
   const brandFields = {};
   if (quotedSpirits !== undefined) brandFields.quotedSpirits = quotedSpirits;
   if (quotedBeer !== undefined) brandFields.quotedBeer = quotedBeer;
   if (quotedSoftDrinks !== undefined) brandFields.quotedSoftDrinks = quotedSoftDrinks;
+  if (quotedExtras !== undefined) brandFields.quotedExtras = quotedExtras;
 
   if (enquiryId) {
     return updateEnquiry(enquiryId, { status: 'Quote Sent', quoteSent: amount, ...brandFields });
@@ -857,6 +863,10 @@ function pageToBooking(page) {
     outboundLoggedAt: p['Outbound Logged At']?.date?.start || null,
     returnLoggedAt: p['Return Logged At']?.date?.start || null,
     outboundLog: text(p['Outbound Log']),
+    // Extras booked on the quote, one per line, and the personalised items
+    // (printed to order) picked under "Personalised bar accessories".
+    extras: text(p['Extras']),
+    personalisedItems: multiSel(p['Personalised Items']),
   };
 }
 
@@ -874,6 +884,11 @@ export async function createBookingFromEnquiry(enq) {
   // into the booking's Spirits Selection / Beer Selection / Soft Drinks
   // Selection fields yet. The Planning tab shows a "Populate from quote"
   // review banner instead, so the user can confirm before it commits.
+  // Extras are different: they're what the client booked, so they go
+  // straight onto the booking, with the personalised items to order.
+  const extras = enq.quotedExtras
+    ? { extras: enq.quotedExtras, personalisedItems: personalisedFromExtras(enq.quotedExtras) }
+    : {};
   const page = await notionFetch('/pages', {
     method: 'POST',
     body: JSON.stringify({
@@ -891,6 +906,7 @@ export async function createBookingFromEnquiry(enq) {
         referredBy: enq.referredBy,
         eventType: enq.eventType,
         internalNotes: `Created from enquiry. ${enq.internalNotes || ''}`.trim(),
+        ...extras,
       }),
     }),
   });
@@ -919,6 +935,12 @@ function bookingToProperties(d) {
   if (d.beerSelection !== undefined) props['Beer Selection'] = { rich_text: [{ text: { content: d.beerSelection || '' } }] };
   if (d.spiritsSelection !== undefined) props['Spirits Selection'] = { rich_text: [{ text: { content: d.spiritsSelection || '' } }] };
   if (d.softDrinksSelection !== undefined) props['Soft Drinks Selection'] = { rich_text: [{ text: { content: d.softDrinksSelection || '' } }] };
+  if (d.extras !== undefined) props['Extras'] = { rich_text: [{ text: { content: (d.extras || '').slice(0, 2000) } }] };
+  if (d.personalisedItems !== undefined) {
+    const items = (Array.isArray(d.personalisedItems) ? d.personalisedItems : []).map(x => String(x || '').trim()).filter(Boolean);
+    // Notion option names can't contain commas.
+    props['Personalised Items'] = { multi_select: [...new Set(items)].map(name => ({ name: name.replace(/,/g, '') })) };
+  }
   if (d.targetMargin !== undefined) props['Target Margin %'] = { number: d.targetMargin === '' || d.targetMargin === null ? null : Number(d.targetMargin) };
   if (d.outboundLoggedAt !== undefined) props['Outbound Logged At'] = { date: d.outboundLoggedAt ? { start: d.outboundLoggedAt } : null };
   if (d.returnLoggedAt !== undefined) props['Return Logged At'] = { date: d.returnLoggedAt ? { start: d.returnLoggedAt } : null };

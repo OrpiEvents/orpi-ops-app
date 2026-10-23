@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { drinksConfirmationGates, eventCompletionGates, bookingStageIndex, LIFECYCLE_STAGES } from '@/lib/gates';
+import { ACCESSORY_CHOICES } from '@/lib/quoteModel';
 
 const COST_TYPES = ['Alcohol', 'Mixers', 'Ice', 'Staff', 'Glassware', 'Logistics/Travel', 'Equipment', 'Bar Hire/Decor', 'Marketing', 'Printing/Branding', 'Contingency', 'Estimation', 'Other/Misc'];
 
@@ -23,6 +24,8 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
     beerSelection: booking.beerSelection || '',
     spiritsSelection: booking.spiritsSelection || '',
     softDrinksSelection: booking.softDrinksSelection || '',
+    extras: booking.extras || '',
+    personalisedItems: Array.isArray(booking.personalisedItems) ? booking.personalisedItems : [],
     cocktailsConfirmed: !!booking.cocktailsConfirmed,
     mocktailsConfirmed: !!booking.mocktailsConfirmed,
     staffConfirmed: !!booking.staffConfirmed,
@@ -132,8 +135,21 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
       spiritsSelection: prev.spiritsSelection || quotedSelections.quotedSpirits || '',
       beerSelection: prev.beerSelection || quotedSelections.quotedBeer || '',
       softDrinksSelection: prev.softDrinksSelection || quotedSelections.quotedSoftDrinks || '',
+      extras: prev.extras || quotedSelections.quotedExtras || '',
+      personalisedItems: prev.personalisedItems.length ? prev.personalisedItems : (quotedSelections.quotedPersonalised || []),
     }));
     setReviewBannerDismissed(true);
+  }
+
+  // Personalised items are printed to order, so the run sheet lists them as
+  // things to order. Picking one here adds it; tapping again takes it off.
+  function togglePersonalised(item) {
+    setForm(prev => ({
+      ...prev,
+      personalisedItems: prev.personalisedItems.includes(item)
+        ? prev.personalisedItems.filter(x => x !== item)
+        : [...prev.personalisedItems, item],
+    }));
   }
 
   async function addCostFromStock() {
@@ -209,6 +225,16 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
   // we tell them WHICH tab has stuff to do, not what it is; the tab itself
   // shows the detail once opened.
   const providesAlcohol = booking.alcoholProvidedBy === 'ORPI';
+  // The "Populate from quote" banner only shows when the quote has something
+  // for a field that's still empty here.
+  const quoteCanFill = !!quotedSelections && !!(
+    (quotedSelections.quotedSpirits && !form.spiritsSelection) ||
+    (quotedSelections.quotedBeer && !form.beerSelection) ||
+    (quotedSelections.quotedSoftDrinks && !form.softDrinksSelection) ||
+    (quotedSelections.quotedExtras && !form.extras) ||
+    ((quotedSelections.quotedPersonalised || []).length && !form.personalisedItems.length)
+  );
+  const personalisedOptions = [...ACCESSORY_CHOICES, ...form.personalisedItems.filter(x => !ACCESSORY_CHOICES.includes(x))];
   const planningAttention =
     (form.cocktailMenu && !form.cocktailsConfirmed) ||
     (form.mocktailMenu && !form.mocktailsConfirmed) ||
@@ -397,13 +423,13 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Field label="Mocktails"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.mocktailMenu} onChange={e => set({ mocktailMenu: e.target.value })} placeholder="TBC, TBC" /></Field>
               </Section>
               <Section title="Event-specific selections">
-                {quotedSelections && !reviewBannerDismissed && (!form.spiritsSelection || !form.beerSelection || !form.softDrinksSelection) && (
+                {quoteCanFill && !reviewBannerDismissed && (
                   <div style={{ background: '#fff8e1', border: '1px solid #f0c674', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#7a5c00', marginBottom: 6 }}>
                       Populate from quote?
                     </div>
                     <div style={{ fontSize: 11, color: '#7a5c00', marginBottom: 10, lineHeight: 1.5 }}>
-                      These brands were quoted to the client. Review, then tap Confirm to fill the empty fields below. Nothing you've already typed will be overwritten.
+                      This is what was quoted to the client. Review, then tap Confirm to fill the empty fields below. Nothing you've already typed will be overwritten.
                     </div>
                     {quotedSelections.quotedSpirits && (
                       <div style={{ fontSize: 11, marginBottom: 4 }}>
@@ -416,8 +442,13 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                       </div>
                     )}
                     {quotedSelections.quotedSoftDrinks && (
-                      <div style={{ fontSize: 11, marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, marginBottom: 4 }}>
                         <strong style={{ color: '#7a5c00' }}>Soft drinks:</strong> <span style={{ color: '#333' }}>{quotedSelections.quotedSoftDrinks}</span>
+                      </div>
+                    )}
+                    {quotedSelections.quotedExtras && (
+                      <div style={{ fontSize: 11, marginBottom: 4 }}>
+                        <strong style={{ color: '#7a5c00' }}>Extras:</strong> <span style={{ color: '#333' }}>{quotedSelections.quotedExtras.split('\n').filter(Boolean).join(' · ')}</span>
                       </div>
                     )}
                     <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -438,6 +469,30 @@ export default function BookingPanel({ booking, onClose, onSaved }) {
                 <Field label="Spirits"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.spiritsSelection} onChange={e => set({ spiritsSelection: e.target.value })} placeholder="Absolut, Bombay Sapphire, Jameson…" /></Field>
                 <Field label="Beer"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.beerSelection} onChange={e => set({ beerSelection: e.target.value })} placeholder="Budweiser only (dropped Peroni)" /></Field>
                 <Field label="Soft drinks & mixers"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={form.softDrinksSelection} onChange={e => set({ softDrinksSelection: e.target.value })} placeholder="Coca-Cola, Diet Coke, Lemonade, Tonic, Soda…" /></Field>
+              </Section>
+              <Section title="Extras & personalised items">
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                  What the client booked on top of the package, one per line. The run sheet picks these up.
+                </p>
+                <Field label="Extras booked"><textarea style={{ ...inputStyle, resize: 'vertical' }} rows={5} value={form.extras} onChange={e => set({ extras: e.target.value })} placeholder={"e.g. Custom bar print\n2× Shots package\nTable bottle service (12 tables)"} /></Field>
+                <Field label="Personalised items to order">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {personalisedOptions.map(item => {
+                      const on = form.personalisedItems.includes(item);
+                      return (
+                        <button key={item} type="button" onClick={() => togglePersonalised(item)} aria-pressed={on}
+                          style={{ fontSize: 11, padding: '4px 10px', borderRadius: 12, cursor: 'pointer',
+                            border: `1px solid ${on ? 'var(--gold)' : 'var(--border)'}`,
+                            background: on ? 'var(--gold-bg)' : '#fff', color: on ? '#7a6300' : 'var(--muted)' }}>
+                          {on ? '✓ ' : ''}{item}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                    Printed with the client's names, logo or monogram, so they need ordering ahead. The standard printed menu is included in every package and isn't listed here.
+                  </p>
+                </Field>
               </Section>
               <Section title="Recipe overrides">
                 <p style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>

@@ -369,9 +369,69 @@ export function gbp(n) { return '£' + (n || 0).toLocaleString('en-GB', { minimu
 // the extra with its count ("2× Shots package") and the total multiplies.
 // Extras saved before quantities existed have no qty, which counts as 1.
 export function addonQty(a) { return Math.max(1, parseInt(a && a.qty, 10) || 1); }
-export function addonName(a) { const q = addonQty(a); return q > 1 ? `${q}× ${a.label}` : a.label; }
+// An extra with a unit reads "Table bottle service (12 tables)"; without one,
+// "2× Shots package". A single one is just its name.
+export function addonName(a) {
+  const q = addonQty(a);
+  if (q <= 1) return a.label;
+  return a.unit ? `${a.label} (${q} ${a.unit}${q === 1 ? '' : 's'})` : `${q}× ${a.label}`;
+}
 export function addonsTotal(addons) {
   return (addons || [])
     .filter(a => a.on && parseFloat(a.price) > 0)
     .reduce((sum, a) => sum + parseFloat(a.price) * addonQty(a), 0);
+}
+
+// Personalised bar accessories are picked item by item, because they're
+// printed to order and the run sheet has to know exactly what to order. The
+// standard custom printed menu is in every package (see buildInclusions);
+// acrylic and fabric menus are the upgrades. Older quotes saved before the
+// picker existed are recognised by name.
+export const ACCESSORY_CHOICES = [
+  'Bar mats (keepsake)', 'Drinks coasters', 'Cocktail napkins', 'Cocktail toppers', 'Stirrers',
+  'Acrylic menus', 'Fabric menus',
+];
+export function choicesFor(a) {
+  if (!a) return null;
+  if (Array.isArray(a.choices) && a.choices.length) return a.choices;
+  return /personalised bar accessor/i.test(a.label || '') ? ACCESSORY_CHOICES : null;
+}
+export function pickedItems(a) {
+  const choices = choicesFor(a);
+  if (!choices) return [];
+  return (Array.isArray(a.items) ? a.items : []).filter(x => choices.includes(x));
+}
+// The line the quote prints under a ticked extra: the picked items when there
+// are any ("Cocktail toppers, Acrylic menus — personalised with your names,
+// logo or monogram"), otherwise its own description.
+export function addonDetail(a) {
+  const picked = pickedItems(a);
+  if (picked.length) return `${picked.join(', ')}, personalised with your names, logo or monogram`;
+  return a.desc || '';
+}
+
+// What the quote books, one line per extra, for Notion ("Quoted Extras" on the
+// enquiry, then "Extras" on the booking) and the run sheet. The bar comes
+// first because it's the first thing loaded.
+export function extrasLines(s) {
+  const lines = [];
+  if (s && s.barUsed) lines.push(`Bar: ${s.barUsed}`);
+  ((s && s.addons) || []).filter(a => a.on && (a.label || '').trim()).forEach(a => {
+    const picked = pickedItems(a);
+    lines.push(picked.length ? `${addonName(a)}: ${picked.join(', ')}` : addonName(a));
+  });
+  return lines.join('\n');
+}
+
+// Back from an extras text to the personalised items in it, so a booking can
+// fill its "Personalised Items" from the quote. Reads the list after the colon
+// on any line, so it still works if the extra was renamed on the quote. Only
+// names we know are kept, in the order they're listed in ACCESSORY_CHOICES.
+export function personalisedFromExtras(text) {
+  const listed = new Set();
+  String(text || '').split('\n').forEach(l => {
+    if (!l.includes(':')) return;
+    l.slice(l.indexOf(':') + 1).split(',').forEach(x => listed.add(x.trim().toLowerCase()));
+  });
+  return ACCESSORY_CHOICES.filter(c => listed.has(c.toLowerCase()));
 }

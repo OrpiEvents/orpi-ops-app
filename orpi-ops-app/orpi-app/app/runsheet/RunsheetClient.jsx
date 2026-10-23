@@ -83,7 +83,9 @@ const blank=()=>({id:String(Date.now()),ev:{client:"",date:"",venue:"",service:"
  gQty:{},gExtra:[],
  // Pulled from the confirmed booking in Notion. `requests` is the internal
  // notes field — the place anything a client specifically asked for ends up.
- bookingId:"",requests:"",closedAt:"",
+ // extrasBooked and personalised are the booking's extras (one per line) and
+ // the personalised items to order, saved so they still show offline.
+ bookingId:"",requests:"",closedAt:"",extrasBooked:"",personalised:[],
  // {Glassware:{amount:"240",note:"Hire invoice"}} or {Staff:{na:true}}
  finalCosts:{},
  // Event-only brand swaps: {"Absolut Vodka 1L":"Smirnoff Red 1L"}. Applies
@@ -320,6 +322,8 @@ export default function Runsheet(){
   if(!b){up("ev",p=>p);return;}
   up("bookingId",()=>id);
   up("requests",()=>b.internalNotes||"");
+  up("extrasBooked",()=>b.extras||"");
+  up("personalised",()=>Array.isArray(b.personalisedItems)?b.personalisedItems:[]);
   up("ev",p=>({...p,
    client:b.clientName||b.name||p.client,
    date:b.eventDate?new Date(b.eventDate+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}):p.date,
@@ -400,6 +404,22 @@ export default function Runsheet(){
  // the shopping list or the close, but stay on the sheet so staff see them.
  const supplier=E.supplier||{};
  const isClient=n=>supplier[NK(n)]==="client";
+
+ // Extras and personalised items read live from the linked booking once the
+ // bookings list has loaded, falling back to the copy saved at the last pull.
+ const linked=E.bookingId?bookings.find(x=>x.id===E.bookingId):null;
+ const extrasBooked=String((linked&&linked.extras!==undefined?linked.extras:E.extrasBooked)||"").trim();
+ const personalised=(linked&&Array.isArray(linked.personalisedItems)?linked.personalisedItems:E.personalised)||[];
+ const extrasPanel=(extrasBooked||personalised.length)?(
+  <div className="mx-5 mt-4 rounded-xl px-4 py-3" style={{background:"#FFFDF7",border:"1px solid "+GOLD}}>
+   {!!extrasBooked&&<>
+    <div className="text-xs font-medium mb-1" style={{color:"#7a6300",letterSpacing:".08em"}}>EXTRAS BOOKED</div>
+    <div className="text-sm whitespace-pre-wrap" style={{color:INK}}>{extrasBooked}</div></>}
+   {!!personalised.length&&<>
+    <div className={"text-xs font-medium mb-1"+(extrasBooked?" mt-3":"")} style={{color:"#7a6300",letterSpacing:".08em"}}>PERSONALISED · TO ORDER</div>
+    <div className="text-sm" style={{color:INK}}>{personalised.join(", ")}</div>
+    <div className="text-xs text-neutral-500 mt-1">Printed with the client's names or logo, so order these well ahead.</div></>}
+  </div>):null;
 
  const buy=E.buy||{}, buyExtra=E.buyExtra||[];
  function toggleBuy(name){
@@ -583,8 +603,10 @@ export default function Runsheet(){
  L.push(`Service: ${ev.service}${ev.guests?` · ${ev.guests} guests`:""}`);L.push("");
  L.push("Normal bar service and cocktails and mocktails");L.push("");
  L.push(`Staff: ${ev.arrival} arrival`);
- if((E.requests||"").trim()){L.push("");L.push("CLIENT REQUESTS:");L.push(E.requests.trim());}
  staff.forEach(s=>s.name.trim()&&L.push(`${s.name}${s.role?` ${s.role}`:""} - ${s.transport}`));
+ if((E.requests||"").trim()){L.push("");L.push("CLIENT REQUESTS:");L.push(E.requests.trim());}
+ if(extrasBooked){L.push("");L.push("EXTRAS BOOKED:");L.push(extrasBooked);}
+ if(personalised.length){L.push("");L.push(`PERSONALISED ITEMS: ${personalised.join(", ")}`);}
  TYPES.forEach(t=>{const ks=picked.filter(d=>d.type===t);if(!ks.length)return;
   L.push("");L.push(`${t}s:`);
   ks.forEach(d=>{L.push("");L.push(`${d.name} - ${d.method} - ${d.glass} - ${d.ice} ice`);
@@ -647,6 +669,7 @@ export default function Runsheet(){
       <div className="text-xs font-medium mb-1" style={{color:"#A8453A",letterSpacing:".08em"}}>CLIENT REQUESTS</div>
       <div className="text-sm whitespace-pre-wrap" style={{color:"#6B3833"}}>{E.requests}</div>
      </div>)}
+    {extrasPanel}
 
     {!!newInv.length&&(
      <div className="mx-5 mt-4 mb-1 rounded-xl px-4 py-3" style={{background:"#FFFDF7",border:"1px solid "+GOLD}}>
@@ -996,6 +1019,7 @@ export default function Runsheet(){
     <div className="text-xs font-medium mb-1" style={{color:"#A8453A",letterSpacing:".08em"}}>CLIENT REQUESTS</div>
     <div className="text-sm whitespace-pre-wrap" style={{color:"#6B3833"}}>{E.requests}</div>
    </div>)}
+  {tab==="out"&&extrasPanel&&<div className="mb-3">{extrasPanel}</div>}
   {/* Nothing downstream can rescue these, so they get the loudest panel on the
       tab and sit above everything else. */}
   {tab==="back"&&!!unpriced.length&&(

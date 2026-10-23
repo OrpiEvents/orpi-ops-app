@@ -10,13 +10,14 @@ export async function POST(request) {
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   if (roleOf(user) !== 'director') return NextResponse.json({ error: 'Your login doesn’t have access to this.' }, { status: 403 });
 
-  const { enquiryId, name, amount, doctype, quotedSpirits, quotedBeer, quotedSoftDrinks } = await request.json();
+  const { enquiryId, name, amount, doctype, quotedSpirits, quotedBeer, quotedSoftDrinks, quotedExtras } = await request.json();
   if (!name?.trim()) return NextResponse.json({ error: 'Client name is required' }, { status: 400 });
 
   try {
     const enquiry = await saveQuoteResult({
       enquiryId, name, amount: amount || 0,
       quotedSpirits, quotedBeer, quotedSoftDrinks,
+      quotedExtras: typeof quotedExtras === 'string' ? quotedExtras.slice(0, 2000) : undefined,
     });
     await logActivity({
       userEmail: user.email,

@@ -6,7 +6,7 @@
 // quote state, so what the client signs is exactly what the builder showed.
 // Pure presentation — all the numbers come in as props or from quoteModel.
 
-import { buildInclusions, pkgShows, fmtDatePretty, fmtDateLong, gbp, addonName } from '@/lib/quoteModel';
+import { buildInclusions, pkgShows, fmtDatePretty, fmtDateLong, gbp, addonName, addonDetail } from '@/lib/quoteModel';
 
 // The "(client supplied)" tag shown next to a client-provided item on the quote.
 function clientMark(item) {
@@ -160,7 +160,7 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
                   <span style={{ color: 'var(--gold)', fontSize: 11, lineHeight: 1.45, flexShrink: 0 }}>✓</span>
                   <span style={{ fontSize: 11.5, color: '#333', lineHeight: 1.45 }}>
                     <span style={{ fontWeight: 500 }}>{addonName(a)}</span>
-                    {a.desc ? <span style={{ color: '#8a8880' }}> — {a.desc}</span> : null}
+                    {addonDetail(a) ? <span style={{ color: '#8a8880' }}> — {addonDetail(a)}</span> : null}
                   </span>
                 </div>
               ))}

@@ -10,7 +10,7 @@ import { authorize } from '@/lib/apiAuth';
 // weekly at most.
 
 import { latestUnitCosts, unitCostFor } from '@/lib/pricing';
-import { sectionFor, GARNISH_SECTION } from '@/lib/taxonomy';
+import { sectionFor, stockCategoryFor, GARNISH_SECTION } from '@/lib/taxonomy';
 
 const TOKEN = process.env.NOTION_TOKEN || process.env.NOTION_API_KEY;
 const DB_DRINKS = process.env.NOTION_DB_DRINKS || '3426ca9d054980b193cadeca4f2bb1b4';
@@ -134,12 +134,14 @@ async function build() {
     const item = invById[relIds(p['\u{1F37A} Inventory Items'])[0]];
     const q = num(p['Quantity']) || 0;
     const name = title(p['Ingredient']) || text(p['Ingredient']);
+    const u = sel(p['Unit']) || text(p['Unit']) || 'ml';
     const ing = {
       n: name,
       q,
-      u: sel(p['Unit']) || text(p['Unit']) || 'ml',
+      u,
       s: item ? item.n : '',
-      sec: sectionFor(name, item ? item.cat : 'Other'),
+      // No stock item (most garnishes) → guess the kind from the name.
+      sec: sectionFor(name, item ? item.cat : (stockCategoryFor(name) || 'Other'), u),
       // Same formula the bundled file uses: quantity x cost per ml.
       c: item ? Math.round(q * item.cpm * 10000) / 10000 : 0,
     };

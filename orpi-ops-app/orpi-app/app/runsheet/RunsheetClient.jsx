@@ -1,8 +1,9 @@
 'use client';
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabaseBrowser";
 import DRINKS_DATA from "./drinks-data.json";
-import { costTypeFor, CATEGORIES, sectionFor, GARNISH_SECTION } from "@/lib/taxonomy";
+import { costTypeFor, CATEGORIES, sectionFor, stockCategoryFor, GARNISH_SECTION, SPIRITS_SECTION, MIXERS_SECTION, RUNSHEET_SECTIONS } from "@/lib/taxonomy";
+import { makeResolver, migrateEventNames, garnishKey } from "@/lib/runsheetNames";
 import { matchScore } from "@/lib/matching";
 import { MIXER_LEVELS, levelSwaps, levelAffects } from "@/lib/mixers";
 import { parseSelection } from "@/lib/selections";
@@ -59,8 +60,14 @@ const GOLD="#B48A3C",INK="#101010",LINE="#E6E2DA";
 // Cost per ml from a bottle price and size — what makes a hand-added product
 // cost exactly like a stocked one.
 const cpmOf=(cost,ml)=>(Number(ml)>0?Number(cost)/Number(ml):0);
-const SEC=["Cocktail spirits","Back bar","Chilled — critical","Mixers & juices"];
+// One heading per kind of product. The back bar used to be a heading of its
+// own, so its soft drinks sat apart from the cocktail mixers and the same
+// bottle could appear under both; now each row just says what it's for.
+const SEC=RUNSHEET_SECTIONS;
 const GSEC=GARNISH_SECTION;
+// The last library Notion sent, kept on the device so a sheet opened with no
+// signal still uses today's product names rather than the bundled file's.
+const LIB_KEY="orpi-drinks-library";
 const DISPOSABLE=["Plastic Shot"];
 // Normalised key for matching a product name to a per-event supplier choice.
 const NK=s=>(s||"").toLowerCase().replace(/\s+/g," ").trim();
@@ -149,15 +156,34 @@ export default function Runsheet(){
  // Live library from Notion. Failure is fine and silent — we already have a
  // working copy on screen.
  useEffect(()=>{
+  let live=false;
+  try{
+   const saved=JSON.parse(localStorage.getItem(LIB_KEY)||"null");
+   if(saved?.drinks?.length&&saved?.inventory?.length){setLIB(saved.drinks);setINV(saved.inventory);setLibSource("saved");}
+  }catch(e){}
   fetch("/api/drinks").then(r=>r.json())
    .then(res=>{
-    if(res.error){setLibSource("error: "+res.error);return;}
-    if(!res.drinks?.length){setLibSource("empty response");return;}
+    if(res.error){setLibSource(s=>s==="saved"?s:"error: "+res.error);return;}
+    if(!res.drinks?.length){setLibSource(s=>s==="saved"?s:"empty response");return;}
+    live=true;
     setLIB(res.drinks);setINV(res.inventory||FALLBACK_INV);
     setLibSource(res.stale?"cached":"notion");
+    try{localStorage.setItem(LIB_KEY,JSON.stringify({drinks:res.drinks,inventory:res.inventory||[]}));}catch(e){}
    })
-   .catch(e=>setLibSource("unreachable"));
+   .catch(e=>{if(!live)setLibSource(s=>s==="saved"?s:"unreachable");});
  },[]);
+
+ // Names Notion has since changed ("Schweppes Soda Water 1L" → "Schweppes Soda
+ // Water") are moved onto today's name, counts and all, so a bottle never shows
+ // twice. Only against the live library: the bundled file is older than the
+ // sheets, and renaming toward it would undo the move.
+ const resolveInv=useMemo(()=>makeResolver(INV),[INV]);
+ useEffect(()=>{
+  if(!ready||!events||(libSource!=="notion"&&libSource!=="cached"))return;
+  let changed=false;
+  const next=events.map(ev=>{const m=migrateEventNames(ev,resolveInv);if(m!==ev)changed=true;return m;});
+  if(changed)setEvents(next);
+ },[ready,events,libSource,resolveInv]);
 
  // Confirmed bookings, so a run sheet can be filled from one rather than
  // retyped. Silent on failure — the run sheet works offline and typing the
@@ -427,16 +453,6 @@ export default function Runsheet(){
    if(n[name]!==undefined)delete n[name];else n[name]="";
    return n;});
  }
- const shopRows=[
-  ...Object.keys(buy).sort().map(n=>({n,q:buy[n],fixed:true})),
-  ...buyExtra.map((x,i)=>({n:x.n,q:x.q,i})),
- ];
- const shopCount=shopRows.filter(r=>r.n&&r.n.trim()).length;
- const shopList=[
-  `Shopping — ${ev.client||"Event"}${ev.date?`, ${ev.date}`:""}`,
-  "",
-  ...shopRows.filter(r=>r.n&&r.n.trim()).map(r=>r.q?`${r.q} × ${r.n}`:r.n),
- ].join("\n");
 
  // ── Glassware ───────────────────────────────────────────────────
  // The menu decides WHICH glasses are needed. Quantities are typed — nobody
@@ -486,9 +502,17 @@ export default function Runsheet(){
  const edQ=(d,i)=>ovr[d.name]?.[i]!==undefined&&ovr[d.name][i]!==d.ing[i].q;
  const edP=(d,i)=>pOf(d,i)!==(d.ing[i].s||"");
  const lineCost=(d,i)=>{const nm=pOf(d,i);if(isClient(nm))return 0;const it=BYX[nm];return it?qOf(d,i)*it.cpm:(d.ing[i].q?d.ing[i].c/d.ing[i].q*qOf(d,i):d.ing[i].c);};
- const secOf=n=>sectionFor(n,BYX[n]?.cat||"Other");
- const rws=d=>{const r=d.ing.map((ing,i)=>rm[d.name]?.[i]?null:({k:"b",i,u:ing.u,sec:ing.sec})).filter(Boolean);
-  (add[d.name]||[]).forEach((a,j)=>r.push({k:"a",i:j,u:a.u,sec:a.s?secOf(a.s):"Mixers & juices"}));return r;};
+ // A product's kind: its stock row, or a guess from the name when it isn't
+ // stocked (most garnishes, and anything typed in by hand).
+ const catOf=n=>BYX[n]?.cat||stockCategoryFor(n)||"Other";
+ const secOf=(n,u)=>sectionFor(n,catOf(n),u);
+ // Worked out here rather than read off the library, so a sheet opened on the
+ // bundled file sorts exactly like one opened on Notion's.
+ const ingSec=(d,i)=>{const ing=d.ing[i];
+  const cat=BYX[pOf(d,i)]?.cat||BYX[ing.s]?.cat||stockCategoryFor(ing.n)||"Other";
+  return sectionFor(ing.n,cat,ing.u);};
+ const rws=d=>{const r=d.ing.map((ing,i)=>rm[d.name]?.[i]?null:({k:"b",i,u:ing.u,sec:ingSec(d,i)})).filter(Boolean);
+  (add[d.name]||[]).forEach((a,j)=>r.push({k:"a",i:j,u:a.u,sec:a.s?secOf(a.s,a.u):MIXERS_SECTION}));return r;};
  const aQ=(d,j)=>add[d.name][j].q,aP=(d,j)=>add[d.name][j].s;
  const aCost=(d,j)=>{const nm=aP(d,j);if(isClient(nm))return 0;const it=BYX[nm];return it?aQ(d,j)*it.cpm:0;};
  const cost=d=>rws(d).reduce((t,r)=>r.sec===GSEC?t:t+(r.k==="b"?lineCost(d,r.i):aCost(d,r.i)),0);
@@ -498,24 +522,68 @@ export default function Runsheet(){
  picked.forEach(d=>rws(d).forEach(r=>{const b=r.k==="b",k=b?(pOf(d,r.i)||d.ing[r.i].n):aP(d,r.i);if(!k)return;
   if(!map[k])map[k]={n:k,sec:r.sec,uses:[],by:isClient(k)?"client":"orpi"};
   map[k].uses.push(`${d.name} @ ${b?qOf(d,r.i):aQ(d,r.i)}${r.u}`);}));
+ // Garnishes get written differently across recipes ("Fresh Mint" and "Fresh
+ // Mint Leaves") but are bought as one thing, so they share a row. The first
+ // name keeps it; the others are remembered as aliases, so a cost or a
+ // shopping-list tick saved under one of them still counts.
+ const gByKey={};
+ Object.keys(map).forEach(k=>{const r=map[k];if(r.sec!==GSEC)return;
+  const gk=garnishKey(k),keep=gByKey[gk];
+  if(!keep){gByKey[gk]=r;r.alias=[];return;}
+  keep.uses.push(...r.uses);keep.alias.push(k);delete map[k];});
  // Back bar items join the same map rather than getting rows of their own. A
  // bottle that's in a cocktail AND on the back bar — Fever-Tree Ginger Ale, say
  // — is still one bottle. Two rows meant two Out/In boxes writing to the same
- // key, and two cost lines on close taking it off stock twice. It keeps the
- // section the recipe put it in and just gains the back bar as another use.
+ // key, and two cost lines on close taking it off stock twice. A bottle only
+ // on the back bar goes under its own kind (a Coke sits with the mixers), and
+ // either way the row says "Standard bar service".
  const keyOf=s=>(s||"").toLowerCase().replace(/\s+/g," ").trim();
  const byKey={}; Object.keys(map).forEach(k=>{byKey[keyOf(k)]=k;});
  extra.forEach(e=>{
   const raw=(e.n||"").trim(); if(!raw)return;
   const k=byKey[keyOf(raw)]||raw;
-  if(!map[k]){map[k]={n:k,sec:"Back bar",uses:[],by:isClient(k)?"client":"orpi"};byKey[keyOf(k)]=k;}
+  if(!map[k]){map[k]={n:k,sec:secOf(k),uses:[],by:isClient(k)?"client":"orpi"};byKey[keyOf(k)]=k;}
   if(!map[k].uses.includes("Standard bar service"))map[k].uses.push("Standard bar service");
  });
+ const byName=(a,b)=>a.n.localeCompare(b.n,undefined,{sensitivity:"base"});
  const all=Object.values(map);
- const grp=SEC.map(s=>({s,rows:all.filter(l=>l.sec===s)})).filter(g=>g.rows.length);
- const gRows=all.filter(l=>l.sec===GSEC);
- // Alcohol lines (cocktail spirits + back bar) are the ones a client might bring.
- const alcoholRows=all.filter(l=>l.sec==="Cocktail spirits"||l.sec==="Back bar");
+ const grp=SEC.map(s=>({s,rows:all.filter(l=>l.sec===s).sort(byName)})).filter(g=>g.rows.length);
+ const gRows=all.filter(l=>l.sec===GSEC).sort(byName);
+ // A cost or tick saved under an older spelling of a garnish (a sheet made
+ // before the recipe was renamed) belongs to its row too.
+ gRows.forEach(r=>{const gk=garnishKey(r.n);
+  const stale=[...Object.keys(gCost||{}),...Object.keys(buy)].filter(k=>!map[k]&&garnishKey(k)===gk);
+  r.alias=[...new Set([...(r.alias||[]),...stale])];});
+ const gNames=r=>[r.n,...(r.alias||[])];
+ const gCostOf=r=>{for(const k of gNames(r)){const v=(gCost||{})[k];if(v!==undefined&&v!=="")return v;}return "";};
+ const gOnList=r=>gNames(r).some(k=>buy[k]!==undefined);
+ function toggleGarnishBuy(r){
+  up("buy",p=>{const n={...(p||{})};
+   if(gNames(r).some(k=>n[k]!==undefined))gNames(r).forEach(k=>{delete n[k];});else n[r.n]="";
+   return n;});
+ }
+ function setGarnishCost(r,v){
+  up("gCost",p=>{const n={...(p||{})};(r.alias||[]).forEach(a=>{delete n[a];});n[r.n]=v;return n;});
+ }
+ // Alcohol is what a client might bring, wherever it's poured.
+ const alcoholRows=all.filter(l=>l.sec===SPIRITS_SECTION).sort(byName);
+ const useLabel=l=>{const bar=l.uses.includes("Standard bar service"),ck=l.uses.some(u=>u!=="Standard bar service");
+  return bar&&ck?"Back bar and cocktails":bar?"Back bar":"Cocktails";};
+
+ // The shopping list. A garnish ticked under an older spelling shows under
+ // today's, so the list reads the same as the rows above it.
+ const aliasOf={}; gRows.forEach(r=>(r.alias||[]).forEach(a=>{aliasOf[a]=r.n;}));
+ const shopName=n=>aliasOf[n]||n;
+ const shopRows=[
+  ...Object.keys(buy).sort().map(n=>({n:shopName(n),q:buy[n],fixed:true})),
+  ...buyExtra.map((x,i)=>({n:x.n,q:x.q,i})),
+ ];
+ const shopCount=shopRows.filter(r=>r.n&&r.n.trim()).length;
+ const shopList=[
+  `Shopping — ${ev.client||"Event"}${ev.date?`, ${ev.date}`:""}`,
+  "",
+  ...shopRows.filter(r=>r.n&&r.n.trim()).map(r=>r.q?`${r.q} × ${r.n}`:r.n),
+ ].join("\n");
 
  // Everything that left the van and didn't come back. This is what gets
  // written to Notion — one costing line each, and stock down by the same.
@@ -589,9 +657,9 @@ export default function Runsheet(){
   }catch(e){}
   window.location.href="/purchases";
  }
- const gTotal=gRows.reduce((t,r)=>t+(parseFloat(gCost[r.n])||0),0);
+ const gTotal=gRows.reduce((t,r)=>t+(parseFloat(gCostOf(r))||0),0);
  const garnishCosts=gRows
-  .map(r=>({name:r.n,amount:parseFloat(gCost[r.n])||0}))
+  .map(r=>({name:r.n,amount:parseFloat(gCostOf(r))||0}))
   .filter(x=>x.amount>0);
  const garnishUnpriced=gRows.length-garnishCosts.length;
  const total=picked.reduce((t,d)=>t+cost(d),0);
@@ -889,7 +957,7 @@ export default function Runsheet(){
        </div>
        {alcoholRows.map(l=>{const client=l.by==="client";return(
         <div key={l.n} className="flex items-center justify-between gap-2 py-2 border-b" style={{borderColor:"#F2F0EB"}}>
-         <span className="min-w-0 flex-1 text-sm">{l.n}<span className="block text-xs text-neutral-400">{l.sec}</span></span>
+         <span className="min-w-0 flex-1 text-sm">{l.n}<span className="block text-xs text-neutral-400">{useLabel(l)}</span></span>
          <div className="flex rounded-full border overflow-hidden shrink-0" style={{borderColor:"#DDD8CE"}}>
           <button onClick={()=>up("supplier",p=>{const m={...(p||{})};delete m[NK(l.n)];return m;})}
             className="px-3 py-1.5 text-xs" style={{background:client?"#fff":INK,color:client?"#6B6459":"#fff"}}>ORPI</button>
@@ -932,12 +1000,12 @@ export default function Runsheet(){
       <div key={r.n} className="px-5 py-3 border-b flex items-center justify-between gap-3" style={{borderColor:"#EFECE6"}}>
        <div className="min-w-0 flex-1"><div className="text-base leading-tight">{r.n}</div>
         <div className="text-xs text-neutral-500 mt-0.5 truncate">{r.uses.join(" · ")}</div>
-        {tab==="out"&&<button onClick={()=>toggleBuy(r.n)} className="text-xs underline underline-offset-4 mt-1"
-          style={{color:buy[r.n]!==undefined?GOLD:"#B5AFA4"}}>
-          {buy[r.n]!==undefined?"on shopping list":"need to buy"}</button>}</div>
+        {tab==="out"&&<button onClick={()=>toggleGarnishBuy(r)} className="text-xs underline underline-offset-4 mt-1"
+          style={{color:gOnList(r)?GOLD:"#B5AFA4"}}>
+          {gOnList(r)?"on shopping list":"need to buy"}</button>}</div>
        <div className="flex items-center gap-1 shrink-0"><span className="text-lg text-neutral-400">£</span>
-        <input inputMode="decimal" placeholder="0.00" value={gCost[r.n]??""} onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");up("gCost",p=>({...p,[r.n]:v}));}}
-         className="w-20 h-14 text-center text-xl tabular-nums rounded-xl border bg-white outline-none" style={{borderColor:LINE,color:(gCost[r.n]&&parseFloat(gCost[r.n]))?GOLD:INK}}/></div></div>))}</section>}
+        <input inputMode="decimal" placeholder="0.00" value={gCostOf(r)} onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");setGarnishCost(r,v);}}
+         className="w-20 h-14 text-center text-xl tabular-nums rounded-xl border bg-white outline-none" style={{borderColor:LINE,color:parseFloat(gCostOf(r))?GOLD:INK}}/></div></div>))}</section>}
     {!grp.length&&!gRows.length&&<div className="px-5 py-16 text-center text-neutral-400">Pick some drinks first.</div>}</div>}
   </main>
 
@@ -960,7 +1028,7 @@ export default function Runsheet(){
       <input inputMode="numeric" placeholder="qty" value={buy[n]}
         onChange={e=>{const v=e.target.value.replace(/[^0-9]/g,"");up("buy",p=>({...(p||{}),[n]:v}));}}
         className="w-14 h-9 text-center rounded-lg border tabular-nums shrink-0" style={{borderColor:"#E6E2DA"}}/>
-      <span className="text-sm min-w-0 flex-1">{n}</span>
+      <span className="text-sm min-w-0 flex-1">{shopName(n)}</span>
       <span className="text-xs text-neutral-400">£</span>
       <input inputMode="decimal" placeholder="paid" value={buySpend[n]||""}
         onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"");up("buySpend",p=>({...(p||{}),[n]:v}));}}

@@ -11,18 +11,32 @@ export const safeFirstName = name => {
   return word.replace(/[^\p{L}'’-]/gu, '').slice(0, 30) || 'there';
 };
 
+// How each event type reads in a sentence: "your wedding", not "your wedding
+// reception"; "your corporate event", not "your corporate"; never "your other".
+const EVENT_PHRASES = {
+  'wedding reception': 'wedding',
+  'corporate': 'corporate event',
+  'other': 'event',
+};
+export const eventPhrase = eventType => {
+  const t = String(eventType || '').trim().toLowerCase();
+  if (!t) return 'event';
+  return EVENT_PHRASES[t] || t;
+};
+
 export function acknowledgementEmail({ name, eventType, eventDate, guests }) {
   const first = safeFirstName(name);
+  const what = eventPhrase(eventType);
   const detail = [
     eventDate && `📅 ${prettyDate(eventDate, { year: true })}`,
     guests && `👥 ${guests} guests`,
   ].filter(Boolean);
   return {
-    subject: `Your ${(eventType || 'event').toLowerCase()} — we’ve got your enquiry`,
+    subject: `Your ${what} — we’ve got your enquiry`,
     text: [
       `Hi ${first},`,
       '',
-      `Thanks for getting in touch about your ${(eventType || 'event').toLowerCase()} — lovely to hear from you.`,
+      `Thanks for getting in touch about your ${what} — lovely to hear from you.`,
       '',
       ...(detail.length ? ['Here’s what we’ve got so far:', '', ...detail, ''] : []),
       'We’ll put a quote together and be in touch shortly. If anything above looks wrong, just reply and let us know.',

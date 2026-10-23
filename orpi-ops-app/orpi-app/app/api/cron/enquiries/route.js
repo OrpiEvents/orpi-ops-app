@@ -2,13 +2,17 @@ import { acknowledgementEmail } from '@/lib/enquiryEmails';
 import { getSettings } from '@/lib/growthStore';
 // app/api/cron/enquiries/route.js
 //
-// Replaces the Make.com scenario. Runs on a schedule, finds enquiries that came
-// in through the form and haven't been acknowledged, emails them, and fills in
-// the two fields that otherwise never get set:
+// Replaces the Make.com scenario. Runs every morning at 9 (vercel.json), finds
+// enquiries that came in through the Notion form and haven't been
+// acknowledged, emails them, and fills in what the form never sets:
 //
-//   Follow Up Date — two days out, so nothing can go quiet unnoticed
-//   Source         — Instagram, because that's the only live channel
+//   Follow Up Date  — two days out, so nothing can go quiet unnoticed
+//   Enquiry Channel — "Notion form" when it's blank. Source (where they heard
+//                     about us) is left for a person: the form doesn't ask, and
+//                     guessing "Instagram" made every enquiry look like one.
 //
+// Only enquiries from the last 3 days get the automatic email, so switching it
+// on never sends a late "thanks for getting in touch" to an older one.
 // Deliberately idempotent. "Acknowledged At" is the flag, so a double-run or a
 // retry can't email anyone twice. If the email service is down the flag stays
 // blank and the next run picks it up.
@@ -19,6 +23,7 @@ const RESEND_KEY = process.env.RESEND_API_KEY;
 const FROM = process.env.ENQUIRY_FROM || 'ORPI Events <hello@orpi.events>';
 const ALERT_TO = process.env.ENQUIRY_ALERT_TO || 'hello@orpi.events';
 const CRON_SECRET = process.env.CRON_SECRET;
+const FRESH_MS = 3 * 24 * 60 * 60 * 1000;   // the automatic email is for enquiries this new
 
 const notionHeaders = () => ({
   Authorization: `Bearer ${NOTION_TOKEN}`,
@@ -45,41 +50,10 @@ function prettyDate(iso) {
   } catch { return iso; }
 }
 
-// Warm, specific, and honest about timing. It quotes their own details back so
-// it reads as a person having looked, not an autoresponder.
-function buildEmail({ name, eventType, eventDate, venue, guests }) {
-  const first = (name || '').trim().split(/\s+/)[0] || 'there';
-  const detail = [
-    eventDate && `\u{1F4C5} ${prettyDate(eventDate)}`,
-    venue && `\u{1F4CD} ${venue}`,
-    guests && `\u{1F465} ${guests} guests`,
-  ].filter(Boolean);
-
-  const lines = [
-    `Hi ${first},`,
-    '',
-    `Thanks for getting in touch about your ${(eventType || 'event').toLowerCase()} — lovely to hear from you.`,
-    '',
-    ...(detail.length ? ['Here\u2019s what we\u2019ve got so far:', '', ...detail, ''] : []),
-    'We\u2019ll put a quote together and be in touch shortly. If anything above looks wrong, just reply and let us know.',
-    '',
-    'A couple of things worth knowing while you wait:',
-    '',
-    '\u2022 Every quote is built around your event rather than a fixed package — guest numbers, how long you want the bar open, and whether you\u2019d like bespoke cocktails all change it',
-    '\u2022 Dates go quickly in peak season, so if yours is set it\u2019s worth telling us early',
-    '',
-    'Speak soon,',
-    '',
-    'ORPI Events',
-    'hello@orpi.events',
-  ];
-  return lines.join('\n');
-}
-
 // The internal heads-up. Deliberately front-loads the contact details and
 // whether the client got an acknowledgement, because an enquiry with no email
 // is the one that needs a human within the hour.
-function buildAlert({ name, eventType, eventDate, venue, guests, email, phone, acknowledged, url }) {
+function buildAlert({ name, eventType, eventDate, venue, guests, email, phone, acknowledged, skipped, url }) {
   return [
     `${name || 'Unnamed enquiry'}`,
     '',
@@ -93,9 +67,11 @@ function buildAlert({ name, eventType, eventDate, venue, guests, email, phone, a
     '',
     acknowledged
       ? 'Acknowledgement sent automatically.'
-      : email
-        ? 'Acknowledgement FAILED \u2014 reply manually.'
-        : 'No email address, so nothing was sent. Reply on Instagram.',
+      : !email
+        ? 'No email address, so nothing was sent. Reply personally.'
+        : skipped
+          ? `No automatic acknowledgement: ${skipped}. Reply personally.`
+          : 'Acknowledgement FAILED \u2014 reply manually.',
     '',
     'Follow-up set for two days from now.',
     '',
@@ -175,9 +151,16 @@ export async function GET(request) {
       // These two get filled whether or not there's an email to send to — a DM
       // enquiry with no address still needs chasing.
       if (!dateOf(p['Follow Up Date'])) patch['Follow Up Date'] = { date: { start: addDays(2) } };
-      if (!p['Source']?.select?.name) patch['Source'] = { select: { name: 'Instagram' } };
+      if (!p['Enquiry Channel']?.select?.name) patch['Enquiry Channel'] = { select: { name: 'Notion form' } };
 
-      if (email && RESEND_KEY && autoAcknowledge) {
+      // Why no email goes, if one doesn't: said in the inbox alert.
+      const fresh = Date.now() - new Date(page.created_time).getTime() <= FRESH_MS;
+      const skipped = !autoAcknowledge ? 'automatic acknowledgements are switched off'
+        : !RESEND_KEY ? 'email sending isn\u2019t set up'
+        : !fresh ? 'it came in more than 3 days ago'
+        : '';
+
+      if (email && !skipped) {
         try {
           const eventType = p['Event Type']?.select?.name || '';
           // Shared wording: repeats back only a cleaned first name, the date
@@ -214,6 +197,7 @@ export async function GET(request) {
             email,
             phone: p['Phone Number']?.number,
             acknowledged: !!patch['Acknowledged At'],
+            skipped,
             url: page.url,
           })
         ).catch(err => failed.push(`alert for ${name}: ${err.message}`));

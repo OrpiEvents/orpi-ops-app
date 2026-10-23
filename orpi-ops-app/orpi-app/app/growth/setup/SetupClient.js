@@ -52,13 +52,13 @@ function Body({ d, director, reload, discover, discovering }) {
           {d.calendar?.ok ? `${d.calendar.count} posts readable.` : <>In Notion, open the Content Calendar (inside “ORPI Growth Agent”) → ••• → Connections → add the same integration the Sales Pipeline uses.</>}
         </Step>
         <Step ok={e.CRON_SECRET} title="Daily sync switched on">
-          {e.CRON_SECRET ? 'The daily job runs once a day (on Vercel’s free plan the exact time varies within the hour).' : <>In Vercel → orpi-app → Settings → Environment Variables, add <Code>CRON_SECRET</Code> with a long random value, then redeploy. Without it the daily sync is switched off.</>}
+          {e.CRON_SECRET ? 'The scheduled jobs are on: the growth sync every morning at 5, and the enquiry job at 9.' : <>In Vercel → orpi-app → Settings → Environment Variables, add <Code>CRON_SECRET</Code> with a long random value, then redeploy. Without it the growth sync and the enquiry job (Notion form acknowledgements) are switched off.</>}
         </Step>
         <Step ok={e.RESEND_API_KEY} title="Email sending">
-          {e.RESEND_API_KEY ? 'New-enquiry alerts go to the inbox.' : <>Add <Code>RESEND_API_KEY</Code> in Vercel so new-enquiry alerts reach the inbox.</>}
+          {e.RESEND_API_KEY ? 'New-enquiry alerts go to the inbox, and acknowledgements can go to clients when switched on below.' : <>Add <Code>RESEND_API_KEY</Code> in Vercel so new-enquiry alerts reach the inbox and acknowledgements can go out.</>}
         </Step>
-        <Step ok={false} title="Vercel Pro plan">
-          Vercel’s free Hobby plan is for non-commercial use only, so a trading business should be on Pro ($20/month plus VAT, as of Sep 2026). Pro also lets scheduled jobs run more than once a day, e.g. the enquiry auto-reply. Upgrade in Vercel → Settings → Billing.
+        <Step ok={true} title="Vercel Pro plan">
+          On Pro since 23 Oct 2026, so the scheduled jobs run on time: the growth sync at 5am and the enquiry job (Notion form acknowledgements and inbox alerts) at 9am, UK time in winter and an hour later in summer.
         </Step>
       </Card>
 
@@ -226,7 +226,7 @@ function Settings({ d, saved }) {
       </Grid>
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16, fontSize: 13, lineHeight: 1.5 }}>
         <input type="checkbox" checked={f.autoAcknowledge} onChange={e => setF(p => ({ ...p, autoAcknowledge: e.target.checked }))} style={{ marginTop: 3 }} />
-        <span><strong style={{ fontWeight: 600 }}>Email new enquiries an acknowledgement automatically.</strong> One switch for every channel: the enquiry page, the website form when it launches, Meta lead forms, and the Notion form (that one via the enquiry job, which needs Vercel Pro to run often). A short “we’ve got your enquiry” email from hello@orpi.events (the enquiry page sends at most one a month to any address, so it can’t be used to spam people). Off until you switch it on. The inbox alert to you always goes.</span>
+        <span><strong style={{ fontWeight: 600 }}>Email new enquiries an acknowledgement automatically.</strong> One switch for every channel: the enquiry page, the website form when it launches, Meta lead forms, and the Notion form (that one via the enquiry job every morning at 9, for enquiries from the last 3 days). A short “we’ve got your enquiry” email from hello@orpi.events (the enquiry page sends at most one a month to any address, so it can’t be used to spam people). Off until you switch it on. The inbox alert to you always goes.</span>
       </label>
       <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
         <button onClick={save} style={btn(true)}>Save controls</button>

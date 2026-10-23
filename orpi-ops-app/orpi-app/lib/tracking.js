@@ -21,9 +21,9 @@ export const PLACEMENTS = {
 // Source options so reporting stays on one list.
 export const HEARD_OPTIONS = [
   { value: 'instagram', label: 'Instagram', source: 'Instagram' },
-  { value: 'event', label: 'Saw ORPI at an event', source: 'Event Guest' },
+  { value: 'event', label: 'Saw ORPI at an event', source: 'Saw ORPI at an event' },
   { value: 'referral', label: 'A friend or family recommendation', source: 'Referral' },
-  { value: 'previous', label: 'We’ve worked with ORPI before', source: 'Previous Client' },
+  { value: 'previous', label: 'We’ve worked with ORPI before', source: 'Worked with ORPI before' },
   { value: 'venue', label: 'Our venue', source: 'Venue' },
   { value: 'planner', label: 'Our wedding planner', source: 'Planner' },
   { value: 'google', label: 'Google', source: 'Google' },

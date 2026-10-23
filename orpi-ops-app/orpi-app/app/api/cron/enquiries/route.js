@@ -1,5 +1,6 @@
 import { acknowledgementEmail } from '@/lib/enquiryEmails';
 import { getSettings } from '@/lib/growthStore';
+import { phoneOf } from '@/lib/notion';
 // app/api/cron/enquiries/route.js
 //
 // Replaces the Make.com scenario. Runs every morning at 9 (vercel.json), finds
@@ -152,6 +153,11 @@ export async function GET(request) {
       // enquiry with no address still needs chasing.
       if (!dateOf(p['Follow Up Date'])) patch['Follow Up Date'] = { date: { start: addDays(2) } };
       if (!p['Enquiry Channel']?.select?.name) patch['Enquiry Channel'] = { select: { name: 'Notion form' } };
+      // The form's "Please don't send me occasional planning tips and offers"
+      // tick becomes Marketing = Opted out, which the re-engagement list skips.
+      if (p['Marketing opt-out']?.checkbox && p['Marketing']?.select?.name !== 'Opted out') {
+        patch['Marketing'] = { select: { name: 'Opted out' } };
+      }
 
       // Why no email goes, if one doesn't: said in the inbox alert.
       const fresh = Date.now() - new Date(page.created_time).getTime() <= FRESH_MS;
@@ -195,7 +201,7 @@ export async function GET(request) {
             venue: text(p['Venue']),
             guests: p['Guest Count']?.number,
             email,
-            phone: p['Phone Number']?.number,
+            phone: phoneOf(p['Phone Number']),
             acknowledged: !!patch['Acknowledged At'],
             skipped,
             url: page.url,

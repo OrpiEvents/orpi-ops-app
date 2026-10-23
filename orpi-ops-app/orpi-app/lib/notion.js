@@ -47,6 +47,14 @@ function multiSel(prop) { return (prop?.multi_select || []).map(o => o.name); }
 function checkbox(prop) { return !!prop?.checkbox; }
 function dateStart(prop) { return prop?.date?.start ?? ''; }
 function formulaNum(prop) { return prop?.formula?.number ?? null; }
+// Phone Number used to be a Number property, which dropped the leading 0
+// ("7424…"). It's a phone field now; old values still lack the 0, so a
+// 10-digit number that doesn't start with 0 (a UK number) gets it back.
+export function phoneOf(prop) {
+  const raw = prop?.phone_number ?? (prop?.number != null ? String(prop.number) : '');
+  const s = String(raw || '').trim();
+  return /^[1-9]\d{9}$/.test(s) ? '0' + s : s;
+}
 
 // ---- Sales Pipeline (Enquiries) -------------------------------------------
 export async function listEnquiries() {
@@ -85,7 +93,7 @@ function pageToEnquiry(page) {
     acknowledgedAt: dateStart(p['Acknowledged At']),
     name: text(p['Name']),
     email: text(p['Email']),
-    phone: p['Phone Number']?.number ?? '',
+    phone: phoneOf(p['Phone Number']),
     eventDate: dateStart(p['Event Date']),
     venue: text(p['Venue']),
     guestCount: num(p['Guest Count']),
@@ -192,7 +200,7 @@ function enquiryToProperties(d) {
   const props = {};
   if (d.name !== undefined) props['Name'] = { title: [{ text: { content: d.name } }] };
   if (d.email !== undefined) props['Email'] = { rich_text: [{ text: { content: d.email || '' } }] };
-  if (d.phone !== undefined && d.phone !== '') props['Phone Number'] = { number: Number(d.phone) || null };
+  if (d.phone !== undefined && d.phone !== '') props['Phone Number'] = { phone_number: String(d.phone).trim().slice(0, 40) || null };
   if (d.venue !== undefined) props['Venue'] = { rich_text: [{ text: { content: d.venue || '' } }] };
   if (d.guestCount !== undefined) props['Guest Count'] = { number: Number(d.guestCount) || null };
   // Notion rejects { select: { name: '' } } — clearing a select needs null. An

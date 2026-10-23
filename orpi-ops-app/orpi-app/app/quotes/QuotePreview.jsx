@@ -26,7 +26,7 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
   const activeAddons = s.addons.filter(a => a.on && parseFloat(a.price) > 0);
   // Every ticked extra, named on the quote (price folded into the total, never
   // itemised) — so the headline figure has visible value behind it.
-  const selectedAddons = s.addons.filter(a => a.on);
+  const selectedAddons = s.addons.filter(a => a.on && (a.label || '').trim());
   // A chosen ORPI bar rides along in the package extras; the venue's own bar is
   // only an event-details note, so it never appears here.
   const barExtra = (s.barUsed && s.barUsed !== "Venue's own bar") ? [{ id: 'bar', label: s.barUsed, desc: '' }] : [];
@@ -273,7 +273,7 @@ export default function QuotePreview({ s, addonTotal, total, dep }) {
 
       {/* ── Enhancements you might like (unselected add-ons) ── */}
       {(() => {
-        const unselectedAddons = s.addons.filter(a => !a.on);
+        const unselectedAddons = s.addons.filter(a => !a.on && (a.label || '').trim());
         if (unselectedAddons.length === 0) return null;
         return (
           <div className="print-avoid-break" style={{ padding: '20px 44px', background: '#fff', borderTop: '1px solid #e8e6e0' }}>

@@ -1701,10 +1701,20 @@ function NewStockNote({ names, stock }) {
   );
 }
 
+// The extras list. Unticked extras are a plain tick-list (full name and a
+// line of description) because on the quote they're only suggestions; ticking
+// one opens it up for how many, the price and, for personalised accessories,
+// which items. Wording is edited behind "Edit" so the list stays readable in
+// the narrow builder panel.
 function AddonEditor({ addons, onChange }) {
+  const [editing, setEditing] = useState(null);   // id whose wording is open
   function update(id, patch) { onChange(addons.map(a => a.id === id ? { ...a, ...patch } : a)); }
-  function remove(id) { onChange(addons.filter(a => a.id !== id)); }
-  function add() { onChange([...addons, { id: uid(), label: 'Custom add-on', desc: '', price: '', qty: 1, on: true }]); }
+  function remove(id) { setEditing(null); onChange(addons.filter(a => a.id !== id)); }
+  function add() {
+    const id = uid();
+    onChange([...addons, { id, label: '', desc: '', price: '', qty: 1, on: true }]);
+    setEditing(id);
+  }
   // Ticking an item under an extra that has choices (personalised accessories)
   // also ticks the extra itself, so the item can't be picked but left off the quote.
   function toggleItem(a, item) {
@@ -1712,47 +1722,88 @@ function AddonEditor({ addons, onChange }) {
     const items = picked.includes(item) ? picked.filter(x => x !== item) : [...picked, item];
     update(a.id, { items, ...(items.length ? { on: true } : {}) });
   }
-  const textInput = { border: '1px solid transparent', borderRadius: 4, background: 'transparent', width: '100%', padding: '1px 3px', margin: '0 -3px', font: 'inherit' };
+  const added = addons.filter(a => a.on && (a.label || '').trim());
+  const total = addonsTotal(addons);
+
   return (
     <div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', margin: '0 0 6px', lineHeight: 1.45 }}>
+        {added.length
+          ? <><strong style={{ color: 'var(--text)' }}>{added.length} added{total > 0 ? ` \u00b7 ${money(total)}` : ''}</strong>. Anything unticked is suggested to the client under “Enhancements you might like”.</>
+          : <>Tick what’s on this quote. Anything unticked is suggested to the client under “Enhancements you might like”.</>}
+      </div>
       {addons.map(a => {
         const choices = choicesFor(a);
         const picked = pickedItems(a);
+        const qty = addonQty(a);
+        const price = parseFloat(a.price) || 0;
+        const isEditing = editing === a.id;
         return (
-          <div key={a.id} style={{ padding: '5px 0', borderBottom: '1px solid var(--off)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={a.on} onChange={e => update(a.id, { on: e.target.checked })} />
-              {/* Name and wording are editable here for this quote only; the
-                  default list lives in DEF_ADDONS, and "Save as template" keeps your versions. */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <input aria-label="Extra name" value={a.label} onChange={e => update(a.id, { label: e.target.value })}
-                  style={{ ...textInput, fontSize: 12, fontWeight: 500 }}
-                  onFocus={e => { e.target.style.borderColor = 'var(--border)'; }} onBlur={e => { e.target.style.borderColor = 'transparent'; }} />
-                <input aria-label="Extra description" value={a.desc || ''} placeholder="Description on the quote" onChange={e => update(a.id, { desc: e.target.value })}
-                  style={{ ...textInput, fontSize: 11, color: 'var(--muted)' }}
-                  onFocus={e => { e.target.style.borderColor = 'var(--border)'; }} onBlur={e => { e.target.style.borderColor = 'transparent'; }} />
-              </div>
-              {/* How many: 2 shots packages, 3 extra staff, 12 tables. The price is per one. */}
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>×</span>
-              <input type="number" min="1" step="1" inputMode="numeric" aria-label={`How many: ${a.label}`} title={a.unit ? `How many ${a.unit}s` : 'How many'}
-                style={{ ...miniInput, width: 56, textAlign: 'right' }} value={addonQty(a)}
-                onChange={e => update(a.id, { qty: Math.max(1, parseInt(e.target.value, 10) || 1) })} />
-              <input style={{ ...miniInput, width: 70, textAlign: 'right' }} value={a.price} onChange={e => update(a.id, { price: e.target.value })} placeholder="£ each" title="Price for one" />
-              <button onClick={() => remove(a.id)} style={rmBtn} title="Remove from this quote">✕</button>
+          <div key={a.id} style={a.on ? addonOnBox : addonOffBox}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!a.on} onChange={e => update(a.id, { on: e.target.checked })} style={{ marginTop: 2, flexShrink: 0 }} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 12.5, fontWeight: a.on ? 600 : 500, lineHeight: 1.35 }}>{a.label || <em style={{ color: 'var(--muted)', fontWeight: 400 }}>New extra</em>}</span>
+                  {a.desc && <span style={a.on ? addonDesc : addonDescClamped}>{a.desc}</span>}
+                </span>
+              </label>
+              <button type="button" onClick={() => setEditing(isEditing ? null : a.id)} style={addonEditBtn} aria-expanded={isEditing}>{isEditing ? 'Done' : 'Edit'}</button>
             </div>
-            {choices && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0 2px 24px' }}>
-                {choices.map(item => {
-                  const on = picked.includes(item);
-                  return (
-                    <button key={item} type="button" onClick={() => toggleItem(a, item)} aria-pressed={on}
-                      style={{ fontSize: 11, padding: '3px 9px', borderRadius: 12, cursor: 'pointer',
-                        border: `1px solid ${on ? 'var(--gold)' : 'var(--border)'}`,
-                        background: on ? 'var(--gold-bg)' : '#fff', color: on ? '#7a6300' : 'var(--muted)' }}>
-                      {on ? '✓ ' : ''}{item}
-                    </button>
-                  );
-                })}
+
+            {a.on && choices && (
+              <div style={{ margin: '8px 0 0 23px' }}>
+                <div style={addonMiniLabel}>Which items</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {choices.map(item => {
+                    const on = picked.includes(item);
+                    return (
+                      <button key={item} type="button" onClick={() => toggleItem(a, item)} aria-pressed={on}
+                        style={{ fontSize: 11, padding: '3px 9px', borderRadius: 12, cursor: 'pointer',
+                          border: `1px solid ${on ? 'var(--gold)' : 'var(--border)'}`,
+                          background: on ? '#fff' : 'transparent', color: on ? '#7a6300' : 'var(--muted)', fontWeight: on ? 600 : 400 }}>
+                        {on ? '\u2713 ' : ''}{item}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {a.on && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '9px 0 0 23px' }}>
+                {/* How many: 2 shots packages, 3 extra staff, 12 tables. The price is per one. */}
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: '#fff', overflow: 'hidden' }}>
+                  <button type="button" aria-label="One fewer" onClick={() => update(a.id, { qty: Math.max(1, qty - 1) })} style={stepBtn} disabled={qty <= 1}>−</button>
+                  <input type="text" inputMode="numeric" aria-label={`How many: ${a.label}`} value={qty}
+                    onChange={e => update(a.id, { qty: Math.max(1, parseInt(e.target.value.replace(/[^0-9]/g, ''), 10) || 1) })}
+                    style={{ width: 34, border: 'none', textAlign: 'center', fontSize: 12.5, padding: '5px 0' }} />
+                  <button type="button" aria-label="One more" onClick={() => update(a.id, { qty: qty + 1 })} style={stepBtn}>+</button>
+                </div>
+                {a.unit && <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{a.unit}{qty === 1 ? '' : 's'}</span>}
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 6, background: '#fff', padding: '0 0 0 8px' }}>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>£</span>
+                  <input inputMode="decimal" aria-label={`Price for one: ${a.label}`} value={a.price} placeholder="0"
+                    onChange={e => update(a.id, { price: e.target.value.replace(/[^0-9.]/g, '') })}
+                    style={{ width: 58, border: 'none', fontSize: 12.5, padding: '5px 6px 5px 3px', background: 'transparent' }} />
+                </div>
+                <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{a.unit ? `per ${a.unit}` : 'each'}</span>
+                {qty > 1 && price > 0 && <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 600 }}>{money(qty * price)}</span>}
+              </div>
+            )}
+
+            {isEditing && (
+              <div style={{ margin: '10px 0 2px 23px', display: 'grid', gap: 6 }}>
+                <label style={addonMiniLabel}>Name on the quote
+                  <input value={a.label} autoFocus={!a.label} onChange={e => update(a.id, { label: e.target.value })} placeholder="e.g. Espresso martini bar" style={addonField} />
+                </label>
+                <label style={addonMiniLabel}>Description on the quote
+                  <textarea rows={2} value={a.desc || ''} onChange={e => update(a.id, { desc: e.target.value })} placeholder="One line on what the client gets" style={{ ...addonField, resize: 'vertical' }} />
+                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>For this quote. Save as template to keep it for next time.</span>
+                  <button type="button" onClick={() => remove(a.id)} style={{ ...addonEditBtn, color: '#b4553b' }}>Remove</button>
+                </div>
               </div>
             )}
           </div>
@@ -1762,6 +1813,16 @@ function AddonEditor({ addons, onChange }) {
     </div>
   );
 }
+
+const money = n => '\u00a3' + (Math.round(n * 100) / 100).toLocaleString('en-GB', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+const addonOffBox = { padding: '9px 2px', borderBottom: '1px solid var(--off)' };
+const addonOnBox = { padding: '10px 10px 11px', margin: '6px 0', background: 'var(--gold-bg)', border: '1px solid #efe2bd', borderRadius: 8 };
+const addonDesc = { display: 'block', fontSize: 11, color: 'var(--muted)', lineHeight: 1.4, marginTop: 1 };
+const addonDescClamped = { ...addonDesc, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' };
+const addonEditBtn = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: '2px 0 2px 6px', textDecoration: 'underline', textUnderlineOffset: 2, flexShrink: 0 };
+const addonMiniLabel = { display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 4 };
+const addonField = { display: 'block', width: '100%', marginTop: 3, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12.5, fontFamily: 'inherit', textTransform: 'none', letterSpacing: 'normal', fontWeight: 400, color: 'var(--text)', background: '#fff' };
+const stepBtn = { width: 26, height: 28, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--text)', lineHeight: 1 };
 
 function NameList({ label, names, onChange }) {
   function update(i, val) { const copy = [...names]; copy[i] = val; onChange(copy); }
